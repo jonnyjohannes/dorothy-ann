@@ -324,6 +324,27 @@ Therefore a static deployment is safe only if either:
 - the first proof uses mocked/fixture providers; or
 - it calls a separately hosted backend/proxy whose credentials and limits are server-side.
 
+### Secret placement for the static proof
+
+The LLM and search provider keys must never be placed in the GitHub Pages bundle, HTML, JavaScript, source maps, browser storage, or request parameters. Anything shipped to the browser should be treated as public and recoverable by the user or an attacker.
+
+The minimum safe architecture is:
+
+```text
+GitHub Pages frontend
+        │ public HTTPS request
+        ▼
+small server-side proxy / edge function
+        ├── provider keys in encrypted deployment secrets
+        ├── request validation and limits
+        ├── provider API calls
+        └── normalized response back to browser
+```
+
+For a personal proof, a separately deployed edge/serverless function is sufficient. Its provider keys live in the platform's secret manager/environment, never in the repository or client bundle. The proxy should allow only the operations needed by the app, enforce bounded input/output, apply rate limits, and avoid logging prompts or credentials.
+
+The proxy itself still needs an access boundary. A token embedded in the frontend is not a secret; it can prevent casual misuse but cannot stop extraction. Prefer an access layer such as a private deployment gate, Cloudflare Access/OAuth, or a user-entered rotating app token sent only to the proxy. If the proof is intentionally public, use fixtures or a zero-cost/delegated provider rather than exposing a paid provider key.
+
 ### Option B: small hosted personal app
 
 ```text
