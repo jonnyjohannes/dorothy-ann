@@ -41,10 +41,11 @@ The core value is not generic LLM chat. It is the combination of:
 
 1. A browser-search entry point that is useful enough to replace the default search habit for research-heavy questions.
 2. Search results and extracted evidence that remain visible and inspectable.
-3. Lightweight, topic-oriented conversations rather than a permanent knowledge base.
-4. A high-signal, editable artifact export as a first-class completion action.
-5. A low-friction bridge into pi.dev: selected context should arrive with sources, decisions, open questions, and next actions intact.
-6. User-controlled deployment and credentials.
+3. A recognizable research-report voice: “according to my research…” followed by a useful synthesis, not an opaque chatbot answer.
+4. Lightweight, topic-oriented conversations rather than a permanent knowledge base.
+5. A high-signal, editable artifact export as a first-class completion action.
+6. A low-friction bridge into pi.dev: selected context should arrive with sources, decisions, open questions, and next actions intact.
+7. User-controlled deployment and credentials.
 
 ## Core Requirements
 
@@ -153,6 +154,45 @@ Answer with source references.
 
 1. [Source title](https://example.com)
 ```
+
+## Research Report Identity
+
+The product should feel like a curious field reporter or classroom research companion: it searches, examines sources, tells the user what it found, and makes the evidence inspectable. The recurring answer shape can be explicit rather than hidden in branding:
+
+```text
+According to my research…
+
+[direct synthesis]
+
+What I found
+- [source-backed finding]
+- [source-backed finding]
+
+Caveats / uncertainty
+- [conflicting evidence or limits]
+
+Sources
+- [clickable citations]
+```
+
+This voice is a presentation and prompt contract, not a provider dependency. The model/provider adapter should return normalized evidence and answer content; the application controls the report sections, citation rendering, export format, and distinction between research evidence and synthesis.
+
+## Initial Provider Strategy
+
+The first provider should optimize for grounded web research and inspectable citations, not merely general chat quality. Perplexity is the strongest initial fit for a one-key prototype because its product/API center of gravity is web research: its Search API returns structured ranked results, while its Sonar-style responses provide cited synthesis. It allows the first proof to validate the complete “according to my research…” loop without building a search system and synthesis system simultaneously.
+
+The adapter must still preserve the application's separate boundaries:
+
+```text
+Perplexity adapter
+  ├── provider response → normalized SearchResult[]
+  ├── provider response → normalized citation metadata
+  └── provider response → ChatStream / ResearchAnswer
+```
+
+Do not store raw Perplexity payloads as the domain model. A later implementation can use OpenAI Responses web search, Gemini Google Search grounding, Anthropic web search, or a standalone SearchProvider plus a separate ChatProvider. OpenAI, Gemini, and Anthropic all expose current-web search with citations, but their tool semantics and response metadata differ; the normalized citation contract is the portability seam.
+
+A second provider should be added after the first end-to-end workflow works, primarily to test whether the domain and exports truly remain provider-neutral. Provider choice should remain configurable per deployment, not user-configurable in the first UI.
 
 ## System Abstractions
 
