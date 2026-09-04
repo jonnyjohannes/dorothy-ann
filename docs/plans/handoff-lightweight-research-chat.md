@@ -338,16 +338,23 @@ Compaction must not create hidden memory. Store and display the generated contex
 
 There are two legitimate initial deployment shapes:
 
-### Option A: static GitHub Pages proof
+### Option A: static frontend plus server-side proxy
 
 ```text
-GitHub Pages static app
+static frontend host
         ├── browser-local ThreadStore implementation
         ├── browser UI and Markdown export
-        └── calls to an external/proxy research service (if any)
+        └── calls same-origin or proxied requests
+                 ↓
+        edge function / serverless proxy
+                 └── provider calls with server-side secrets
 ```
 
-This is inexpensive and fast for validating the interaction, responsive layout, export UX, and artifact shape. It does **not** provide cross-device continuity: `localStorage` belongs to one browser profile on one device, and a static client cannot safely contain provider credentials. Direct calls to model/search APIs may also fail because of CORS, expose secrets, or create uncontrolled spend.
+GitHub Pages can host the static frontend, but it provides no special advantage once a backend proxy is required. It remains useful if free static hosting, GitHub-based deployment, or familiarity are priorities. The trade-off is two separately configured deployments, cross-origin/auth configuration, and potentially separate domains.
+
+A platform that hosts both the frontend and the small proxy is likely simpler for this project. Cloudflare Pages + Workers or Vercel + Functions are examples; the choice should follow deployment familiarity, secret management, logs, limits, and domain setup rather than loyalty to GitHub Pages.
+
+This deployment does **not** provide cross-device continuity: `localStorage` belongs to one browser profile on one device. It does provide safe provider-key storage when the proxy keeps credentials server-side. Direct calls to model/search APIs from the browser may fail because of CORS, expose secrets, or create uncontrolled spend.
 
 The local-only choice should not leak into the rest of the application. The UI and domain services should depend on the existing asynchronous `ThreadStore` interface, not on `localStorage`, IndexedDB, serialization details, or browser APIs. The first implementation can be `LocalThreadStore`; a later `RemoteThreadStore` can satisfy the same contract without changing chat, research, export, or thread UI behavior.
 
@@ -363,7 +370,7 @@ The LLM and search provider keys must never be placed in the GitHub Pages bundle
 The minimum safe architecture is:
 
 ```text
-GitHub Pages frontend
+static frontend host
         │ public HTTPS request
         ▼
 small server-side proxy / edge function
@@ -396,7 +403,7 @@ This supports cross-device use, secrets, rate limits, and a real default-search 
 
 Use a two-stage rollout with one domain model and a swappable storage boundary:
 
-1. **local/static proof:** GitHub Pages or equivalent frontend, `LocalThreadStore`, fixture or proxied providers, deterministic export. Validate the core interaction in roughly 1–3 focused days of implementation time.
+1. **local/static proof:** a static frontend host (GitHub Pages is optional), `LocalThreadStore`, fixture or proxied providers, deterministic export. Validate the core interaction in roughly 1–3 focused days of implementation time.
 2. **cross-device upgrade, only if earned:** keep the same domain and UI contracts, implement `RemoteThreadStore` behind a small authenticated backend, and add sync/import migration. Estimate roughly 3–7 focused days after the proof, depending on the chosen hosting/auth/database services.
 
 The prototype should include an explicit export/import path even if remote storage is not planned. This protects the user's local threads from a future storage change and gives the product a useful manual cross-device escape hatch: export a thread or archive on one device, import it on another.
@@ -465,6 +472,7 @@ The application may later become installable as a PWA, but offline support shoul
 ## Open Questions for the Next Session
 
 1. **Persistence boundary:** use `LocalThreadStore` for the static/local proof. Keep the application dependent on the abstract `ThreadStore`, with versioned export/import so a later `RemoteThreadStore` can be composed or swapped in without rewriting the product.
+2. **Frontend hosting:** GitHub Pages is optional rather than an architectural requirement. Prefer a single platform that can host the static frontend and the small server-side proxy when that reduces deployment and CORS complexity.
 2. **Default-search behavior:** should the home screen always perform web search, or offer chat/search as an explicit mode while the product is being validated?
 3. **Research mode:** is `auto` important for the MVP, or should search remain fully explicit and predictable?
 4. **Extraction policy:** should source extraction be required for every researched turn, selectively triggered for the top results, or user-triggered per source?
