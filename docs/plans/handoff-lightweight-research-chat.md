@@ -4,13 +4,13 @@
 
 - Status: planning
 - Last updated: 2026-05-12
-- Current focus: choosing a deployment shape that validates the browser → research → pi artifact loop without prematurely building a full backend
+- Current focus: defining platform-neutral application boundaries with Vercel as a convenient initial deployment target
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: choose whether the initial phase is a static/local proof or a cross-device hosted MVP
+- Next action: turn the portability decision into concrete package boundaries, runtime adapters, and deployment verification
 
 ## Handoff
 
-The core abstractions remain intentionally small: normalized chat, search, extraction, thread storage, and export boundaries. The important product clarification is that this is not merely a lightweight research chat: it should become a practical personal search surface for desktop and mobile browsers, with a fast path from web evidence to editable artifacts that pi.dev can consume. The key deployment question is now whether to validate the interaction as a static GitHub Pages app first or include hosted persistence immediately. Continue by defining the smallest end-to-end browser → research thread → Markdown artifact → pi workflow and making the deployment trade-off explicit.
+The core abstractions remain intentionally small: normalized chat, search, extraction, thread storage, and export boundaries. The important product clarification is that this is not merely a lightweight research chat: it should become a practical personal search surface for desktop and mobile browsers, with a fast path from web evidence to editable artifacts that pi.dev can consume. The deployment decision is now: keep the application platform-neutral, use Vercel as the first convenient hosted target, and preserve thin adapters for local execution, Cloudflare, or another provider. Continue by defining the smallest end-to-end browser → research thread → Markdown artifact → pi workflow and making the portability boundary concrete.
 
 ## Goal
 
@@ -352,11 +352,47 @@ static frontend host
 
 GitHub Pages can host the static frontend, but it provides no special advantage once a backend proxy is required. It remains useful if free static hosting, GitHub-based deployment, or familiarity are priorities. The trade-off is two separately configured deployments, cross-origin/auth configuration, and potentially separate domains.
 
-A platform that hosts both the frontend and the small proxy is likely simpler for this project. Cloudflare Pages + Workers or Vercel + Functions are examples; the choice should follow deployment familiarity, secret management, logs, limits, and domain setup rather than loyalty to GitHub Pages.
+A platform that hosts both the frontend and the small proxy is likely simpler for this project. Vercel + Functions is the initial deployment target because it offers convenient frontend hosting, previews, serverless functions, and secret configuration. Cloudflare Pages + Workers remains a supported alternate target, not a structural dependency. The choice should follow deployment familiarity, secret management, logs, limits, and domain setup rather than loyalty to a platform.
 
 This deployment does **not** provide cross-device continuity: `localStorage` belongs to one browser profile on one device. It does provide safe provider-key storage when the proxy keeps credentials server-side. Direct calls to model/search APIs from the browser may fail because of CORS, expose secrets, or create uncontrolled spend.
 
 The local-only choice should not leak into the rest of the application. The UI and domain services should depend on the existing asynchronous `ThreadStore` interface, not on `localStorage`, IndexedDB, serialization details, or browser APIs. The first implementation can be `LocalThreadStore`; a later `RemoteThreadStore` can satisfy the same contract without changing chat, research, export, or thread UI behavior.
+
+## Portability and Deployment Boundaries
+
+No hosting platform should be structurally critical to the application. The deployable system should have three independently replaceable layers:
+
+```text
+application core
+  ├── normalized domain types
+  ├── chat/search/extraction/export interfaces
+  ├── research orchestration
+  └── thread and artifact behavior
+          │
+          ├── runtime adapter
+          │     ├── local HTTP server
+          │     ├── Vercel Function (initial target)
+          │     └── Cloudflare Worker / other serverless adapter
+          │
+          └── infrastructure adapters
+                ├── LocalThreadStore
+                ├── RemoteThreadStore
+                ├── provider implementations
+                └── secret/configuration bindings
+```
+
+Portability invariants:
+
+- application-core code imports no Vercel, Cloudflare, framework, or browser-storage package;
+- provider adapters consume a small configuration object and return normalized domain values;
+- runtime adapters translate platform-specific request/response objects to standard Web `Request`/`Response` behavior;
+- secrets enter only through runtime configuration and are never represented in frontend configuration;
+- storage implementations satisfy `ThreadStore`; the UI does not know whether data is local, remote, relational, or object-backed;
+- export rendering is deterministic and runnable locally without a hosted platform;
+- a local command can exercise the same HTTP API used by the deployed frontend;
+- deployment-specific conveniences may be used in adapters, but they must not change domain behavior or data formats.
+
+The initial target may use Vercel conveniences—preview deployments, project environment variables, function routing, and observability—without making Vercel APIs part of the application core. A second runtime adapter should be a verification exercise, not a rewrite.
 
 Therefore a static deployment is safe only if either:
 
@@ -472,7 +508,7 @@ The application may later become installable as a PWA, but offline support shoul
 ## Open Questions for the Next Session
 
 1. **Persistence boundary:** use `LocalThreadStore` for the static/local proof. Keep the application dependent on the abstract `ThreadStore`, with versioned export/import so a later `RemoteThreadStore` can be composed or swapped in without rewriting the product.
-2. **Frontend hosting:** GitHub Pages is optional rather than an architectural requirement. Prefer a single platform that can host the static frontend and the small server-side proxy when that reduces deployment and CORS complexity.
+2. **Frontend hosting:** GitHub Pages is optional rather than an architectural requirement. Use Vercel as the initial deployment target for its integrated frontend/function workflow, while keeping the runtime and infrastructure adapters portable.
 2. **Default-search behavior:** should the home screen always perform web search, or offer chat/search as an explicit mode while the product is being validated?
 3. **Research mode:** is `auto` important for the MVP, or should search remain fully explicit and predictable?
 4. **Extraction policy:** should source extraction be required for every researched turn, selectively triggered for the top results, or user-triggered per source?
