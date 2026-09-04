@@ -179,18 +179,22 @@ This voice is a presentation and prompt contract, not a provider dependency. The
 
 ## Initial Provider Strategy
 
-The first provider should optimize for grounded web research and inspectable citations, not merely general chat quality. Perplexity is the strongest initial fit for a one-key prototype because its product/API center of gravity is web research: its Search API returns structured ranked results, while its Sonar-style responses provide cited synthesis. It allows the first proof to validate the complete “according to my research…” loop without building a search system and synthesis system simultaneously.
+The first provider should optimize for the user's existing workflow and API access before optimizing for a provider's branded research product. The product is not meant to recreate Perplexity's consumer interface. Its value is a user-controlled research-and-handoff layer: local threads, inspectable evidence, a distinctive “according to my research…” report, and editable artifacts for pi.dev.
 
-The adapter must still preserve the application's separate boundaries:
+Perplexity remains a viable optional adapter, especially if its API research behavior is useful, but it should not be the architectural recommendation or product dependency. A Perplexity Pro subscription and Perplexity API access are separate concerns; the existing subscription should not be assumed to provide the API key or API credits.
+
+For the first real prototype, prefer the provider whose API key and model behavior already work well for the user's pi.dev workflow. If that provider offers web search with citations, use its native search tool. If it does not, compose a standalone `SearchProvider` with that provider's `ChatProvider`. This validates the application idea without asking the user to adopt another provider first.
+
+The adapter must preserve the application's separate boundaries:
 
 ```text
-Perplexity adapter
+provider adapter(s)
   ├── provider response → normalized SearchResult[]
   ├── provider response → normalized citation metadata
   └── provider response → ChatStream / ResearchAnswer
 ```
 
-Do not store raw Perplexity payloads as the domain model. A later implementation can use OpenAI Responses web search, Gemini Google Search grounding, Anthropic web search, or a standalone SearchProvider plus a separate ChatProvider. OpenAI, Gemini, and Anthropic all expose current-web search with citations, but their tool semantics and response metadata differ; the normalized citation contract is the portability seam.
+Do not store raw provider payloads as the domain model. Candidate implementations include OpenAI Responses web search, Gemini Google Search grounding, Anthropic web search, Perplexity search/synthesis, or a standalone search provider plus a separate chat provider. These integrations expose different search controls and citation metadata; the normalized citation contract is the portability seam.
 
 A second provider should be added after the first end-to-end workflow works, primarily to test whether the domain and exports truly remain provider-neutral. Provider choice should remain configurable per deployment, not user-configurable in the first UI.
 
