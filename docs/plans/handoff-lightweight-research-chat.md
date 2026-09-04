@@ -1,13 +1,22 @@
-# Handoff: Lightweight Research Chat
+# Lightweight Research Chat → Pi Artifact Workbench
 
-> Last updated: 2026-05-12 — by agent session
-> Resume by: reading this file end-to-end, then refining the open product and architecture decisions.
+## Current State
+
+- Status: planning
+- Last updated: 2026-05-12
+- Current focus: refining the product around browser-first research capture and a high-quality handoff into pi.dev
+- Handoff lives in: [`## Handoff`](#handoff)
+- Next action: settle the MVP persistence boundary and the exact pi artifact/export contract
+
+## Handoff
+
+The core abstractions remain intentionally small: normalized chat, search, extraction, thread storage, and export boundaries. The important product clarification is that this is not merely a lightweight research chat: it should become a practical personal search surface for desktop and mobile browsers, with a fast path from web evidence to editable artifacts that pi.dev can consume. Continue by defining the smallest end-to-end browser → research thread → Markdown artifact → pi workflow, then resolve the open product choices below.
 
 ## Goal
 
-Build a small, self-deployed, mobile-friendly web client for temporary, source-aware conversations. It should support ordinary chat, optional web research, lightweight topic sessions, and clean Markdown export for durable storage or handoff to a desktop workflow.
+Build a self-deployed, mobile-friendly web client that can become the user's default search surface for exploratory questions. It should support ordinary chat, explicit web research, lightweight topic sessions, and clean, editable artifacts that move useful context from the browser into pi.dev for coding, planning, investigation, or handoff.
 
-The product is intentionally an ephemeral thinking surface—not a knowledge base, coding agent, or permanent memory system.
+The product is intentionally an ephemeral thinking surface—not a knowledge base, coding agent, or permanent memory system. Its durable output is the artifact the user chooses to export, not an invisible memory layer.
 
 ## Product Shape
 
@@ -30,10 +39,12 @@ ask / discuss
 
 The core value is not generic LLM chat. It is the combination of:
 
-1. Search results that remain visible and inspectable.
-2. Lightweight, topic-oriented conversations.
-3. Markdown export as a first-class completion action.
-4. User-controlled deployment and credentials.
+1. A browser-search entry point that is useful enough to replace the default search habit for research-heavy questions.
+2. Search results and extracted evidence that remain visible and inspectable.
+3. Lightweight, topic-oriented conversations rather than a permanent knowledge base.
+4. A high-signal, editable artifact export as a first-class completion action.
+5. A low-friction bridge into pi.dev: selected context should arrive with sources, decisions, open questions, and next actions intact.
+6. User-controlled deployment and credentials.
 
 ## Core Requirements
 
@@ -88,15 +99,29 @@ Required actions:
 
 Folders, tags, embeddings, semantic retrieval, and cross-thread memory are outside the initial scope.
 
-### Markdown Export
+### Artifact Export and Pi.dev Handoff
 
-Export is a primary workflow, not a miscellaneous settings action.
+Export is a primary workflow, not a miscellaneous settings action. The user should be able to turn either a whole thread or a selected slice of research into an artifact without cleaning up provider-specific JSON or losing source provenance.
 
 Support:
 
 - download as `.md`;
 - copy as Markdown;
-- invoke the platform share action where available.
+- invoke the platform share action where available;
+- export only selected messages, sources, or answer sections;
+- choose a durable transcript or a concise pi.dev handoff;
+- preview and edit the artifact before it leaves the application.
+
+The initial pi.dev integration should be file/protocol-level rather than a deep API integration: produce predictable Markdown that can be pasted, downloaded, shared, or placed into the working context of a pi session. Avoid coupling the web app to pi internals until the artifact contract proves useful.
+
+A pi.dev handoff should optimize for actionability rather than transcript completeness. It should preserve:
+
+- the user's objective and relevant constraints;
+- conclusions and claims, separated from evidence;
+- source links and optionally bounded source excerpts;
+- decisions made and decisions still open;
+- concrete next actions or an implementation prompt;
+- an explicit note that the content is research context, not executed or verified work.
 
 Two useful export forms:
 
@@ -331,8 +356,8 @@ Support configurable limits for:
 
 ## Explicit Non-Goals
 
-- Coding-agent execution.
-- Filesystem or shell access.
+- Coding-agent execution inside the web/mobile app (pi.dev remains the execution environment).
+- Filesystem or shell access from the web/mobile app.
 - General tool/plugin ecosystems.
 - Vector databases or semantic memory.
 - Automatic permanent memory.
@@ -346,22 +371,26 @@ The application may later become installable as a PWA, but offline support shoul
 
 ## Proposed Build Sequence
 
-- [ ] **Validate the loop:** one chat adapter, one search adapter, streamed chat, explicit search, visible results, and transcript export.
+- [ ] **Validate the browser loop:** mobile/desktop query entry, one chat adapter, one search adapter, explicit research, visible result/source evidence, streamed synthesis, and deterministic Markdown export.
+- [ ] **Validate the pi artifact loop:** selected research → editable handoff preview → copy/download/shareable Markdown with sources, decisions, and next actions.
 - [ ] **Add lightweight persistence:** topic list, rename/archive/delete, normalized messages and sources.
-- [ ] **Add cross-device continuity:** authenticated server-side `ThreadStore` and synchronized desktop/mobile access.
-- [ ] **Improve handoff:** handoff export, preview/edit, context compaction, and usage visibility.
-- [ ] **Test the abstractions:** add a second implementation behind the chat and search boundaries without changing domain storage or UI behavior.
+- [ ] **Add cross-device continuity:** authenticated server-side `ThreadStore` and synchronized desktop/mobile access so the tool can plausibly become the default search surface across devices.
+- [ ] **Improve handoff:** handoff export, context compaction, source selection, and usage visibility.
+- [ ] **Test the abstractions:** add a second implementation behind the chat and search boundaries without changing domain storage, artifact format, or UI behavior.
 
 ## Open Questions for the Next Session
 
-1. Should the first prototype persist threads in browser storage or require cross-device server persistence immediately?
-2. Is `auto` research important enough for the MVP, or should search remain fully explicit?
-3. Should source extraction be required for every researched turn or selectively triggered?
-4. What is the smallest citation contract that remains reliable across chat implementations?
-5. Should handoff export be a fixed template, user-configurable templates, or both?
-6. How should failed or partial streamed responses appear and persist?
-7. Is the initial deployment strictly personal, or should the architecture preserve a future multi-user boundary?
+1. **Persistence boundary:** should the first prototype use browser storage for speed, or require authenticated server persistence so desktop/mobile continuity is present from day one?
+2. **Default-search behavior:** should the home screen always perform web search, or offer chat/search as an explicit mode while the product is being validated?
+3. **Research mode:** is `auto` important for the MVP, or should search remain fully explicit and predictable?
+4. **Extraction policy:** should source extraction be required for every researched turn, selectively triggered for the top results, or user-triggered per source?
+5. **Pi artifact contract:** is a downloadable/copyable Markdown handoff sufficient initially, or should the MVP target a specific pi.dev import/paste convention?
+6. **Artifact scope:** should users export a whole thread, selected messages/sources, or both?
+7. **Handoff shape:** fixed template first, user-configurable templates, or fixed required sections plus optional customization?
+8. **Citation contract:** what is the smallest source-ID/citation format that remains reliable across chat implementations and exports?
+9. **Failure behavior:** how should failed or partial streamed responses appear and persist?
+10. **Deployment boundary:** is the initial deployment strictly personal, or should the architecture preserve a future multi-user boundary?
 
 ## Next
 
-Start the new project by choosing the persistence boundary and sketching the mobile chat/search interaction. Then define normalized TypeScript domain types before selecting concrete infrastructure or external providers.
+Resolve the persistence, default-search, and pi artifact decisions first. Then define the browser interaction and normalized TypeScript domain types before selecting concrete infrastructure or external providers.
