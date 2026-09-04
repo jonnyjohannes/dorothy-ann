@@ -291,6 +291,36 @@ copy / download / share
 
 Transcript export should not require a model call. Handoff export may use one, but the generated artifact must be editable before leaving the application.
 
+## Storage Strategy
+
+The initial storage decision is local-first, not storage-hardcoded. `LocalThreadStore` is the MVP implementation; `ThreadStore` remains the application boundary.
+
+The storage contract should cover the operations the UI actually needs while leaving backend mechanics out of the domain:
+
+```ts
+interface ThreadStore {
+  list(): Promise<ThreadSummary[]>;
+  load(threadId: ThreadId): Promise<Thread | null>;
+  save(thread: Thread): Promise<void>;
+  archive(threadId: ThreadId): Promise<void>;
+  remove(threadId: ThreadId): Promise<void>;
+  exportData(threadIds?: ThreadId[]): Promise<ThreadArchive>;
+  importData(archive: ThreadArchive): Promise<ImportReport>;
+}
+```
+
+Storage requirements:
+
+- persist versioned, provider-neutral domain objects;
+- use stable thread, message, research-run, and source IDs;
+- keep serialization/migrations inside the storage adapter;
+- make writes atomic enough that a refresh cannot leave a half-written thread;
+- handle unavailable, full, or corrupted browser storage without losing the current exportable artifact;
+- keep archived/deleted semantics explicit rather than relying on UI filtering;
+- avoid assuming all devices share a clock, browser, or storage quota.
+
+`LocalThreadStore` may begin with `localStorage` for the smallest proof. If thread size grows because of extracted source content, move that implementation to IndexedDB without changing the rest of the app. `RemoteThreadStore` can later map the same normalized objects to authenticated API calls and server persistence. The UI should not branch on local versus remote storage; synchronization status, if eventually added, should be an adapter-provided capability/state.
+
 ## Context Management
 
 Short threads can send the complete transcript. As a thread approaches a configurable context budget, the interface should make that state visible and offer explicit choices:
@@ -312,12 +342,14 @@ There are two legitimate initial deployment shapes:
 
 ```text
 GitHub Pages static app
-        ├── browser-local thread storage
+        ├── browser-local ThreadStore implementation
         ├── browser UI and Markdown export
         └── calls to an external/proxy research service (if any)
 ```
 
 This is inexpensive and fast for validating the interaction, responsive layout, export UX, and artifact shape. It does **not** provide cross-device continuity: `localStorage` belongs to one browser profile on one device, and a static client cannot safely contain provider credentials. Direct calls to model/search APIs may also fail because of CORS, expose secrets, or create uncontrolled spend.
+
+The local-only choice should not leak into the rest of the application. The UI and domain services should depend on the existing asynchronous `ThreadStore` interface, not on `localStorage`, IndexedDB, serialization details, or browser APIs. The first implementation can be `LocalThreadStore`; a later `RemoteThreadStore` can satisfy the same contract without changing chat, research, export, or thread UI behavior.
 
 Therefore a static deployment is safe only if either:
 
@@ -352,7 +384,7 @@ static web client / hosted frontend
         ↓ authenticated request
 small application backend
         ├── server-side provider credentials
-        ├── thread/artifact storage
+        ├── RemoteThreadStore implementation
         ├── chat provider adapter
         ├── search provider adapter
         └── content extraction adapter
@@ -362,10 +394,12 @@ This supports cross-device use, secrets, rate limits, and a real default-search 
 
 ### Recommended rollout
 
-Use a two-stage rollout with one domain model:
+Use a two-stage rollout with one domain model and a swappable storage boundary:
 
-1. **local/static proof:** GitHub Pages or equivalent frontend, local storage allowed, fixture or proxied providers, deterministic export. Validate the core interaction in roughly 1–3 focused days of implementation time.
-2. **cross-device MVP:** keep the same frontend contracts, put provider calls and `ThreadStore` behind a small authenticated backend, and add sync. Estimate roughly 3–7 focused days after the proof, depending on the chosen hosting/auth/database services.
+1. **local/static proof:** GitHub Pages or equivalent frontend, `LocalThreadStore`, fixture or proxied providers, deterministic export. Validate the core interaction in roughly 1–3 focused days of implementation time.
+2. **cross-device upgrade, only if earned:** keep the same domain and UI contracts, implement `RemoteThreadStore` behind a small authenticated backend, and add sync/import migration. Estimate roughly 3–7 focused days after the proof, depending on the chosen hosting/auth/database services.
+
+The prototype should include an explicit export/import path even if remote storage is not planned. This protects the user's local threads from a future storage change and gives the product a useful manual cross-device escape hatch: export a thread or archive on one device, import it on another.
 
 These are estimates for a narrow single-user build, not a commitment. The main schedule risk is provider integration and authentication—not the chat UI or Markdown export. If cross-device usage is a prerequisite for judging the product, skip Option A as a product milestone and build Option B directly; the likely initial phase becomes roughly 1–2 weeks of focused implementation including deployment hardening and testing.
 
@@ -430,7 +464,7 @@ The application may later become installable as a PWA, but offline support shoul
 
 ## Open Questions for the Next Session
 
-1. **Persistence boundary:** use the static/local proof first unless cross-device continuity is required to evaluate the product; otherwise start directly with the small hosted personal app described in `## Deployment and Credential Boundary`.
+1. **Persistence boundary:** use `LocalThreadStore` for the static/local proof. Keep the application dependent on the abstract `ThreadStore`, with versioned export/import so a later `RemoteThreadStore` can be composed or swapped in without rewriting the product.
 2. **Default-search behavior:** should the home screen always perform web search, or offer chat/search as an explicit mode while the product is being validated?
 3. **Research mode:** is `auto` important for the MVP, or should search remain fully explicit and predictable?
 4. **Extraction policy:** should source extraction be required for every researched turn, selectively triggered for the top results, or user-triggered per source?
