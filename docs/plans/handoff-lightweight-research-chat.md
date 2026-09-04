@@ -4,13 +4,13 @@
 
 - Status: planning
 - Last updated: 2026-05-12
-- Current focus: refining the product around browser-first research capture and a high-quality handoff into pi.dev
+- Current focus: choosing a deployment shape that validates the browser → research → pi artifact loop without prematurely building a full backend
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: settle the MVP persistence boundary and the exact pi artifact/export contract
+- Next action: choose whether the initial phase is a static/local proof or a cross-device hosted MVP
 
 ## Handoff
 
-The core abstractions remain intentionally small: normalized chat, search, extraction, thread storage, and export boundaries. The important product clarification is that this is not merely a lightweight research chat: it should become a practical personal search surface for desktop and mobile browsers, with a fast path from web evidence to editable artifacts that pi.dev can consume. Continue by defining the smallest end-to-end browser → research thread → Markdown artifact → pi workflow, then resolve the open product choices below.
+The core abstractions remain intentionally small: normalized chat, search, extraction, thread storage, and export boundaries. The important product clarification is that this is not merely a lightweight research chat: it should become a practical personal search surface for desktop and mobile browsers, with a fast path from web evidence to editable artifacts that pi.dev can consume. The key deployment question is now whether to validate the interaction as a static GitHub Pages app first or include hosted persistence immediately. Continue by defining the smallest end-to-end browser → research thread → Markdown artifact → pi workflow and making the deployment trade-off explicit.
 
 ## Goal
 
@@ -306,20 +306,49 @@ Compaction must not create hidden memory. Store and display the generated contex
 
 ## Deployment and Credential Boundary
 
+There are two legitimate initial deployment shapes:
+
+### Option A: static GitHub Pages proof
+
 ```text
-responsive web client
+GitHub Pages static app
+        ├── browser-local thread storage
+        ├── browser UI and Markdown export
+        └── calls to an external/proxy research service (if any)
+```
+
+This is inexpensive and fast for validating the interaction, responsive layout, export UX, and artifact shape. It does **not** provide cross-device continuity: `localStorage` belongs to one browser profile on one device, and a static client cannot safely contain provider credentials. Direct calls to model/search APIs may also fail because of CORS, expose secrets, or create uncontrolled spend.
+
+Therefore a static deployment is safe only if either:
+
+- the first proof uses mocked/fixture providers; or
+- it calls a separately hosted backend/proxy whose credentials and limits are server-side.
+
+### Option B: small hosted personal app
+
+```text
+static web client / hosted frontend
         ↓ authenticated request
-application backend
-        ├── thread storage
-        ├── server-side credentials
+small application backend
+        ├── server-side provider credentials
+        ├── thread/artifact storage
         ├── chat provider adapter
         ├── search provider adapter
         └── content extraction adapter
 ```
 
-Credentials should be deployment secrets and remain server-side. The initial product is single-user; it should avoid building account management or browser-side credential storage.
+This supports cross-device use, secrets, rate limits, and a real default-search workflow. It does not require a large platform: a small serverless/API deployment plus managed or embedded database is enough for the single-user MVP.
 
-The storage implementation may begin locally in the browser to validate the interaction, then move behind `ThreadStore` when cross-device continuity is needed.
+### Recommended rollout
+
+Use a two-stage rollout with one domain model:
+
+1. **local/static proof:** GitHub Pages or equivalent frontend, local storage allowed, fixture or proxied providers, deterministic export. Validate the core interaction in roughly 1–3 focused days of implementation time.
+2. **cross-device MVP:** keep the same frontend contracts, put provider calls and `ThreadStore` behind a small authenticated backend, and add sync. Estimate roughly 3–7 focused days after the proof, depending on the chosen hosting/auth/database services.
+
+These are estimates for a narrow single-user build, not a commitment. The main schedule risk is provider integration and authentication—not the chat UI or Markdown export. If cross-device usage is a prerequisite for judging the product, skip Option A as a product milestone and build Option B directly; the likely initial phase becomes roughly 1–2 weeks of focused implementation including deployment hardening and testing.
+
+Credentials should be deployment secrets and remain server-side. Even in the static proof, the browser should never receive long-lived provider credentials. The initial product is single-user; it should avoid building general account management, while still keeping an authentication boundary around private threads and provider routes.
 
 ## Security Constraints
 
@@ -371,16 +400,16 @@ The application may later become installable as a PWA, but offline support shoul
 
 ## Proposed Build Sequence
 
-- [ ] **Validate the browser loop:** mobile/desktop query entry, one chat adapter, one search adapter, explicit research, visible result/source evidence, streamed synthesis, and deterministic Markdown export.
-- [ ] **Validate the pi artifact loop:** selected research → editable handoff preview → copy/download/shareable Markdown with sources, decisions, and next actions.
-- [ ] **Add lightweight persistence:** topic list, rename/archive/delete, normalized messages and sources.
-- [ ] **Add cross-device continuity:** authenticated server-side `ThreadStore` and synchronized desktop/mobile access so the tool can plausibly become the default search surface across devices.
+- [ ] **Phase 1 — validate the browser loop:** mobile/desktop query entry, one chat adapter, one search adapter, explicit research, visible result/source evidence, streamed synthesis, and deterministic Markdown export. Target: roughly 1–3 focused implementation days with fixture or proxied providers.
+- [ ] **Phase 1 — validate the pi artifact loop:** selected research → editable handoff preview → copy/download/shareable Markdown with sources, decisions, and next actions. Target: included in the same 1–3 day proof if the artifact format stays narrow.
+- [ ] **Phase 2 — add lightweight persistence:** topic list, rename/archive/delete, normalized messages and sources. Target: part of the static proof locally, then moved behind the store boundary.
+- [ ] **Phase 3 — add cross-device continuity:** authenticated server-side `ThreadStore`, server-side provider calls, and synchronized desktop/mobile access so the tool can plausibly become the default search surface across devices. Target: roughly 3–7 additional focused implementation days, or 1–2 weeks total if this is required from the start.
 - [ ] **Improve handoff:** handoff export, context compaction, source selection, and usage visibility.
 - [ ] **Test the abstractions:** add a second implementation behind the chat and search boundaries without changing domain storage, artifact format, or UI behavior.
 
 ## Open Questions for the Next Session
 
-1. **Persistence boundary:** should the first prototype use browser storage for speed, or require authenticated server persistence so desktop/mobile continuity is present from day one?
+1. **Persistence boundary:** use the static/local proof first unless cross-device continuity is required to evaluate the product; otherwise start directly with the small hosted personal app described in `## Deployment and Credential Boundary`.
 2. **Default-search behavior:** should the home screen always perform web search, or offer chat/search as an explicit mode while the product is being validated?
 3. **Research mode:** is `auto` important for the MVP, or should search remain fully explicit and predictable?
 4. **Extraction policy:** should source extraction be required for every researched turn, selectively triggered for the top results, or user-triggered per source?
@@ -393,4 +422,4 @@ The application may later become installable as a PWA, but offline support shoul
 
 ## Next
 
-Resolve the persistence, default-search, and pi artifact decisions first. Then define the browser interaction and normalized TypeScript domain types before selecting concrete infrastructure or external providers.
+Decide whether cross-device continuity is required to evaluate the product. If not, build the static/local proof first; if yes, start with the small hosted personal app. Then define the browser interaction, normalized TypeScript domain types, and deployment contract before selecting concrete infrastructure or external providers.
