@@ -1,0 +1,6 @@
+import { describe, expect, it } from "vitest";
+import { createApp } from "../server/app";
+import { loadConfig } from "../server/config";
+
+const app = createApp({ config: loadConfig({ DOROTHY_FIXTURE_MODE: "true" }) });
+describe("portable Hono API", () => { it("streams a fixture research turn with one terminal event", async () => { const response = await app.request("http://localhost/api/turn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: "why is the sky blue?", mode: "research" }) }); expect(response.status).toBe(200); expect(response.headers.get("content-type")).toContain("text/event-stream"); const body = await response.text(); expect(body).toContain("event: turn.started"); expect(body).toContain("event: research.sources"); expect(body).toContain("event: answer.delta"); expect(body.match(/event: turn\.completed/g)).toHaveLength(1); }); it("rejects malformed turns", async () => { const response = await app.request("http://localhost/api/turn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: "", mode: "research" }) }); expect(response.status).toBe(400); }); });

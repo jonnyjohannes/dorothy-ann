@@ -5,7 +5,7 @@
 - Status: in progress
 - Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha.md`
 - Last updated: 2026-09-05
-- Current focus: bounded extractor baseline is implemented and its first focused tests pass; hardening pinned DNS/streaming byte enforcement and broader redirect/rebinding fixtures before closing step 6
+- Current focus: fixture turn streaming endpoint is implemented and verified; continue provider-neutral chat/research streaming while extractor hardening remains active
 - Handoff lives in: [`## Handoff`](#handoff)
 - Next action: approve implementation via `feature-builder`, beginning with Plan Ledger step 1
 
@@ -13,7 +13,7 @@
 
 Read `Current State`, `Concrete Application Stack`, `Browser Interaction Design`, `Application HTTP and Streaming Contract`, `Explicit Non-Goals`, `Implementation Plan`, and `Operator Setup and Secret Handoff` first. Product, interfaces, browser states, transport contracts, dependencies, implementation steps, and verification are settled. The alpha is a Vercel-hosted React/Vite SPA with a portable Hono backend, browser-only IndexedDB threads, Brave search, application-owned extraction, Anthropic synthesis, passphrase auth, and Markdown reports.
 
-Ledger steps 1–5 are complete and verified. Authentication now has scrypt hash verification, signed expiring cookies with previous-key verification, fixture-safe auth routes, cookie logout, in-memory rate limiting, and an Upstash limiter seam. Brave lookup now normalizes bounded ranked results, deduplicates canonical URLs, handles provider failures, and serves fixture/live provider paths without involving model or extraction code. Step 6 has a working Readability/content-type/URL-validation baseline, but remains active until production fetches use the validated DNS result and streamed byte bounds, with the plan's redirect/rebinding fixture matrix. Fixture mode allows implementation through step 11 without live credentials; step 12 needs the deployment inputs. Do not add remote thread storage, sync, autonomous research, context compaction, topic archiving, edit-history branching, rich editors, or second-provider work to the alpha.
+Ledger steps 1–5 are complete and verified. Authentication now has scrypt hash verification, signed expiring cookies with previous-key verification, fixture-safe auth routes, cookie logout, in-memory rate limiting, and an Upstash limiter seam. Brave lookup now normalizes bounded ranked results, deduplicates canonical URLs, handles provider failures, and serves fixture/live provider paths without involving model or extraction code. Step 6 has a working Readability/content-type/URL-validation baseline, but remains active until production fetches use the validated DNS result and streamed byte bounds. A new fixture-only `/api/turn` SSE endpoint now emits ordered chat/research lifecycle events with exactly one terminal completion event; Anthropic replacement and full orchestration remain active work. Fixture mode allows implementation through step 11 without live credentials; step 12 needs the deployment inputs. Do not add remote thread storage, sync, autonomous research, context compaction, topic archiving, edit-history branching, rich editors, or second-provider work to the alpha.
 
 ## Summary
 
@@ -2095,8 +2095,8 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [x] 4. Owner auth — deliverable: scrypt passphrase, signed sessions, auth routes, in-memory/Upstash limiters; verify: scrypt/session/expiry/rotation/cookie/limiter tests and full typecheck/lint/build passed.
 - [x] 5. Brave lookup — deliverable: normalized `SearchProvider` and `/api/lookup`; verify: normalization, malformed payload, dedupe, API-boundary, provider-error tests plus full lint/typecheck/build passed.
 - [~] 6. Safe extraction — deliverable: SSRF-safe bounded Node extractor with Readability; current: URL/content-type/timeout/character bounds and initial fixtures implemented; remaining: pinned DNS connection, streaming byte cap, redirect/rebinding/oversized fixture matrix.
-- [ ] 7. Anthropic adapter — deliverable: chat/research/report streaming with validated citation sentinels; verify: replay, injection, chunk boundary, unknown citation, interruption, and persistence-boundary tests.
-- [ ] 8. Orchestration/SSE — deliverable: turn/report streams, bounded extraction, stage-aware retry; verify: Hono end-to-end contract matrix and terminal-event assertions.
+- [~] 7. Anthropic adapter — deliverable: chat/research/report streaming with validated citation sentinels; current: provider-neutral fixture stream contract exists at `/api/turn`; remaining: Anthropic adapter and replay/security fixtures.
+- [~] 8. Orchestration/SSE — deliverable: turn/report streams, bounded extraction, stage-aware retry; current: fixture `/api/turn` lifecycle and terminal-event contract verified; remaining: real staged orchestration/retry/persistence.
 - [ ] 9. Shell and lookup UI — deliverable: auth shell, drawer, mode routing, lookup/promotion states; verify: RTL/MSW plus desktop/mobile Playwright paths.
 - [ ] 10. Research/chat/evidence UI — deliverable: accepted turn/evidence states and recovery interactions; verify: machine-state components plus full/partial/failure/reload E2E paths.
 - [ ] 11. Reports and recovery UI — deliverable: Markdown workbench, drafts, export/share, data backup; verify: deterministic export tests and workbench/backup E2E paths.
