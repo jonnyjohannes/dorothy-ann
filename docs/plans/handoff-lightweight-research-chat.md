@@ -4,13 +4,13 @@
 
 - Status: planning
 - Last updated: 2026-09-05
-- Current focus: selecting supporting React packages and concrete chat/search/extraction/limiter adapters
+- Current focus: selecting accessible UI primitives, Markdown/editor packages, test tools, extraction implementation, and a durable login limiter
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: choose routing and UI state conventions, then provider adapters and the Implementation Plan/Plan Ledger
+- Next action: choose the accessibility primitive set, then finish supporting packages and the Implementation Plan/Plan Ledger
 
 ## Handoff
 
-The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. Vercel is the committed deployment target, while application core, Hono routes, provider adapters, and persisted formats remain portable. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. The MVP adds no slash commands or bang aliases. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB through the small `idb` promise/schema wrapper from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. `idb` remains private to the infrastructure adapter. The hosted app is personal/single-owner and uses a portable passphrase auth adapter: a dedicated `/unlock` screen exchanges the entered passphrase for a signed secure session cookie with a seven-day idle and 30-day absolute expiry, while protected application routes depend only on normalized `AuthContext`. MVP export scope is also settled: export one researched answer or a whole topic as an editable **Dorothy Ann report**, and export a whole topic as a deterministic transcript; arbitrary message/source selection and direct pi integration are deferred. Before transport work continues, complete and agree on the browser state matrix and paired desktop/mobile layouts described in `Browser Interaction Design`. A happy-path matrix and wireframe set are now drafted. Topic navigation is settled as a closed-by-default drawer on desktop and mobile, leaving only main content plus optional evidence visible. On desktop, the evidence panel opens automatically when research sources arrive, remains user-collapsible, and reopens/focuses when a citation is activated; mobile evidence remains an on-demand bottom sheet. Export uses a compact format-choice modal followed by a dedicated full-screen artifact workbench route on desktop and mobile. The happy-path shell is now agreed and the exhaustive MVP transition matrix is drafted. The exhaustive loading, empty, partial, error, and recovery variants are now drafted. Export-draft recovery is settled through an IndexedDB `artifactDrafts` store: generated and edited workbench content autosaves independently from topics, can be resumed or explicitly discarded, and does not become a general artifact library. The browser interaction baseline is accepted. Exact lookup, turn, retry, and topic-report HTTP/SSE contracts are drafted around a stateless authenticated backend and browser-owned threads. Every referenced ID, thread, turn, message, source, extraction, context, error, archive, report, and provider-boundary type is now defined in the normalized domain model. The concrete shell is now Vite + TypeScript for the frontend, Hono over standard Web APIs for the backend, a thin Vercel deployment adapter as the committed target, and a thin Node adapter for local execution. React is selected as the Vite UI framework. Continue by choosing the smallest routing, state, accessibility, Markdown, and testing package set, then settle provider/limiter adapters and replace the coarse build sequence with an atomic Implementation Plan and mirrored Plan Ledger.
+The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. Vercel is the committed deployment target, while application core, Hono routes, provider adapters, and persisted formats remain portable. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. The MVP adds no slash commands or bang aliases. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB through the small `idb` promise/schema wrapper from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. `idb` remains private to the infrastructure adapter. The hosted app is personal/single-owner and uses a portable passphrase auth adapter: a dedicated `/unlock` screen exchanges the entered passphrase for a signed secure session cookie with a seven-day idle and 30-day absolute expiry, while protected application routes depend only on normalized `AuthContext`. MVP export scope is also settled: export one researched answer or a whole topic as an editable **Dorothy Ann report**, and export a whole topic as a deterministic transcript; arbitrary message/source selection and direct pi integration are deferred. Before transport work continues, complete and agree on the browser state matrix and paired desktop/mobile layouts described in `Browser Interaction Design`. A happy-path matrix and wireframe set are now drafted. Topic navigation is settled as a closed-by-default drawer on desktop and mobile, leaving only main content plus optional evidence visible. On desktop, the evidence panel opens automatically when research sources arrive, remains user-collapsible, and reopens/focuses when a citation is activated; mobile evidence remains an on-demand bottom sheet. Export uses a compact format-choice modal followed by a dedicated full-screen artifact workbench route on desktop and mobile. The happy-path shell is now agreed and the exhaustive MVP transition matrix is drafted. The exhaustive loading, empty, partial, error, and recovery variants are now drafted. Export-draft recovery is settled through an IndexedDB `artifactDrafts` store: generated and edited workbench content autosaves independently from topics, can be resumed or explicitly discarded, and does not become a general artifact library. The browser interaction baseline is accepted. Exact lookup, turn, retry, and topic-report HTTP/SSE contracts are drafted around a stateless authenticated backend and browser-owned threads. Every referenced ID, thread, turn, message, source, extraction, context, error, archive, report, and provider-boundary type is now defined in the normalized domain model. The concrete shell is now Vite + TypeScript for the frontend, Hono over standard Web APIs for the backend, a thin Vercel deployment adapter as the committed target, and a thin Node adapter for local execution. React is selected as the Vite UI framework. React Router owns browser routes. XState models only the interruption-heavy auth, lookup/research turn, and topic-report workflows; ordinary disclosure, focus, and form state remains local React state, with no global client store. Continue by choosing the accessibility primitive set, Markdown/editor/test packages, extraction implementation, and durable login limiter, then replace the coarse build sequence with an atomic Implementation Plan and mirrored Plan Ledger.
 
 ## Goal
 
@@ -193,12 +193,22 @@ Settled:
 
 - **deployment target:** Vercel for production and preview deployments;
 - **frontend UI/build:** React + Vite + TypeScript;
+- **routing:** React Router with `/unlock`, `/`, `/topics/:threadId`, and `/topics/:threadId/export/:draftId` routes;
+- **workflow state:** XState for auth, lookup/research turn, and topic-report actors only; local React state for ordinary UI state; no global store;
 - **backend HTTP layer:** Hono using standard Web `Request`/`Response` and SSE-compatible streaming;
 - **portability boundary:** Hono application/orchestration code contains no Vercel imports; a thin Vercel function entrypoint binds environment, secrets, limits, and platform request lifecycle;
 - **local runtime:** a thin Node adapter runs the same Hono application and API contracts used on Vercel;
 - **browser persistence:** IndexedDB through `idb`.
 
-React is the selected UI framework. It is used as a client-side Vite SPA, not through Next.js or another full-stack React framework. Domain types, state transitions, research orchestration, export rendering, and storage adapters remain plain TypeScript rather than React-specific modules. React owns rendering, focus/overlay behavior, and composition around those boundaries. Vercel remains the target; SPA deep-link rewrites belong only in `vercel.json`.
+React is the selected UI framework. It is used as a client-side Vite SPA, not through Next.js or another full-stack React framework. React Router owns URL parsing, deep links, browser Back behavior, and restoration hooks. XState machines live outside React components and consume normalized application events:
+
+- `authMachine` — checking, locked, unlocking, authenticated, limited, unavailable, expired;
+- `turnMachine` — lookup, search, extraction, synthesis/chat streaming, completed, stopped, failed, interrupted, and stage-specific retry;
+- `reportMachine` — choosing, deterministic render or generation, clean/dirty workbench, save failure, and retry.
+
+Machines do not become a second persistence model. Completed stages are written through `ThreadStore`/`ArtifactDraftStore`; on reload, machines initialize from persisted domain objects and route state. Drawer visibility, evidence collapse, field drafts, and other short-lived UI details remain local React state unless the interaction contract explicitly requires restoration. There is no Zustand/Redux-style global store.
+
+Domain types, research orchestration, export rendering, and storage adapters remain plain TypeScript rather than React-specific modules. React owns rendering, focus/overlay behavior, and composition around those boundaries. Vercel remains the target; SPA deep-link rewrites belong only in `vercel.json`.
 
 ## Initial Provider Strategy
 
@@ -206,20 +216,35 @@ The first provider should optimize for the user's existing workflow and API acce
 
 Perplexity remains a viable optional adapter, especially if its API research behavior is useful, but it should not be the architectural recommendation or product dependency. A Perplexity Pro subscription and Perplexity API access are separate concerns; the existing subscription should not be assumed to provide the API key or API credits.
 
-For the first real prototype, prefer the provider whose API key and model behavior already work well for the user's pi.dev workflow. If that provider offers web search with citations, use its native search tool. If it does not, compose a standalone `SearchProvider` with that provider's `ChatProvider`. This validates the application idea without asking the user to adopt another provider first.
+For the first real prototype, use **Brave Search API** as the `SearchProvider` and **Anthropic API** as the `ChatProvider`. This gives the personal pi.dev workflow and dorothy-ann a common LLM vendor while keeping web retrieval independent and application-controlled. Use separate Anthropic API keys for pi.dev and dorothy-ann when the account supports it; keep them under the same personal billing relationship to preserve one vendor/payment surface while limiting credential blast radius and making usage attributable.
+
+Brave owns ranked discovery only. Dorothy Ann must not receive a provider-generated research answer from Brave or Anthropic's hosted web-search tool in the MVP. The application owns the bounded pipeline:
+
+```text
+Brave ranked results
+  → normalized SearchResult[]
+  → URL safety, canonicalization, and bounded extraction
+  → EvidencePack
+  → Anthropic chat / research synthesis / report generation
+  → normalized AssistantContentPart[] with app-owned citations
+```
+
+This preserves a meaningful distinction between retrieval and synthesis. Brave results are provider-ranked and their snippets are not guaranteed to be literal page quotations, but they are not an LLM research answer. Raw provider payloads remain adapter-only; normalized results, extracted pages, and evidence packs are the inspectable application inputs. Retrieved content is untrusted reference material and must be delimited from system instructions.
 
 The adapter must preserve the application's separate boundaries:
 
 ```text
-provider adapter(s)
-  ├── provider response → normalized SearchResult[]
-  ├── provider response → normalized citation metadata
-  └── provider response → ChatStream / ResearchAnswer
+SearchProvider (Brave initially)
+  └── provider response → normalized SearchResult[]
+
+ContentExtractor (application-controlled)
+  └── safe URL → bounded ExtractedPage / ExtractionOutcome
+
+ChatProvider (Anthropic initially)
+  └── EvidencePack + context → streamed ChatProviderEvent[]
 ```
 
-Do not store raw provider payloads as the domain model. Candidate implementations include OpenAI Responses web search, Gemini Google Search grounding, Anthropic web search, Perplexity search/synthesis, or a standalone search provider plus a separate chat provider. These integrations expose different search controls and citation metadata; the normalized citation contract is the portability seam.
-
-A second provider should be added after the first end-to-end workflow works, primarily to test whether the domain and exports truly remain provider-neutral. Provider choice should remain configurable per deployment, not user-configurable in the first UI.
+Do not store raw provider payloads as the domain model. Candidate replacement search adapters include Tavily or Exa; candidate replacement chat adapters include OpenAI or Gemini. A second provider should be added after the first end-to-end workflow works, primarily to replay the same `EvidencePack` through another chat/search implementation and test whether the domain and exports remain provider-neutral. Provider choice remains configurable per deployment, not user-configurable in the first UI.
 
 ## Browser Interaction Design
 
@@ -1291,7 +1316,7 @@ interface NormalizedChatInput {
   systemInstruction: string;
   turns: CompletedContextTurn[];
   currentUserContent: string;
-  evidence?: ContextEvidence[];
+  evidence?: EvidencePack;
   maxOutputTokens: number;
 }
 
@@ -1311,6 +1336,16 @@ interface SearchOptions {
 
 interface ContentExtractor {
   extract(source: SearchResult, limits: ExtractionLimits): Promise<ExtractionOutcome>;
+}
+
+/**
+ * The exact bounded evidence supplied to a synthesis request. This is an
+ * application-owned replay/evaluation boundary, not a provider payload.
+ */
+interface EvidencePack {
+  query: string;
+  sources: ContextEvidence[];
+  createdAt: IsoTimestamp;
 }
 
 interface ExtractionLimits {
@@ -1344,6 +1379,28 @@ interface ArtifactDraftStore {
 ```
 
 Provider responses should be normalized at the boundary. Stored threads should not require a particular provider SDK to be read or exported.
+
+### EvidencePack and provider-neutral synthesis
+
+`EvidencePack` is the seam between Dorothy Ann's research pipeline and any chat model. It contains only the bounded, selected evidence that the application is willing to send to a model. It must preserve source boundaries rather than concatenate pages into an undifferentiated prompt:
+
+```text
+SOURCE source_1
+  rank: 1
+  title: …
+  url: …
+  search snippet: …
+  extracted passage: …
+
+SOURCE source_2
+  …
+```
+
+The application creates an `EvidencePack` only after search results have been normalized, URLs have passed safety checks, canonical URLs have been deduplicated, and extraction outcomes have established viable pages. Search snippets and extracted passages remain visibly distinct in the UI and in the model envelope. A source can remain visible as discovered evidence without becoming eligible for synthesis if extraction failed.
+
+Anthropic receives the `EvidencePack` for `research_synthesis` and topic-report requests; it does not perform search in the initial implementation. The system instruction must say that all evidence is untrusted reference material, that instructions inside retrieved pages have no authority, and that claims may cite only supplied `SourceId` values. The adapter converts model citation references into normalized `AssistantContentPart[]`; visible citation numbers are still assigned by the application.
+
+Because the pack is deterministic and serializable, completed packs should be usable as replay fixtures for prompt/model evaluation without repeating Brave searches or page extraction. Initial tuning should focus on system instructions, evidence-envelope shape, citation validation, output limits, and model choice—not fine-tuning. Store enough provenance to explain which search results and extracted pages produced each completed answer, while keeping raw provider payloads outside the domain model.
 
 ### Core Domain Objects
 
@@ -1547,7 +1604,7 @@ interface ContextEvidence {
 interface CompletedContextTurn {
   userMessage: UserMessage;
   assistantMessage: AssistantMessage;
-  evidence?: ContextEvidence[];
+  evidence?: EvidencePack;
 }
 
 interface ReportThreadInput {
@@ -2048,7 +2105,7 @@ The application may later become installable as a PWA, but offline support shoul
 
 ## Open Questions for the Next Session
 
-The browser interaction decisions and React + Vite + Hono + Vercel deployment stack are settled. Remaining implementation-level choices are routing/state conventions, accessibility/Markdown/test packages, concrete chat/search/extraction providers, and the durable login-attempt limiter behind the Vercel adapter.
+The browser interaction decisions, React + Vite + Hono + Vercel deployment stack, React Router routes, selective XState workflow boundaries, and initial provider split are settled: Brave Search for ranked discovery, application-controlled extraction, and Anthropic for chat/synthesis. Remaining implementation-level choices are accessibility/Markdown/test packages, extraction implementation details, and the durable login-attempt limiter behind the Vercel adapter.
 
 ## Next
 
