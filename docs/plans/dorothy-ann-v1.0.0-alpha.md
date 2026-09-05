@@ -5,7 +5,7 @@
 - Status: in progress
 - Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha.md`
 - Last updated: 2026-09-05
-- Current focus: applying the second hands-on UI feedback pass: rotating home prompt, external mode/action controls, settings appearance page, corrected citation links, and consolidated evidence presentation
+- Current focus: refining the UI feedback pass: drawer topic-plus navigation, smaller home hierarchy, single Go action, styled mode control, and settings-only appearance controls
 - Handoff lives in: [`## Handoff`](#handoff)
 - Next action: approve implementation via `feature-builder`, beginning with Plan Ledger step 1
 
