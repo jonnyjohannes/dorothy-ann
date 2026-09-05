@@ -7,8 +7,8 @@ test("fixture lookup is keyboard reachable on desktop and mobile", async ({ page
   await expect(query).toBeVisible();
   await query.fill("weather");
   await page.getByRole("button", { name: "Go" }).click();
-  await expect(page.getByRole("heading", { name: "Results" })).toBeVisible();
-  await expect(page.getByText(/Fixture result for weather/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Evidence" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Fixture result for weather" }).first()).toBeVisible();
 });
 
 test("home has no serious accessibility violations", async ({ page }) => {

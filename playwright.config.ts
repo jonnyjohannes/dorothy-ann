@@ -11,7 +11,7 @@ export default defineConfig({
     { name: "mobile-webkit", use: { ...devices["iPhone 13"] } },
   ],
   webServer: [
-    { command: "npm run dev:server", url: "http://127.0.0.1:8787/api/health", reuseExistingServer: !process.env.CI, timeout: 30_000 },
+    { command: "DOROTHY_FIXTURE_MODE=true NODE_TLS_REJECT_UNAUTHORIZED=1 npm run dev:server", url: "http://127.0.0.1:8787/api/health", reuseExistingServer: !process.env.CI, timeout: 30_000 },
     { command: "npm run dev -- --host 127.0.0.1", url: "http://127.0.0.1:5173", reuseExistingServer: !process.env.CI, timeout: 30_000 },
   ],
 });
