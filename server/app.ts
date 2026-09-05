@@ -2,6 +2,8 @@ import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { InMemoryLoginLimiter, SessionAuth } from "./auth.js";
+import { UpstashLoginLimiter } from "./limiter-upstash.js";
+import type { LoginAttemptLimiter } from "../src/ports/auth.js";
 import type { AppConfig } from "./config.js";
 import { BraveSearchProvider } from "./brave.js";
 import { runResearch } from "./research.js";
@@ -13,11 +15,37 @@ export interface AppDependencies { config: AppConfig; }
 export function createApp({ config }: AppDependencies) {
   const app = new Hono();
   const auth = config.APP_PASSPHRASE_SCRYPT_HASH && config.SESSION_SIGNING_KEYS ? new SessionAuth(config.APP_PASSPHRASE_SCRYPT_HASH, config.SESSION_SIGNING_KEYS) : null;
-  const limiter = new InMemoryLoginLimiter();
+  const limiter: LoginAttemptLimiter = config.UPSTASH_REDIS_REST_URL && config.UPSTASH_REDIS_REST_TOKEN
+    ? new UpstashLoginLimiter(config.UPSTASH_REDIS_REST_URL, config.UPSTASH_REDIS_REST_TOKEN)
+    : new InMemoryLoginLimiter();
   const searchProvider = config.BRAVE_SEARCH_API_KEY ? new BraveSearchProvider(config.BRAVE_SEARCH_API_KEY) : null;
   const extractor = !config.DOROTHY_FIXTURE_MODE ? new SafeContentExtractor({ maxFetchBytes: config.MAX_FETCH_BYTES, maxRedirects: config.MAX_REDIRECTS, userAgent: "dorothy-ann/1.0", minCharacters: 120 }) : undefined;
   const chatProvider = config.ANTHROPIC_API_KEY && config.ANTHROPIC_MODEL ? new AnthropicChatProvider(config.ANTHROPIC_API_KEY, config.ANTHROPIC_MODEL) : undefined;
-  app.use("/api/*", async (context, next) => { context.header("Cache-Control", "no-store"); context.header("X-Content-Type-Options", "nosniff"); context.header("Referrer-Policy", "same-origin"); await next(); });
+  const sameOrigin = (context: Parameters<Parameters<typeof app.use>[1]>[0]) => {
+    const origin = context.req.header("origin");
+    if (!origin) return true;
+    try { return new URL(origin).origin === new URL(context.req.url).origin; } catch { return false; }
+  };
+  const requestGuard = async (context: Parameters<Parameters<typeof app.use>[1]>[0], next: () => Promise<void>) => {
+    if (["POST", "PUT", "PATCH", "DELETE"].includes(context.req.method)) {
+      if (!sameOrigin(context)) { context.status(403); return context.json({ error: { code: "forbidden", message: "same-origin request required" } }); }
+      const length = Number(context.req.header("content-length") ?? 0);
+      if (length > config.MAX_REQUEST_BYTES) { context.status(413); return context.json({ error: { code: "request_too_large", message: "request body is too large" } }); }
+    }
+    await next();
+  };
+  const requireOwner = async (context: Parameters<Parameters<typeof app.use>[1]>[0], next: () => Promise<void>) => {
+    if (config.DOROTHY_FIXTURE_MODE) return next();
+    const claims = auth?.verifySession(getCookie(context, "__Host-dorothy-ann-session") ?? "");
+    if (!claims) { context.status(401); return context.json({ error: { code: "unauthorized", message: "authentication required" } }); }
+    if (claims.exp - Date.now() < 24 * 60 * 60 * 1000 && auth) {
+      const refreshed = auth.refreshSession(claims);
+      setCookie(context, "__Host-dorothy-ann-session", refreshed.value, { httpOnly: true, secure: true, sameSite: "Lax", path: "/", maxAge: Math.max(0, Math.floor((Date.parse(refreshed.expiresAt) - Date.now()) / 1000)) });
+    }
+    await next();
+  };
+  app.use("/api/*", async (context, next) => { context.header("Cache-Control", "no-store"); context.header("X-Content-Type-Options", "nosniff"); context.header("Referrer-Policy", "same-origin"); return requestGuard(context, next); });
+  for (const path of ["/api/lookup", "/api/turn", "/api/research", "/api/report"]) app.use(path, requireOwner);
   app.get("/api/health", (context) => context.json({ ok: true, fixtureMode: config.DOROTHY_FIXTURE_MODE }));
   app.get("/api/providers/status", (context) => context.json({ fixtureMode: config.DOROTHY_FIXTURE_MODE, search: config.DOROTHY_FIXTURE_MODE || Boolean(searchProvider), chat: config.DOROTHY_FIXTURE_MODE || Boolean(chatProvider), extraction: config.DOROTHY_FIXTURE_MODE || Boolean(extractor) }));
   app.get("/api/auth/session", (context) => { const claims = auth ? auth.verifySession(getCookie(context, "__Host-dorothy-ann-session") ?? "") : null; if (!claims) return context.json({ authenticated: false }); return context.json({ authenticated: true, session: { subject: claims.subject, method: claims.method, expiresAt: new Date(claims.exp).toISOString(), absoluteExpiresAt: new Date(claims.abs).toISOString() } }); });
