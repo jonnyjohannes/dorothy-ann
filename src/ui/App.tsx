@@ -3,6 +3,7 @@ import {
   Link,
   Route,
   Routes,
+  useLocation,
   useNavigate,
   useParams,
   useSearchParams,
@@ -143,6 +144,7 @@ function Drawer({ onClose }: { onClose: () => void }) {
 }
 
 function Unlock() {
+  const navigate = useNavigate();
   const [passphrase, setPassphrase] = useState("");
   const [message, setMessage] = useState("");
   return (
@@ -159,9 +161,8 @@ function Unlock() {
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ passphrase }),
             });
-            setMessage(
-              response.ok ? "Unlocked." : "That passphrase did not work.",
-            );
+            if (response.ok) { setMessage("Unlocked."); navigate("/"); }
+            else setMessage("That passphrase did not work.");
           }}
         >
           <label htmlFor="passphrase">Passphrase</label>
@@ -310,36 +311,33 @@ async function readResearchStream(
   response: Response,
   update: (state: StreamState) => void,
 ) {
-  const text = await response.text();
-  const blocks = text.split("\n\n").filter(Boolean);
+  if (!response.body) throw new Error("stream unavailable");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
   let state: StreamState = { stage: "starting", answer: "", sources: [] };
-  for (const block of blocks) {
+  const process = (block: string) => {
     const event = block.match(/^event: (.+)$/m)?.[1];
     const data = block.match(/^data: (.+)$/m)?.[1];
-    if (!event || !data) continue;
+    if (!event || !data || event === "heartbeat") return;
     const payload = JSON.parse(data) as Record<string, unknown>;
-    if (event === "research.sources")
-      state = {
-        ...state,
-        stage: "sources found",
-        sources: (payload.sources as Result[]) ?? [],
-      };
-    else if (event === "research.extraction")
-      state = { ...state, stage: "extracting evidence" };
-    else if (event === "answer.delta")
-      state = {
-        ...state,
-        stage: "complete",
-        answer: state.answer + String(payload.markdown ?? ""),
-      };
-    else if (event === "turn.failed")
-      state = {
-        ...state,
-        stage: "failed",
-        error: String(payload.code ?? "research failed"),
-      };
+    if (event === "research.sources") state = { ...state, stage: "sources found", sources: (payload.sources as Result[]) ?? [] };
+    else if (event === "research.extraction") state = { ...state, stage: "extracting evidence" };
+    else if (event === "research.evidence") state = { ...state, stage: "synthesizing" };
+    else if (event === "answer.delta") state = { ...state, stage: "synthesizing", answer: state.answer + String(payload.markdown ?? "") };
+    else if (event === "turn.completed") state = { ...state, stage: "complete" };
+    else if (event === "turn.failed") state = { ...state, stage: "failed", error: String(payload.code ?? "research failed") };
     update(state);
+  };
+  while (true) {
+    const next = await reader.read();
+    buffer += decoder.decode(next.value ?? new Uint8Array(), { stream: !next.done });
+    const blocks = buffer.split("\n\n");
+    buffer = blocks.pop() ?? "";
+    for (const block of blocks) process(block);
+    if (next.done) break;
   }
+  if (buffer.trim()) process(buffer);
 }
 
 function renderCitations(answer: string, sources: Result[]) {
@@ -571,6 +569,7 @@ function Topic() {
   const [chatInput, setChatInput] = useState("");
   const [chatAnswer, setChatAnswer] = useState("");
   const [chatStage, setChatStage] = useState("");
+  const researchController = useRef<AbortController | null>(null);
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -615,10 +614,13 @@ function Topic() {
             );
           }
         } else {
+          const controller = new AbortController();
+          researchController.current = controller;
           const response = await fetch("/api/research", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ query }),
+            signal: controller.signal,
           });
           if (!response.ok) throw new Error("research failed");
           await readResearchStream(response, (next) => {
@@ -626,17 +628,16 @@ function Topic() {
           });
         }
       } catch (error) {
-        if (!cancelled)
-          setState((current) => ({
-            ...current,
-            stage: "failed",
-            error: error instanceof Error ? error.message : "request failed",
-          }));
-      }
+        if (!cancelled) {
+          const interrupted = error instanceof DOMException && error.name === "AbortError";
+          setState((current) => ({ ...current, stage: interrupted ? "interrupted" : "failed", error: interrupted ? "Research stopped." : error instanceof Error ? error.message : "request failed" }));
+        }
+      } finally { researchController.current = null; }
     };
     void run();
     return () => {
       cancelled = true;
+      researchController.current?.abort();
     };
   }, [mode, query, threadId]);
   useEffect(() => {
@@ -691,6 +692,9 @@ function Topic() {
               <p role="alert">{state.error}</p>
               <button onClick={() => window.location.reload()}>Retry</button>
             </>
+          )}
+          {mode === "research" && ["loading", "starting", "sources found", "extracting evidence", "synthesizing"].includes(state.stage) && (
+            <button onClick={() => researchController.current?.abort()}>Stop</button>
           )}
           {state.answer && (
             <article className={styles.answer}>
@@ -816,8 +820,33 @@ function Topic() {
   );
 }
 
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  useEffect(() => {
+    if (location.pathname === "/unlock") { setState("ready"); return; }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const status = await fetch("/api/providers/status").then((response) => response.json()) as { fixtureMode?: boolean };
+        if (!status.fixtureMode) {
+          const session = await fetch("/api/auth/session").then((response) => response.json()) as { authenticated?: boolean };
+          if (!session.authenticated) { navigate("/unlock", { replace: true }); return; }
+        }
+        if (!cancelled) setState("ready");
+      } catch { if (!cancelled) setState("error"); }
+    })();
+    return () => { cancelled = true; };
+  }, [location.pathname, navigate]);
+  if (state === "loading") return <main className={styles.center}><p role="status">Checking access…</p></main>;
+  if (state === "error") return <main className={styles.center}><p role="alert">Unable to check access.</p><button onClick={() => window.location.reload()}>Retry</button></main>;
+  return <>{children}</>;
+}
+
 export function App() {
   return (
+    <AuthGate>
     <Routes>
       <Route path="/unlock" element={<Unlock />} />
       <Route path="/settings" element={<Settings />} />
@@ -828,5 +857,6 @@ export function App() {
       <Route path="/topics/:threadId" element={<Topic />} />
       <Route path="*" element={<Home />} />
     </Routes>
+    </AuthGate>
   );
 }
