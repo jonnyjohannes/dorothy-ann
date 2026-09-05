@@ -1,0 +1,4 @@
+import { describe, expect, it } from "vitest";
+import { InMemoryLoginLimiter, SessionAuth } from "../server/auth";
+
+describe("owner authentication primitives", () => { it("limits and resets attempts", async () => { const limiter = new InMemoryLoginLimiter(2, 60_000); expect((await limiter.consume("ip")).allowed).toBe(true); expect((await limiter.consume("ip")).allowed).toBe(true); expect((await limiter.consume("ip")).allowed).toBe(false); await limiter.reset("ip"); expect((await limiter.consume("ip")).allowed).toBe(true); }); it("signs sessions and accepts previous keys", () => { let now = Date.now(); const auth = new SessionAuth("invalid", "active:secret,old:previous", () => now); const session = auth.createSession(); expect(auth.verifySession(session.value)?.subject).toBe("owner"); now += 31 * 86400000; expect(auth.verifySession(session.value)).toBeNull(); expect(auth.cookie(session)).toContain("HttpOnly"); }); });
