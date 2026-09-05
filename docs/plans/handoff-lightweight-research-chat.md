@@ -4,13 +4,13 @@
 
 - Status: planning
 - Last updated: 2026-09-05
-- Current focus: drawing responsive loading, empty, partial, error, and recovery variants from the completed exhaustive transition matrix
+- Current focus: reviewing the completed browser state matrix and responsive wireframes before moving to transport contracts
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: add grouped desktop/mobile variant wireframes and resolve the export-draft persistence requirement exposed by the matrix
+- Next action: accept or revise the browser interaction baseline, then define exact lookup/research/retry HTTP and SSE contracts
 
 ## Handoff
 
-The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. The MVP adds no slash commands or bang aliases. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB through the small `idb` promise/schema wrapper from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. `idb` remains private to the infrastructure adapter. The hosted app is personal/single-owner and uses a portable passphrase auth adapter: a dedicated `/unlock` screen exchanges the entered passphrase for a signed secure session cookie with a seven-day idle and 30-day absolute expiry, while protected application routes depend only on normalized `AuthContext`. MVP export scope is also settled: export one researched answer or a whole topic as an editable **Dorothy Ann report**, and export a whole topic as a deterministic transcript; arbitrary message/source selection and direct pi integration are deferred. Before transport work continues, complete and agree on the browser state matrix and paired desktop/mobile layouts described in `Browser Interaction Design`. A happy-path matrix and wireframe set are now drafted. Topic navigation is settled as a closed-by-default drawer on desktop and mobile, leaving only main content plus optional evidence visible. On desktop, the evidence panel opens automatically when research sources arrive, remains user-collapsible, and reopens/focuses when a citation is activated; mobile evidence remains an on-demand bottom sheet. Export uses a compact format-choice modal followed by a dedicated full-screen artifact workbench route on desktop and mobile. The happy-path shell is now agreed and the exhaustive MVP transition matrix is drafted. Continue by drawing grouped loading, empty, partial, error, and recovery variants, including the export-draft persistence behavior the matrix exposed. After that, finish lookup, research, retry, and SSE contracts and align normalized domain types and the Plan Ledger.
+The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. The MVP adds no slash commands or bang aliases. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB through the small `idb` promise/schema wrapper from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. `idb` remains private to the infrastructure adapter. The hosted app is personal/single-owner and uses a portable passphrase auth adapter: a dedicated `/unlock` screen exchanges the entered passphrase for a signed secure session cookie with a seven-day idle and 30-day absolute expiry, while protected application routes depend only on normalized `AuthContext`. MVP export scope is also settled: export one researched answer or a whole topic as an editable **Dorothy Ann report**, and export a whole topic as a deterministic transcript; arbitrary message/source selection and direct pi integration are deferred. Before transport work continues, complete and agree on the browser state matrix and paired desktop/mobile layouts described in `Browser Interaction Design`. A happy-path matrix and wireframe set are now drafted. Topic navigation is settled as a closed-by-default drawer on desktop and mobile, leaving only main content plus optional evidence visible. On desktop, the evidence panel opens automatically when research sources arrive, remains user-collapsible, and reopens/focuses when a citation is activated; mobile evidence remains an on-demand bottom sheet. Export uses a compact format-choice modal followed by a dedicated full-screen artifact workbench route on desktop and mobile. The happy-path shell is now agreed and the exhaustive MVP transition matrix is drafted. The exhaustive loading, empty, partial, error, and recovery variants are now drafted. Export-draft recovery is settled through an IndexedDB `artifactDrafts` store: generated and edited workbench content autosaves independently from topics, can be resumed or explicitly discarded, and does not become a general artifact library. Review/accept the browser interaction baseline, then define exact lookup, research, retry, and report HTTP/SSE contracts and align normalized domain types and the Plan Ledger.
 
 ## Goal
 
@@ -390,9 +390,9 @@ The tables below expand the happy path into every product-significant MVP transi
 | topic header | Export topic | E0 chooser | focus selected default `Dorothy Ann report`; Escape returns to topic |
 | E0 | choose transcript | E1 deterministic workbench | render locally from completed turns |
 | E0 | choose report | E2 generating workbench | call one bounded condensation request; preserve topic unchanged |
-| E2 | generation deltas/completes | E3 clean workbench | transient until complete, then store workbench draft separately from topic |
+| E2 | generation deltas/completes | E3 clean workbench | transient until complete, then save `ArtifactDraft` separately from topic |
 | E2 | failure/disconnect | E2-failed | retain topic and any dimmed transient draft; retry generation only |
-| E1/E3 | edit | E4 dirty workbench | autosave ephemeral draft locally; never mutate topic |
+| E1/E3 | edit | E4 dirty workbench | autosave `ArtifactDraft` locally; never mutate topic |
 | E1/E3/E4 | Copy | same + success notice | clipboard failure leaves content selected and offers manual copy |
 | E1/E3/E4 | Download | same + success notice | create `.md` locally; failure retains draft |
 | E1/E3/E4 | Share supported | native share → same | cancellation is neutral; failure returns with draft intact |
@@ -400,8 +400,11 @@ The tables below expand the happy path into every product-significant MVP transi
 | E4 | Back/close | E4-confirm | choose Keep draft, Discard, or Stay; no silent loss |
 | E1/E3 | Back | prior topic | restore conversation scroll/focus |
 | workbench route reload | saved draft exists | E3/E4 | restore draft and dirty state |
+| same export target opened with draft | resume choice | Resume restores it; Start over requires confirmation then replaces it |
 | workbench route reload | no draft + deterministic request | E1 | reconstruct from topic |
 | workbench route reload | no draft + generated report | E2-recover | offer regenerate; do not imply prior edits survived |
+| E4-confirm | Keep draft and return | prior topic | committed draft remains resumable from the same export target |
+| E4-confirm | Discard edits | prior topic | delete draft, then restore topic position |
 
 #### Browser Storage, Import, and Migration
 
@@ -882,6 +885,14 @@ DESKTOP — dirty draft on Back
 │ [Stay here]  [Discard edits]  [Keep draft and return]                       │
 └──────────────────────────────────────────────────────────────────────────────┘
 
+MOBILE — existing draft / generated-report recovery
+┌────────────────────────────────┐  ┌──────────────────────────────┐
+│ Resume your report draft?      │  │ This generated report has   │
+│ Saved on this device 2h ago.   │  │ no saved draft to restore.  │
+│                                │  │                              │
+│ [Resume] [Start over]          │  │ [Regenerate] [Back]          │
+└────────────────────────────────┘  └──────────────────────────────┘
+
 MOBILE — generation failed / share unavailable
 ┌────────────────────────────────┐  ┌──────────────────────────────┐
 │ Report generation stopped.     │  │ Dorothy Ann report          │
@@ -1079,6 +1090,12 @@ interface ThreadStore {
 
 interface Exporter {
   export(request: ExportRequest, thread: Thread): Promise<ExportArtifact>;
+}
+
+interface ArtifactDraftStore {
+  loadBySourceKey(sourceKey: string): Promise<ArtifactDraft | null>;
+  save(draft: ArtifactDraft): Promise<void>;
+  remove(draftId: string): Promise<void>;
 }
 ```
 
@@ -1299,15 +1316,41 @@ interface DorothyAnnDb extends DBSchema {
       "by-updated-at": string; // ISO timestamp
     };
   };
+  artifactDrafts: {
+    key: string; // ArtifactDraftId
+    value: ArtifactDraft;
+    indexes: {
+      "by-source-key": string;
+      "by-thread-id": string;
+      "by-updated-at": string;
+    };
+  };
 }
 
 interface StoredThreadEnvelope {
   schemaVersion: number;
   thread: Thread;
 }
+
+interface ArtifactDraft {
+  schemaVersion: number;
+  id: string; // ArtifactDraftId
+  threadId: string; // ThreadId
+  sourceKey: string; // <ThreadId>:answer:<TurnId> | <ThreadId>:topic:<format>
+  format: "dorothy_ann_report" | "transcript";
+  scope: "answer" | "topic";
+  turnId?: string; // required for answer scope
+  markdown: string;
+  sourceUpdatedAt: string;
+  dirty: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 ```
 
-`LocalThreadStore.save` opens a read-write transaction across `threads` and `threadSummaries` and commits both records together. Archive state remains explicit in normalized thread data; deletion removes both full and summary records in one transaction. Database-version upgrades run through `idb`'s `upgrade` callback; domain schema migration remains a separately testable pure function over `StoredThreadEnvelope`.
+`LocalThreadStore.save` opens a read-write transaction across `threads` and `threadSummaries` and commits both records together. Archive state remains explicit in normalized thread data; deletion removes the full record, summary, and associated artifact drafts in one transaction. Database-version upgrades run through `idb`'s `upgrade` callback; domain schema migration remains a separately testable pure function over `StoredThreadEnvelope`.
+
+An `ArtifactDraftStore` backed by the same database owns workbench drafts. The `by-source-key` index is unique, permitting at most one active draft per `sourceKey`; reopening that export offers Resume or Start over. Deterministic and generated artifacts are saved once complete, edits autosave with a short debounce, and Back offers Keep draft, Discard, or Stay when dirty. Copy/download/share does not silently delete a draft. Drafts are excluded from thread archives and topic history, are not listed as durable artifacts, survive archive/refresh/browser restart, and are deleted with their source topic or by explicit discard.
 
 `RemoteThreadStore` can later map the same normalized objects to authenticated API calls and server persistence. The UI should not branch on local versus remote storage; synchronization status, if eventually added, should be an adapter-provided capability/state.
 
