@@ -50,22 +50,11 @@ function Drawer({ onClose }: { onClose: () => void }) {
       <div className={styles.drawerHeader}>
         <h2>
           Topics{" "}
-          <Link
-            className={styles.drawerNew}
-            to="/"
-            onClick={onClose}
-            aria-label="New topic"
-          >
-            ＋
-          </Link>
         </h2>
         <button onClick={onClose} aria-label="Close topics">
           ×
         </button>
       </div>
-      <Link className={styles.settingsLink} to="/settings" onClick={onClose}>
-        ⚙ Settings
-      </Link>
       {topics.length ? (
         <ul>
           {topics.map((topic) => (
@@ -112,7 +101,9 @@ function Drawer({ onClose }: { onClose: () => void }) {
       <p className={styles.drawerNote}>
         Saved topics and sources stay in this browser.
       </p>
-      <ThemeControl />
+      <Link className={styles.settingsLink} to="/settings" onClick={onClose}>
+        ⚙
+      </Link>
     </aside>
   );
 }
@@ -251,15 +242,14 @@ function Home() {
       </header>
       {drawer && <Drawer onClose={() => setDrawer(false)} />}
       <section className={styles.hero}>
-        <p className={styles.kicker}>{tagline}</p>
-        <h1>What should we look up?</h1>
+        <h2 className={styles.kicker}>{tagline}</h2>
         <form onSubmit={submit} className={styles.queryForm}>
           <div className={styles.queryRow}>
             <input
               aria-label="Search query"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Ask a question or search for something"
+              placeholder="Add ? to ask Dorothy Ann to research"
               autoFocus
             />
           </div>
@@ -277,7 +267,6 @@ function Home() {
             <button type="submit">Go</button>
           </div>
         </form>
-        <p className={styles.hint}>Add ? to ask Dorothy Ann to research.</p>
       </section>
     </main>
   );
@@ -338,6 +327,33 @@ function renderCitations(answer: string, sources: Result[]) {
     ) : (
       <span key={index}>{part}</span>
     );
+  });
+}
+
+async function appendChatTurn(threadId: string, prompt: string, answer: string) {
+  const thread = await store.load(threadId);
+  if (!thread) return;
+  const timestamp = now();
+  await store.save({
+    ...thread,
+    updatedAt: timestamp,
+    turns: [
+      ...thread.turns,
+      {
+        id: id() as Thread["turns"][number]["id"],
+        mode: "chat",
+        status: "completed",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        userMessage: { id: id() as never, role: "user", content: prompt, createdAt: timestamp },
+        assistantMessage: {
+          id: id() as never,
+          role: "assistant",
+          content: { parts: [{ type: "text", markdown: answer }] },
+          createdAt: timestamp,
+        },
+      },
+    ],
   });
 }
 
@@ -403,12 +419,23 @@ async function saveTopic(
   await store.save(thread);
 }
 
+function transcriptMarkdown(thread: Thread): string {
+  const lines = [`---`, `title: "${thread.title.replaceAll('"', '\\"')}"`, `created: ${thread.createdAt}`, `updated: ${thread.updatedAt}`, `model: ${thread.modelRef}`, `search_provider: ${thread.searchRef}`, `---`, "", `# ${thread.title}`];
+  for (const turn of thread.turns) {
+    lines.push("", "## User", "", turn.userMessage.content);
+    if (turn.assistantMessage) lines.push("", "## Assistant", "", turn.assistantMessage.content.parts.map((part) => part.type === "text" ? part.markdown : `[[cite:${part.sourceId}]]`).join(""));
+  }
+  return `${lines.join("\\n")}\\n`;
+}
+
 function ExportWorkbench() {
+  const route = useParams();
   const [params] = useSearchParams();
   const [markdown, setMarkdown] = useState(
     `# Dorothy Ann report: ${params.get("title") ?? "Untitled topic"}\n\n## Conclusion\n\n${params.get("answer") ?? ""}\n\n> This is research context, not executed or independently verified work.\n`,
   );
   const [preview, setPreview] = useState(false);
+  useEffect(() => { if (route.draftId !== "transcript" || !route.threadId) return; void store.load(route.threadId).then((thread) => { if (thread) setMarkdown(transcriptMarkdown(thread)); }); }, [route.draftId, route.threadId]);
   const copy = async () => {
     await navigator.clipboard?.writeText(markdown);
   };
@@ -459,7 +486,8 @@ function ExportWorkbench() {
 function Topic() {
   const [params] = useSearchParams();
   const route = useParams();
-  const query = params.get("q") ?? "";
+  const [threadId] = useState(() => route.threadId === "new" ? id() : route.threadId ?? id());
+  const query = params.get("q") ??"";
   const mode = params.get("mode") ?? "lookup";
   const [drawer, setDrawer] = useState(false);
   const [state, setState] = useState<StreamState>({
@@ -476,8 +504,8 @@ function Topic() {
       try {
         if (!query) {
           const saved =
-            route.threadId && route.threadId !== "new"
-              ? await store.load(route.threadId)
+            threadId !== "new"
+              ? await store.load(threadId)
               : null;
           const turn = saved?.turns.at(-1);
           if (turn && !cancelled)
@@ -507,7 +535,7 @@ function Topic() {
             };
             setState(next);
             await saveTopic(
-              route.threadId === "new" ? id() : route.threadId!,
+              threadId,
               query,
               mode,
               next,
@@ -537,16 +565,16 @@ function Topic() {
     return () => {
       cancelled = true;
     };
-  }, [mode, query, route.threadId]);
+  }, [mode, query, threadId]);
   useEffect(() => {
     if (query && mode === "research" && state.stage === "complete")
       void saveTopic(
-        route.threadId === "new" ? id() : route.threadId!,
+        threadId,
         query,
         mode,
         state,
       );
-  }, [mode, query, route.threadId, state]);
+  }, [mode, query, threadId, state]);
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
@@ -570,12 +598,20 @@ function Topic() {
           </p>
           <h1>{query || "Saved topic"}</h1>
           {state.answer && (
-            <Link
-              className={styles.textLink}
-              to={`/topics/${route.threadId}/export/report?title=${encodeURIComponent(query)}&answer=${encodeURIComponent(state.answer)}`}
-            >
-              Export report →
-            </Link>
+            <span className={styles.exportLinks}>
+              <Link
+                className={styles.textLink}
+                to={`/topics/${threadId}/export/report?title=${encodeURIComponent(query)}&answer=${encodeURIComponent(state.answer)}`}
+              >
+                Export report →
+              </Link>
+              <Link
+                className={styles.textLink}
+                to={`/topics/${threadId}/export/transcript`}
+              >
+                Export transcript →
+              </Link>
+            </span>
           )}
           {state.error && (
             <>
@@ -611,10 +647,15 @@ function Topic() {
                   setChatStage("chat unavailable");
                   return;
                 }
+                let finalAnswer = "";
                 await readResearchStream(response, (next) => {
+                  finalAnswer = next.answer;
                   setChatAnswer(next.answer);
                   setChatStage(next.stage);
                 });
+                if (finalAnswer && threadId !== "new") {
+                  await appendChatTurn(threadId, prompt, finalAnswer);
+                }
               }}
             >
               <label htmlFor="follow-up">Ask a follow-up</label>
