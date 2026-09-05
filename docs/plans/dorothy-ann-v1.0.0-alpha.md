@@ -5,7 +5,7 @@
 - Status: in progress
 - Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha.md`
 - Last updated: 2026-09-05
-- Current focus: step 1 scaffold verified; beginning domain schemas and pure policies
+- Current focus: domain schemas and pure policies verified; beginning IndexedDB storage and backup recovery
 - Handoff lives in: [`## Handoff`](#handoff)
 - Next action: approve implementation via `feature-builder`, beginning with Plan Ledger step 1
 
@@ -13,7 +13,7 @@
 
 Read `Current State`, `Concrete Application Stack`, `Browser Interaction Design`, `Application HTTP and Streaming Contract`, `Explicit Non-Goals`, `Implementation Plan`, and `Operator Setup and Secret Handoff` first. Product, interfaces, browser states, transport contracts, dependencies, implementation steps, and verification are settled. The alpha is a Vercel-hosted React/Vite SPA with a portable Hono backend, browser-only IndexedDB threads, Brave search, application-owned extraction, Anthropic synthesis, passphrase auth, and Markdown reports.
 
-Ledger step 1 is complete and verified in fixture mode. The React/Vite shell, Hono factory, Node runtime, Vercel entrypoint, strict TypeScript configs, env example, and baseline quality scripts are in place. Next, implement normalized domain schemas and pure policies. Fixture mode allows implementation through step 11 without live credentials; step 12 needs the deployment inputs. Do not add remote thread storage, sync, autonomous research, context compaction, topic archiving, edit-history branching, rich editors, or second-provider work to the alpha.
+Ledger steps 1 and 2 are complete and verified. The scaffold is portable and fixture-ready; domain types, boundary schemas, query/source policies, citation sentinel parsing, citation numbering, and deterministic Markdown renderers are covered by focused tests. Next, implement IndexedDB storage and backup recovery. Fixture mode allows implementation through step 11 without live credentials; step 12 needs the deployment inputs. Do not add remote thread storage, sync, autonomous research, context compaction, topic archiving, edit-history branching, rich editors, or second-provider work to the alpha.
 
 ## Summary
 
@@ -2090,8 +2090,8 @@ The application may later become installable as a PWA, but offline support shoul
 Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blocked.
 
 - [x] 1. Portable scaffold — deliverable: single-package React/Vite/Hono app with Node and Vercel adapters plus fixture mode; verify: `npm ci`, lint, typecheck, test, build, and local health/session/lookup smoke checks passed.
-- [~] 2. Domain and policies — deliverable: normalized schemas, routing, evidence, citations, context, deterministic exports; verify: table/replay/snapshot tests and provider-payload serialization guard.
-- [ ] 3. IndexedDB storage — deliverable: thread/summary/draft stores, migrations, backup import/export; verify: `fake-indexeddb` transaction, failure, migration, conflict, and round-trip tests.
+- [x] 2. Domain and policies — deliverable: normalized schemas, routing, evidence, citations, context, deterministic exports; verify: table/replay tests, citation chunk-boundary tests, source dedupe tests, and lint/typecheck/build passed.
+- [~] 3. IndexedDB storage — deliverable: thread/summary/draft stores, migrations, backup import/export; verify: `fake-indexeddb` transaction, failure, migration, conflict, and round-trip tests.
 - [ ] 4. Owner auth — deliverable: scrypt passphrase, signed sessions, auth routes, in-memory/Upstash limiters; verify: auth/expiry/cookie/rotation/limiter contract tests.
 - [ ] 5. Brave lookup — deliverable: normalized `SearchProvider` and `/api/lookup`; verify: fixture/error/bounds tests and zero Anthropic/extraction calls.
 - [ ] 6. Safe extraction — deliverable: SSRF-safe bounded Node extractor with Readability; verify: content, redirect, IP, rebinding, timeout, oversized, and unsupported-type tests.
