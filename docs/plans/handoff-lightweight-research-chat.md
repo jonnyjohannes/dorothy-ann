@@ -1,20 +1,20 @@
-# Lightweight Research Chat → Pi Artifact Workbench
+# dorothy-ann: Search, Research Chat, and Pi Artifact Workbench
 
 ## Current State
 
 - Status: planning
-- Last updated: 2026-05-12
-- Current focus: defining platform-neutral application boundaries with Vercel as a convenient initial deployment target
+- Last updated: 2026-09-05
+- Current focus: designing the browser interaction that separates cheap web lookup from Dorothy Ann research while keeping follow-up chat and Markdown export close at hand
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: turn the portability decision into concrete package boundaries, runtime adapters, and deployment verification
+- Next action: choose the deterministic query-routing syntax, then finalize browser states and the backend event contract
 
 ## Handoff
 
-The core abstractions remain intentionally small: normalized chat, search, extraction, thread storage, and export boundaries. The important product clarification is that this is not merely a lightweight research chat: it should become a practical personal search surface for desktop and mobile browsers, with a fast path from web evidence to editable artifacts that pi.dev can consume. The deployment decision is now: keep the application platform-neutral, use Vercel as the first convenient hosted target, and preserve thin adapters for local execution, Cloudflare, or another provider. Continue by defining the smallest end-to-end browser → research thread → Markdown artifact → pi workflow and making the portability boundary concrete.
+The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. Continue by settling how punctuation/macros and explicit controls choose lookup versus research, then specify the event stream and responsive source/export interactions.
 
 ## Goal
 
-Build a self-deployed, mobile-friendly web client that can become the user's default search surface for exploratory questions. It should support ordinary chat, explicit web research, lightweight topic sessions, and clean, editable artifacts that move useful context from the browser into pi.dev for coding, planning, investigation, or handoff.
+Build **dorothy-ann**, a self-deployed, mobile-friendly web client that can become the user's default search surface. It should handle cheap everyday web lookups, source-aware Dorothy Ann research, conversational follow-ups, lightweight topic sessions, and clean, editable artifacts that move useful context from the browser into pi.dev for coding, planning, investigation, or handoff.
 
 The product is intentionally an ephemeral thinking surface—not a knowledge base, coding agent, or permanent memory system. Its durable output is the artifact the user chooses to export, not an invisible memory layer.
 
@@ -23,18 +23,18 @@ The product is intentionally an ephemeral thinking surface—not a knowledge bas
 > An ephemeral, source-aware chat client with clean exits.
 
 ```text
-ask / discuss
+enter a query
      │
-     ├── optional web search
-     │      └── inspectable results and source content
+     ├── quick lookup ──→ ranked web results ──→ open the useful link
      │
-     ├── streamed answer with citations
-     │
-     └── lightweight topic thread
-                  │
-                  └── export Markdown
-                           ↓
-                durable notes / repo / desktop handoff
+     └── research question
+             ├── visible search and source evidence
+             ├── “According to my research…” synthesis
+             └── follow-up chat in the same lightweight topic thread
+                              │
+                              └── export Markdown
+                                       ↓
+                            durable notes / repo / pi handoff
 ```
 
 The core value is not generic LLM chat. It is the combination of:
@@ -57,24 +57,27 @@ The core value is not generic LLM chat. It is the combination of:
 - Remain comfortable on desktop and narrow mobile screens.
 - Allow a model to be selected per thread without coupling stored conversations to one provider's response format.
 
-### Research
+### Query Paths
 
-Each user turn has an explicit research mode:
+A new query must take one of two visibly different paths:
 
-```text
-[ off | auto | search ]  ask anything…
-```
+- **lookup** — call the search provider and render ranked results without extraction or model synthesis. This is the low-cost, low-latency path for navigational and utility queries such as `weather` or `life alive`.
+- **research** — search, optionally extract bounded source content, and stream a Dorothy Ann synthesis with citations. The resulting page is already a chat thread, so the user can ask follow-up questions without entering another mode or moving elsewhere.
 
-- **off** — ordinary conversation without web access.
-- **auto** — the system may search when current or external information would help.
-- **search** — the system must perform web research before answering.
+Routing should be predictable and reversible. The current recommendation is a deterministic browser-side router with a visible mode chip:
 
-The initial version may simplify this to a single explicit `web search` toggle. Predictability is more important than autonomous behavior in the MVP.
+- ordinary keyword-like input defaults to `lookup`;
+- a query ending in `?` explicitly selects `research`;
+- an explicit `lookup` / `research` control always overrides inference;
+- the selected path is visible before submission and can be changed with the keyboard or pointer;
+- no model call is required merely to decide which path to use.
+
+The punctuation rule is a convenience macro, not the only way to enter research. The exact fallback for natural-language questions without terminal punctuation remains an open design choice.
 
 When research occurs, the interface should show both:
 
 1. The result set returned by the search layer.
-2. The model's synthesized answer with citations linked to those sources.
+2. Dorothy Ann's synthesized answer with citations linked to those sources.
 
 The product must preserve the distinction between retrieved evidence and model synthesis.
 
@@ -155,9 +158,13 @@ Answer with source references.
 1. [Source title](https://example.com)
 ```
 
-## Research Report Identity
+## dorothy-ann Product Identity
 
-The product should feel like a curious field reporter or classroom research companion: it searches, examines sources, tells the user what it found, and makes the evidence inspectable. The recurring answer shape can be explicit rather than hidden in branding:
+The product and agent are named **dorothy-ann**. In interface prose, the speaking agent may be called **Dorothy Ann**. The core interaction is inspired by the character from *The Magic School Bus*: curious, prepared, evidence-oriented, and recognizable for beginning a researched response with:
+
+> According to my research…
+
+This phrase is earned by the research path; it must not appear for an ordinary lookup or unsupported chat answer. A Dorothy Ann response should be direct rather than theatrical:
 
 ```text
 According to my research…
@@ -175,7 +182,7 @@ Sources
 - [clickable citations]
 ```
 
-This voice is a presentation and prompt contract, not a provider dependency. The model/provider adapter should return normalized evidence and answer content; the application controls the report sections, citation rendering, export format, and distinction between research evidence and synthesis.
+The identity belongs to the application layer, not a model provider. The system prompt defines the voice and evidence rules; normalized source data supports citations; the UI owns labels, progress language, and report sections; and exporters preserve the same identity in Markdown. Provider adapters must not contain product branding or be relied upon to produce the report shape correctly.
 
 ## Initial Provider Strategy
 
@@ -197,6 +204,102 @@ provider adapter(s)
 Do not store raw provider payloads as the domain model. Candidate implementations include OpenAI Responses web search, Gemini Google Search grounding, Anthropic web search, Perplexity search/synthesis, or a standalone search provider plus a separate chat provider. These integrations expose different search controls and citation metadata; the normalized citation contract is the portability seam.
 
 A second provider should be added after the first end-to-end workflow works, primarily to test whether the domain and exports truly remain provider-neutral. Provider choice should remain configurable per deployment, not user-configurable in the first UI.
+
+## Browser Interaction Design
+
+### New Query
+
+The home screen is search-first rather than a blank chatbot. It contains one prominent query field, a visible route chip, and recent lightweight topics.
+
+```text
+┌──────────────────────────────────────────────────────────┐
+│ dorothy-ann                                  recent ▾    │
+│                                                          │
+│ What should we look up?                                  │
+│ ┌──────────────────────────────────────────────────────┐ │
+│ │ what's the deal with composition over inheritance?  │ │
+│ └──────────────────────────────────────────────────────┘ │
+│ [ research ▾ ]                         [ ask Dorothy Ann ]│
+└──────────────────────────────────────────────────────────┘
+```
+
+As input changes, the route chip shows what Enter will do. Adding a terminal `?` can switch `lookup` to `research`; changing the chip pins an explicit override. The user must never discover after submission that an unexpected expensive research run was inferred invisibly.
+
+### Lookup Result
+
+A lookup should feel like a focused search engine result page, not a failed or abbreviated chat turn:
+
+- show ranked title, URL/domain, and snippet;
+- make the top result quick to open from the keyboard;
+- avoid source extraction and LLM calls;
+- provide an `Ask Dorothy Ann about this` action that promotes the query and available results into a research thread;
+- allow editing/resubmitting the query with `research` selected.
+
+Specialized instant answers such as weather cards are not assumed for the MVP; they depend on structured data from the selected search provider. The baseline promise is fast ranked results.
+
+### Research Result and Follow-up
+
+A research submission creates a topic thread immediately. Its response progresses through explicit states:
+
+```text
+searching → sources available → reading selected sources → synthesizing → complete
+```
+
+Source cards should appear as soon as search completes rather than waiting for synthesis. The answer then streams under the Dorothy Ann identity and begins with “According to my research…” only once evidence exists. After completion, the same composer remains active for follow-ups. Each follow-up has a visible per-turn route:
+
+- **chat** — answer from the existing conversation and attached research context without a new search;
+- **research** — perform another bounded search and attach a new `ResearchRun` to that turn.
+
+The default follow-up route should be `chat`; the user can explicitly request fresh research when recency or new evidence matters.
+
+### Responsive Evidence
+
+Evidence uses one information model across layouts:
+
+- desktop: inline source summary plus an optional right-side evidence drawer;
+- mobile: inline source summary plus a bottom sheet;
+- activating a citation focuses the matching source and bounded excerpt;
+- opening the original source is a separate, obvious action;
+- search snippets and extracted passages are visually distinct from Dorothy Ann's prose.
+
+### Markdown Export
+
+Export stays close to the content:
+
+- each researched answer offers `Export this`;
+- the topic header offers `Export topic`;
+- export opens an editable Markdown preview rather than downloading immediately;
+- formats are `Dorothy Ann handoff` and `Transcript`;
+- completion actions are copy, `.md` download, and native share where available.
+
+A lookup-only result does not need a full transcript export. Promoting it to research or selecting `Export links` can create a small deterministic Markdown artifact without invoking a model.
+
+### Required Turn Event Contract
+
+Research needs structured progress and evidence events in addition to text deltas. Runtime adapters should expose a transport such as SSE over a normalized application event contract:
+
+```ts
+type TurnEvent =
+  | { type: "turn.started"; turnId: TurnId; mode: "chat" | "research" }
+  | { type: "research.query"; runId: ResearchRunId; query: string }
+  | { type: "research.sources"; runId: ResearchRunId; sources: SearchResult[] }
+  | {
+      type: "research.progress";
+      runId: ResearchRunId;
+      phase: "searching" | "extracting" | "synthesizing";
+    }
+  | { type: "answer.delta"; turnId: TurnId; markdown: string }
+  | { type: "turn.completed"; message: Message; researchRun?: ResearchRun }
+  | {
+      type: "turn.failed";
+      turnId: TurnId;
+      code: TurnErrorCode;
+      retryable: boolean;
+      message: string;
+    };
+```
+
+Lookup does not use this expensive orchestration path. It calls `SearchProvider.search` through a bounded lookup endpoint and returns normalized `SearchResult[]`. Cancellation, retry, and persistence must use stable turn/run IDs so a disconnected stream cannot create duplicate messages or research runs.
 
 ## System Abstractions
 
@@ -551,18 +654,17 @@ The application may later become installable as a PWA, but offline support shoul
 
 ## Open Questions for the Next Session
 
-1. **Persistence boundary:** use `LocalThreadStore` for the static/local proof. Keep the application dependent on the abstract `ThreadStore`, with versioned export/import so a later `RemoteThreadStore` can be composed or swapped in without rewriting the product.
-2. **Frontend hosting:** GitHub Pages is optional rather than an architectural requirement. Use Vercel as the initial deployment target for its integrated frontend/function workflow, while keeping the runtime and infrastructure adapters portable.
-2. **Default-search behavior:** should the home screen always perform web search, or offer chat/search as an explicit mode while the product is being validated?
-3. **Research mode:** is `auto` important for the MVP, or should search remain fully explicit and predictable?
-4. **Extraction policy:** should source extraction be required for every researched turn, selectively triggered for the top results, or user-triggered per source?
-5. **Pi artifact contract:** is a downloadable/copyable Markdown handoff sufficient initially, or should the MVP target a specific pi.dev import/paste convention?
-6. **Artifact scope:** should users export a whole thread, selected messages/sources, or both?
-7. **Handoff shape:** fixed template first, user-configurable templates, or fixed required sections plus optional customization?
-8. **Citation contract:** what is the smallest source-ID/citation format that remains reliable across chat implementations and exports?
-9. **Failure behavior:** how should failed or partial streamed responses appear and persist?
+1. **Routing fallback:** beyond terminal `?`, should unpunctuated natural-language questions remain lookup by default, use deterministic question-shape heuristics, or show a non-blocking research suggestion?
+2. **Explicit macro syntax:** is the visible route chip plus terminal `?` sufficient, or should power-user prefixes such as `/research` and `/lookup` also be supported?
+3. **Extraction policy:** should source extraction be required for every researched turn, selectively triggered for top results, or user-triggered per source?
+4. **Lookup promotion:** when `Ask Dorothy Ann about this` is selected, should the existing search result set be reused or should research always issue fresh/generated queries?
+5. **Pi artifact contract:** is downloadable/copyable Markdown sufficient initially, or should the MVP target a specific pi.dev import/paste convention?
+6. **Artifact scope:** after answer-level and whole-topic export, is arbitrary message/source selection necessary for the MVP?
+7. **Citation contract:** what is the smallest source-ID/citation format that remains reliable across chat implementations and exports?
+8. **Failure behavior:** how should partial sources and streamed prose appear and persist when search, extraction, synthesis, or the client connection fails?
+9. **Persistence milestone:** is local browser continuity enough to evaluate the product, or is cross-device continuity required for the first useful deployment?
 10. **Deployment boundary:** is the initial deployment strictly personal, or should the architecture preserve a future multi-user boundary?
 
 ## Next
 
-Decide whether cross-device continuity is required to evaluate the product. If not, build the static/local proof first; if yes, start with the small hosted personal app. Then define the browser interaction, normalized TypeScript domain types, and deployment contract before selecting concrete infrastructure or external providers.
+Choose the routing fallback for full questions without terminal punctuation, then define normalized TypeScript domain types and exact HTTP/SSE contracts around the browser interaction above. After that, settle extraction and lookup-promotion policy before selecting concrete providers.
