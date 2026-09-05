@@ -4,13 +4,13 @@
 
 - Status: planning
 - Last updated: 2026-09-05
-- Current focus: finalizing source extraction and lookup-to-research promotion after settling deterministic browser routing
+- Current focus: defining normalized domain types and exact HTTP/SSE contracts for the settled browser flow
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: choose whether promoted lookups reuse their result set and how research selects pages for extraction
+- Next action: specify source/citation identity, turn failure semantics, and request/response contracts
 
 ## Handoff
 
-The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Continue by deciding whether lookup promotion reuses existing results and how research chooses pages for extraction.
+The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The default extraction target is five viable pages; deployments can configure the target within a server-enforced safety bound. Continue by defining source/citation identity, turn failure semantics, and exact HTTP/SSE contracts.
 
 ## Goal
 
@@ -62,7 +62,7 @@ The core value is not generic LLM chat. It is the combination of:
 A new query must take one of two visibly different paths:
 
 - **lookup** — call the search provider and render ranked results without extraction or model synthesis. This is the low-cost, low-latency path for navigational and utility queries such as `weather` or `life alive`.
-- **research** — search, optionally extract bounded source content, and stream a Dorothy Ann synthesis with citations. The resulting page is already a chat thread, so the user can ask follow-up questions without entering another mode or moving elsewhere.
+- **research** — search, extract up to the configured number of viable pages (five by default), and stream a Dorothy Ann synthesis with citations. The resulting page is already a chat thread, so the user can ask follow-up questions without entering another mode or moving elsewhere.
 
 Routing should be predictable and reversible. The current recommendation is a deterministic browser-side router with a visible mode chip:
 
@@ -233,10 +233,13 @@ A lookup should feel like a focused search engine result page, not a failed or a
 - show ranked title, URL/domain, and snippet;
 - make the top result quick to open from the keyboard;
 - avoid source extraction and LLM calls;
-- provide an `Ask Dorothy Ann about this` action that promotes the query and available results into a research thread;
-- allow editing/resubmitting the query with `research` selected.
+- provide a `Research this with Dorothy Ann` action that promotes the query and existing result set into a research thread without repeating the search;
+- walk results in rank order until the configured viable-page target is met or candidates are exhausted;
+- allow editing/resubmitting the query with `research` selected when the existing results are not useful.
 
 Specialized instant answers such as weather cards are not assumed for the MVP; they depend on structured data from the selected search provider. The baseline promise is fast ranked results.
+
+Promotion preserves the original query, result ranks, and source IDs in the resulting `ResearchRun`. A page is viable only after URL safety checks, successful retrieval, canonical-URL deduplication, and extraction of enough readable text to contribute evidence. Failed, duplicate, blocked, or content-empty candidates do not consume one of the viable-page slots; the orchestrator continues down the ranked result set until it reaches the configured target or exhausts available candidates.
 
 ### Research Result and Follow-up
 
@@ -300,7 +303,22 @@ type TurnEvent =
     };
 ```
 
-Lookup does not use this expensive orchestration path. It calls `SearchProvider.search` through a bounded lookup endpoint and returns normalized `SearchResult[]`. Cancellation, retry, and persistence must use stable turn/run IDs so a disconnected stream cannot create duplicate messages or research runs.
+Lookup does not use this expensive orchestration path. It calls `SearchProvider.search` through a bounded lookup endpoint and returns normalized `SearchResult[]`. Promotion passes those normalized results into research orchestration rather than invoking search again. Cancellation, retry, and persistence must use stable turn/run IDs so a disconnected stream cannot create duplicate messages or research runs.
+
+Extraction count is explicit application configuration rather than a provider-specific constant:
+
+```ts
+interface ResearchPolicy {
+  /** Target count of successfully extracted, viable pages. Default: 5. */
+  targetViablePages: number;
+  /** Server-enforced ceiling for targetViablePages. */
+  maxViablePages: number;
+  maxCharactersPerPage: number;
+  maxTotalExtractedCharacters: number;
+}
+```
+
+The backend clamps request-level values to deployment policy. The initial UI may use the deployment default without exposing a settings screen; keeping the value in the request/domain contract allows a lightweight control later without changing orchestration.
 
 ## System Abstractions
 
@@ -396,7 +414,8 @@ SearchProvider returns ranked results
         ↓
 show result cards immediately
         ↓
-optionally extract bounded content from top results
+extract ranked candidates until targetViablePages (default 5)
+or the result set is exhausted
         ↓
 construct research context with stable source IDs
         ↓
@@ -407,19 +426,23 @@ render citations against source IDs
 persist assistant message + ResearchRun + usage metadata
 ```
 
-The first implementation should avoid an autonomous multi-step research loop. A bounded sequence—search, optional extraction, one synthesis—is sufficient to validate the product.
+The first implementation should avoid an autonomous multi-step research loop. A bounded sequence—one search, extraction up to the configured viable-page target, and one synthesis—is sufficient to validate the product.
 
-### Auto Research Turn
+### Lookup Promotion
 
 ```text
-user submits message in auto mode
+user selects “Research this with Dorothy Ann”
         ↓
-small routing decision: search or chat directly
-        ├── no search → ordinary chat flow
-        └── search    → explicit research flow
+create ResearchRun from the existing query and SearchResult[]
+        ↓
+walk results in rank order, skipping non-viable pages
+        ↓
+stop at targetViablePages (default 5) or exhaustion
+        ↓
+stream one cited synthesis through ChatProvider
 ```
 
-Auto mode is optional and should come after the explicit flow is reliable. The routing decision and any generated queries should remain visible for inspection.
+Promotion never repeats the initial search. If the existing results are weak, the user can edit the query and deliberately submit a new research turn.
 
 ### Export Flow
 
@@ -656,15 +679,13 @@ The application may later become installable as a PWA, but offline support shoul
 ## Open Questions for the Next Session
 
 1. **Explicit macro syntax:** is the visible route chip plus terminal `?` sufficient, or should power-user prefixes such as `/research` and `/lookup` also be supported?
-2. **Extraction policy:** should source extraction be required for every researched turn, selectively triggered for top results, or user-triggered per source?
-3. **Lookup promotion:** when `Research this with Dorothy Ann` is selected, should the existing search result set be reused or should research always issue fresh/generated queries?
-4. **Pi artifact contract:** is downloadable/copyable Markdown sufficient initially, or should the MVP target a specific pi.dev import/paste convention?
-5. **Artifact scope:** after answer-level and whole-topic export, is arbitrary message/source selection necessary for the MVP?
-6. **Citation contract:** what is the smallest source-ID/citation format that remains reliable across chat implementations and exports?
-7. **Failure behavior:** how should partial sources and streamed prose appear and persist when search, extraction, synthesis, or the client connection fails?
-8. **Persistence milestone:** is local browser continuity enough to evaluate the product, or is cross-device continuity required for the first useful deployment?
-9. **Deployment boundary:** is the initial deployment strictly personal, or should the architecture preserve a future multi-user boundary?
+2. **Pi artifact contract:** is downloadable/copyable Markdown sufficient initially, or should the MVP target a specific pi.dev import/paste convention?
+3. **Artifact scope:** after answer-level and whole-topic export, is arbitrary message/source selection necessary for the MVP?
+4. **Citation contract:** what is the smallest source-ID/citation format that remains reliable across chat implementations and exports?
+5. **Failure behavior:** how should partial sources and streamed prose appear and persist when search, extraction, synthesis, or the client connection fails?
+6. **Persistence milestone:** is local browser continuity enough to evaluate the product, or is cross-device continuity required for the first useful deployment?
+7. **Deployment boundary:** is the initial deployment strictly personal, or should the architecture preserve a future multi-user boundary?
 
 ## Next
 
-Settle extraction and lookup-promotion policy, then define normalized TypeScript domain types and exact HTTP/SSE contracts around the browser interaction before selecting concrete providers.
+Define normalized TypeScript domain types and exact HTTP/SSE contracts around the settled lookup, promotion, extraction, and follow-up interactions before selecting concrete providers.
