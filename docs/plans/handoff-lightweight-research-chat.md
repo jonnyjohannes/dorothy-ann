@@ -4,13 +4,13 @@
 
 - Status: planning
 - Last updated: 2026-09-05
-- Current focus: designing the browser interaction that separates cheap web lookup from Dorothy Ann research while keeping follow-up chat and Markdown export close at hand
+- Current focus: finalizing source extraction and lookup-to-research promotion after settling deterministic browser routing
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: choose the deterministic query-routing syntax, then finalize browser states and the backend event contract
+- Next action: choose whether promoted lookups reuse their result set and how research selects pages for extraction
 
 ## Handoff
 
-The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. Continue by settling how punctuation/macros and explicit controls choose lookup versus research, then specify the event stream and responsive source/export interactions.
+The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Continue by deciding whether lookup promotion reuses existing results and how research chooses pages for extraction.
 
 ## Goal
 
@@ -70,9 +70,10 @@ Routing should be predictable and reversible. The current recommendation is a de
 - a query ending in `?` explicitly selects `research`;
 - an explicit `lookup` / `research` control always overrides inference;
 - the selected path is visible before submission and can be changed with the keyboard or pointer;
+- unpunctuated input remains on the cheap lookup path, but question-shaped results may offer a non-blocking `Research this with Dorothy Ann` action;
 - no model call is required merely to decide which path to use.
 
-The punctuation rule is a convenience macro, not the only way to enter research. The exact fallback for natural-language questions without terminal punctuation remains an open design choice.
+The punctuation rule is a convenience macro, not the only way to enter research. It applies only to new queries. Inside an existing topic, follow-up questions default to contextual chat even when they end in `?`; fresh research requires an explicit per-turn selection.
 
 When research occurs, the interface should show both:
 
@@ -223,7 +224,7 @@ The home screen is search-first rather than a blank chatbot. It contains one pro
 └──────────────────────────────────────────────────────────┘
 ```
 
-As input changes, the route chip shows what Enter will do. Adding a terminal `?` can switch `lookup` to `research`; changing the chip pins an explicit override. The user must never discover after submission that an unexpected expensive research run was inferred invisibly.
+As input changes, the route chip shows what Enter will do. On a new query, adding a terminal `?` switches `lookup` to `research`; changing the chip pins an explicit override. Unpunctuated input stays on `lookup`, though question-shaped result pages may suggest promotion to Dorothy Ann research. The user must never discover after submission that an unexpected expensive research run was inferred invisibly. Terminal punctuation does not change modes inside an existing topic, where follow-ups default to chat.
 
 ### Lookup Result
 
@@ -654,17 +655,16 @@ The application may later become installable as a PWA, but offline support shoul
 
 ## Open Questions for the Next Session
 
-1. **Routing fallback:** beyond terminal `?`, should unpunctuated natural-language questions remain lookup by default, use deterministic question-shape heuristics, or show a non-blocking research suggestion?
-2. **Explicit macro syntax:** is the visible route chip plus terminal `?` sufficient, or should power-user prefixes such as `/research` and `/lookup` also be supported?
-3. **Extraction policy:** should source extraction be required for every researched turn, selectively triggered for top results, or user-triggered per source?
-4. **Lookup promotion:** when `Ask Dorothy Ann about this` is selected, should the existing search result set be reused or should research always issue fresh/generated queries?
-5. **Pi artifact contract:** is downloadable/copyable Markdown sufficient initially, or should the MVP target a specific pi.dev import/paste convention?
-6. **Artifact scope:** after answer-level and whole-topic export, is arbitrary message/source selection necessary for the MVP?
-7. **Citation contract:** what is the smallest source-ID/citation format that remains reliable across chat implementations and exports?
-8. **Failure behavior:** how should partial sources and streamed prose appear and persist when search, extraction, synthesis, or the client connection fails?
-9. **Persistence milestone:** is local browser continuity enough to evaluate the product, or is cross-device continuity required for the first useful deployment?
-10. **Deployment boundary:** is the initial deployment strictly personal, or should the architecture preserve a future multi-user boundary?
+1. **Explicit macro syntax:** is the visible route chip plus terminal `?` sufficient, or should power-user prefixes such as `/research` and `/lookup` also be supported?
+2. **Extraction policy:** should source extraction be required for every researched turn, selectively triggered for top results, or user-triggered per source?
+3. **Lookup promotion:** when `Research this with Dorothy Ann` is selected, should the existing search result set be reused or should research always issue fresh/generated queries?
+4. **Pi artifact contract:** is downloadable/copyable Markdown sufficient initially, or should the MVP target a specific pi.dev import/paste convention?
+5. **Artifact scope:** after answer-level and whole-topic export, is arbitrary message/source selection necessary for the MVP?
+6. **Citation contract:** what is the smallest source-ID/citation format that remains reliable across chat implementations and exports?
+7. **Failure behavior:** how should partial sources and streamed prose appear and persist when search, extraction, synthesis, or the client connection fails?
+8. **Persistence milestone:** is local browser continuity enough to evaluate the product, or is cross-device continuity required for the first useful deployment?
+9. **Deployment boundary:** is the initial deployment strictly personal, or should the architecture preserve a future multi-user boundary?
 
 ## Next
 
-Choose the routing fallback for full questions without terminal punctuation, then define normalized TypeScript domain types and exact HTTP/SSE contracts around the browser interaction above. After that, settle extraction and lookup-promotion policy before selecting concrete providers.
+Settle extraction and lookup-promotion policy, then define normalized TypeScript domain types and exact HTTP/SSE contracts around the browser interaction before selecting concrete providers.
