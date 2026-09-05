@@ -4,13 +4,13 @@
 
 - Status: planning
 - Last updated: 2026-09-05
-- Current focus: reviewing the completed browser state matrix and responsive wireframes before moving to transport contracts
+- Current focus: defining exact lookup, research, retry, and report HTTP/SSE contracts
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: accept or revise the browser interaction baseline, then define exact lookup/research/retry HTTP and SSE contracts
+- Next action: reconcile the transport contract with normalized domain types, then build the atomic Implementation Plan and Plan Ledger
 
 ## Handoff
 
-The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. The MVP adds no slash commands or bang aliases. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB through the small `idb` promise/schema wrapper from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. `idb` remains private to the infrastructure adapter. The hosted app is personal/single-owner and uses a portable passphrase auth adapter: a dedicated `/unlock` screen exchanges the entered passphrase for a signed secure session cookie with a seven-day idle and 30-day absolute expiry, while protected application routes depend only on normalized `AuthContext`. MVP export scope is also settled: export one researched answer or a whole topic as an editable **Dorothy Ann report**, and export a whole topic as a deterministic transcript; arbitrary message/source selection and direct pi integration are deferred. Before transport work continues, complete and agree on the browser state matrix and paired desktop/mobile layouts described in `Browser Interaction Design`. A happy-path matrix and wireframe set are now drafted. Topic navigation is settled as a closed-by-default drawer on desktop and mobile, leaving only main content plus optional evidence visible. On desktop, the evidence panel opens automatically when research sources arrive, remains user-collapsible, and reopens/focuses when a citation is activated; mobile evidence remains an on-demand bottom sheet. Export uses a compact format-choice modal followed by a dedicated full-screen artifact workbench route on desktop and mobile. The happy-path shell is now agreed and the exhaustive MVP transition matrix is drafted. The exhaustive loading, empty, partial, error, and recovery variants are now drafted. Export-draft recovery is settled through an IndexedDB `artifactDrafts` store: generated and edited workbench content autosaves independently from topics, can be resumed or explicitly discarded, and does not become a general artifact library. Review/accept the browser interaction baseline, then define exact lookup, research, retry, and report HTTP/SSE contracts and align normalized domain types and the Plan Ledger.
+The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. The MVP adds no slash commands or bang aliases. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB through the small `idb` promise/schema wrapper from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. `idb` remains private to the infrastructure adapter. The hosted app is personal/single-owner and uses a portable passphrase auth adapter: a dedicated `/unlock` screen exchanges the entered passphrase for a signed secure session cookie with a seven-day idle and 30-day absolute expiry, while protected application routes depend only on normalized `AuthContext`. MVP export scope is also settled: export one researched answer or a whole topic as an editable **Dorothy Ann report**, and export a whole topic as a deterministic transcript; arbitrary message/source selection and direct pi integration are deferred. Before transport work continues, complete and agree on the browser state matrix and paired desktop/mobile layouts described in `Browser Interaction Design`. A happy-path matrix and wireframe set are now drafted. Topic navigation is settled as a closed-by-default drawer on desktop and mobile, leaving only main content plus optional evidence visible. On desktop, the evidence panel opens automatically when research sources arrive, remains user-collapsible, and reopens/focuses when a citation is activated; mobile evidence remains an on-demand bottom sheet. Export uses a compact format-choice modal followed by a dedicated full-screen artifact workbench route on desktop and mobile. The happy-path shell is now agreed and the exhaustive MVP transition matrix is drafted. The exhaustive loading, empty, partial, error, and recovery variants are now drafted. Export-draft recovery is settled through an IndexedDB `artifactDrafts` store: generated and edited workbench content autosaves independently from topics, can be resumed or explicitly discarded, and does not become a general artifact library. The browser interaction baseline is accepted. Exact lookup, turn, retry, and topic-report HTTP/SSE contracts are now drafted around a stateless authenticated backend and browser-owned threads. Continue by reconciling every referenced transport type with the normalized domain model, then replace the coarse build sequence with an atomic Implementation Plan and Plan Ledger.
 
 ## Goal
 
@@ -214,7 +214,7 @@ A second provider should be added after the first end-to-end workflow works, pri
 
 - [x] Draft and agree on the happy-path state transition matrix and paired desktop/mobile shell.
 - [x] Expand the matrix into an exhaustive transition table covering every product-significant loading, empty, partial, error, and recovery state.
-- [~] Draw the corresponding desktop/mobile variants and verify actions, focus, persistence, events, and accessibility before finalizing transport contracts.
+- [x] Draw and agree on the corresponding desktop/mobile variants, including actions, focus, persistence, events, and accessibility.
 
 The design pass must cover this state matrix:
 
@@ -1019,23 +1019,164 @@ An answer-scoped Dorothy Ann report deterministically renders the question, rese
 
 A lookup-only result does not produce a Dorothy Ann report because Dorothy Ann has not researched it. `Export links` may create a small deterministic Markdown link list without invoking a model, or the user may promote the lookup to research first.
 
-### Required Turn Event Contract
+### Application HTTP and Streaming Contract
 
-Research needs structured progress and evidence events in addition to text deltas. Runtime adapters should expose a transport such as SSE over a normalized application event contract:
+The browser owns threads in IndexedDB; the backend is an authenticated, stateless orchestration boundary for provider calls and extraction. Requests therefore carry the bounded context or preserved research stage needed for that operation. The backend never becomes an implicit second thread store.
+
+All routes are same-origin, require a valid `AuthContext` except the auth endpoints, accept/return UTF-8 JSON unless streaming, and use a versioned envelope:
 
 ```ts
+interface ApiEnvelope<T> {
+  apiVersion: 1;
+  requestId: string;
+  data: T;
+}
+
+interface ApiErrorEnvelope {
+  apiVersion: 1;
+  requestId: string;
+  error: {
+    code: ApiErrorCode;
+    message: string;
+    retryable: boolean;
+    retryAfterSeconds?: number;
+  };
+}
+```
+
+Malformed, unauthorized, oversized, and rate-limited requests fail before a stream opens with normal JSON and status `400`, `401`, `413`, or `429`. Once a stream opens, terminal failures arrive as typed stream events because the HTTP status is already `200`.
+
+#### Lookup
+
+```text
+POST /api/lookup
+Content-Type: application/json
+
+{
+  "apiVersion": 1,
+  "requestId": "req_…",
+  "query": "life alive"
+}
+
+200
+{
+  "apiVersion": 1,
+  "requestId": "req_…",
+  "data": {
+    "lookupId": "lookup_…",
+    "query": "life alive",
+    "results": [SearchResult],
+    "completedAt": "ISO-8601"
+  }
+}
+```
+
+Result count is deployment-configured; the client cannot request an unbounded limit. `lookupId` identifies UI/request provenance, not server persistence. Promotion sends the returned query/results into research without a second search. The backend still repeats URL safety, size, and canonicalization checks because browser-provided result objects are untrusted.
+
+#### Turn Stream Request
+
+```text
+POST /api/turns/stream
+Accept: text/event-stream
+Content-Type: application/json
+```
+
+```ts
+interface TurnStreamRequestBase {
+  apiVersion: 1;
+  requestId: string;
+  threadId: ThreadId;
+  turnId: TurnId;
+  userMessage: UserMessage;
+  context: ThreadContextInput;
+}
+
+type TurnStreamRequest =
+  | (TurnStreamRequestBase & {
+      operation: "chat";
+      replaceAssistantMessageId?: MessageId;
+    })
+  | (TurnStreamRequestBase & {
+      operation: "research";
+      runId: ResearchRunId;
+      input:
+        | { kind: "search"; query: string }
+        | {
+            kind: "promote_lookup";
+            lookupId: string;
+            query: string;
+            results: SearchResult[];
+          };
+    })
+  | (TurnStreamRequestBase & {
+      operation: "retry_research";
+      run: ResearchRun;
+      resumeFrom: "search" | "extraction" | "synthesis";
+      allowPartialSynthesis?: boolean;
+    });
+
+interface ThreadContextInput {
+  turns: CompletedContextTurn[];
+  visibleSummary?: string;
+}
+```
+
+Only completed assistant messages enter `ThreadContextInput`; interrupted prose and failed extraction content are excluded. The backend reapplies deployment context/token/character limits and returns `413 context_too_large` rather than silently dropping recent user content. A future explicit compaction flow may supply `visibleSummary`.
+
+`allowPartialSynthesis` is accepted only when retrying an extraction failure that preserved one or two viable pages and the user selected `Answer with this evidence`. Normal candidate exhaustion with partial viable evidence does not require this flag.
+
+#### Turn SSE Events
+
+The response uses `Content-Type: text/event-stream`, `Cache-Control: no-cache, no-transform`, disables proxy buffering where supported, and emits monotonically increasing sequence numbers. The browser consumes it with `fetch` plus an SSE parser because native `EventSource` cannot POST the request body.
+
+```ts
+interface StreamEventBase {
+  apiVersion: 1;
+  requestId: string;
+  sequence: number;
+  occurredAt: string;
+}
+
 type TurnEvent =
-  | { type: "turn.started"; turnId: TurnId; mode: "chat" | "research" }
-  | { type: "research.query"; runId: ResearchRunId; query: string }
-  | { type: "research.sources"; runId: ResearchRunId; sources: SearchResult[] }
-  | {
+  | (StreamEventBase & {
+      type: "turn.started";
+      turnId: TurnId;
+      mode: "chat" | "research";
+    })
+  | (StreamEventBase & {
+      type: "research.query";
+      runId: ResearchRunId;
+      query: string;
+    })
+  | (StreamEventBase & {
+      type: "research.sources";
+      runId: ResearchRunId;
+      sources: SearchResult[];
+    })
+  | (StreamEventBase & {
+      type: "research.extraction";
+      runId: ResearchRunId;
+      outcome: ExtractionOutcome;
+      viableCount: number;
+      targetCount: number;
+    })
+  | (StreamEventBase & {
       type: "research.progress";
       runId: ResearchRunId;
       phase: "searching" | "extracting" | "synthesizing";
-    }
-  | { type: "answer.delta"; turnId: TurnId; part: AssistantContentPart }
-  | { type: "turn.completed"; message: Message; researchRun?: ResearchRun }
-  | {
+    })
+  | (StreamEventBase & {
+      type: "answer.delta";
+      turnId: TurnId;
+      part: AssistantContentPart;
+    })
+  | (StreamEventBase & {
+      type: "turn.completed";
+      turnId: TurnId;
+      assistantMessage: AssistantMessage;
+      researchRun?: ResearchRun;
+    })
+  | (StreamEventBase & {
       type: "turn.failed";
       turnId: TurnId;
       stage: TurnStage;
@@ -1043,12 +1184,72 @@ type TurnEvent =
       retryable: boolean;
       message: string;
       researchRun?: ResearchRun;
-    };
+    });
 
 type TurnStage = "search" | "extraction" | "synthesis" | "transport";
 ```
 
-Lookup does not use this expensive orchestration path. It calls `SearchProvider.search` through a bounded lookup endpoint and returns normalized `SearchResult[]`. Promotion passes those normalized results into research orchestration rather than invoking search again. Cancellation, retry, and persistence must use stable turn/run IDs so a disconnected stream cannot create duplicate messages or research runs.
+Wire format uses the `type` as the SSE `event` field and serialized event as `data`; `id` is `<requestId>:<sequence>`. Comment heartbeats may be sent while providers are quiet and are not domain events. Exactly one `turn.completed` or `turn.failed` terminates a normally connected stream. EOF without either marks the turn interrupted.
+
+The client ignores duplicate/out-of-order sequence numbers and events whose `requestId`, `turnId`, or `runId` do not match the active operation. It persists source/extraction events as stages complete, but keeps `answer.delta` transient until `turn.completed`. An `AbortController` implements Stop; no cancellation endpoint is required in the MVP.
+
+The stateless backend cannot promise provider exactly-once execution after a connection loss. Stable request/turn/run IDs prevent duplicate local records, not duplicate external spend. Therefore the client never automatically retries after a stream opened; it shows the stage-aware retry action and waits for user intent.
+
+#### Topic Report Stream
+
+Answer reports and transcripts render entirely in the browser. Only topic-scoped Dorothy Ann report condensation calls the backend:
+
+```text
+POST /api/reports/stream
+Accept: text/event-stream
+Content-Type: application/json
+```
+
+```ts
+interface TopicReportStreamRequest {
+  apiVersion: 1;
+  requestId: string;
+  draftId: ArtifactDraftId;
+  thread: ReportThreadInput;
+}
+
+type ReportEvent =
+  | (StreamEventBase & { type: "report.started"; draftId: ArtifactDraftId })
+  | (StreamEventBase & { type: "report.delta"; draftId: ArtifactDraftId; markdown: string })
+  | (StreamEventBase & {
+      type: "report.completed";
+      draftId: ArtifactDraftId;
+      artifact: ExportArtifact;
+    })
+  | (StreamEventBase & {
+      type: "report.failed";
+      draftId: ArtifactDraftId;
+      code: ReportErrorCode;
+      retryable: boolean;
+      message: string;
+    });
+```
+
+`ReportThreadInput` contains completed turns and their normalized sources only, bounded by the same deployment context policy. The client keeps deltas transient, saves `ArtifactDraft` only on `report.completed`, and requires user intent before retrying an opened stream.
+
+#### Retry and Authentication Rules
+
+- Before-stream `401`: open `/unlock`, then replay once only if no provider work began.
+- Midstream EOF/terminal auth failure: preserve completed stages and require the user to choose the stage-specific retry.
+- Search retry reruns search and replaces that run's prior failed search state.
+- Extraction retry sends the preserved `ResearchRun`; the backend retries failed/eligible candidates and never treats browser-provided extracted text as trusted instructions.
+- Synthesis retry reuses the frozen viable evidence set and performs no search/extraction.
+- Chat retry reuses the user turn ID; replacement of an existing assistant answer occurs only after a new `turn.completed`.
+- Report retry reuses the draft ID/source target and replaces no saved draft until `report.completed`.
+
+#### Transport Security and Limits
+
+- Validate every discriminated union and reject unknown fields at the HTTP boundary.
+- Bound query length, turn count, message characters, result count, URL count, extracted characters, and output tokens server-side.
+- Revalidate every promoted URL; block private/link-local/loopback addresses and unsafe redirects before extraction.
+- Delimit all browser-provided conversation/source content from system instructions.
+- Apply auth, origin/CSRF, request-rate, and provider-spend limits before starting work.
+- Do not log request bodies, SSE data, passphrases, extracted content, or generated prose by default.
 
 Extraction count is explicit application configuration rather than a provider-specific constant:
 
@@ -1615,4 +1816,4 @@ The browser interaction decisions are settled. Remaining implementation-level ch
 
 ## Next
 
-Complete the exhaustive browser transition matrix and desktop/mobile loading/error/recovery wireframes using the agreed happy-path shell. Then define exact HTTP/SSE contracts around lookup, promotion, extraction, retry, and follow-up interactions, and align normalized domain types, implementation steps, and the Plan Ledger before selecting concrete providers.
+Reconcile every request, event, message, source, extraction, error, context, report, and ID type referenced by the transport contracts with the normalized domain model. Then replace the coarse build sequence with atomic implementation steps and a mirrored Plan Ledger before selecting concrete providers/framework packages.
