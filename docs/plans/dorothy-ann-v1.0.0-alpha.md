@@ -5,13 +5,13 @@
 - Status: ready
 - Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha.md`
 - Last updated: 2026-09-05
-- Current focus: implementation-ready alpha after scope, portability, and minimalism review
+- Current focus: implementation-ready alpha with operator account, secret, and deployment handoff defined
 - Handoff lives in: [`## Handoff`](#handoff)
 - Next action: approve implementation via `feature-builder`, beginning with Plan Ledger step 1
 
 ## Handoff
 
-Read `Current State`, `Concrete Application Stack`, `Browser Interaction Design`, `Application HTTP and Streaming Contract`, `Explicit Non-Goals`, and `Implementation Plan` first. Product, interfaces, browser states, transport contracts, dependencies, implementation steps, and verification are settled. The alpha is a Vercel-hosted React/Vite SPA with a portable Hono backend, browser-only IndexedDB threads, Brave search, application-owned extraction, Anthropic synthesis, passphrase auth, and Markdown reports.
+Read `Current State`, `Concrete Application Stack`, `Browser Interaction Design`, `Application HTTP and Streaming Contract`, `Explicit Non-Goals`, `Implementation Plan`, and `Operator Setup and Secret Handoff` first. Product, interfaces, browser states, transport contracts, dependencies, implementation steps, and verification are settled. The alpha is a Vercel-hosted React/Vite SPA with a portable Hono backend, browser-only IndexedDB threads, Brave search, application-owned extraction, Anthropic synthesis, passphrase auth, and Markdown reports.
 
 Begin with Plan Ledger step 1 and update `Current State`, this handoff, and ledger markers as work proceeds. Fixture mode allows implementation through step 11 without live credentials; step 12 needs the deployment inputs. Do not add remote thread storage, sync, autonomous research, context compaction, topic archiving, edit-history branching, rich editors, or second-provider work to the alpha.
 
@@ -1902,9 +1902,11 @@ Portability invariants:
 Required deployment configuration:
 
 ```text
-ANTHROPIC_API_KEY
-ANTHROPIC_MODEL                 required; deployment-selected, not persisted provider payload
-BRAVE_SEARCH_API_KEY
+DOROTHY_FIXTURE_MODE           true for local/preview fixtures; false in production
+ANTHROPIC_API_KEY               required when fixture mode is false
+ANTHROPIC_MODEL                 required when fixture mode is false; deployment-selected
+ANTHROPIC_WORKSPACE_ID          optional; only for keys requiring workspace selection
+BRAVE_SEARCH_API_KEY            required when fixture mode is false
 APP_PASSPHRASE_SCRYPT_HASH     versioned salt/parameters/hash string
 SESSION_SIGNING_KEYS           active + optional previous HMAC keys for rotation
 LIMITER_KEY_SECRET             HMAC secret for client-IP limiter keys
@@ -2128,9 +2130,104 @@ Alpha acceptance assertions:
 - Provider adapters can be replaced by test doubles without changing domain, orchestration, UI, storage, or artifact formats.
 - The local Node and Vercel adapters expose identical versioned API/event contracts.
 
-## Deployment Inputs
+## Operator Setup and Secret Handoff
 
-Implementation can proceed entirely in fixture mode. Live smoke/deployment requires the operator to provide Brave, Anthropic, and Upstash credentials; a generated scrypt passphrase hash and signing/limiter secrets; and a current Anthropic model ID through `ANTHROPIC_MODEL`. The model value is deployment configuration, not an unresolved domain or UI decision.
+Implementation works in fixture mode without accounts or secrets. The operator supplies live services incrementally; secrets never go in chat, git, issue text, screenshots, browser configuration, or a `VITE_*` variable. The repository will provide a committed `.env.example` containing names/defaults only and a gitignored `.env.local` for live local development.
+
+### What Jonny needs to obtain
+
+| Item | When needed | Operator action | Dorothy Ann receives it as |
+|---|---|---|---|
+| Brave Search API key | Ledger step 5/live lookup | Create a Brave Search API account, activate an API plan, create a descriptively named key in the API dashboard, and keep it server-side. Official setup: <https://api-dashboard.search.brave.com/documentation/quickstart>. | `BRAVE_SEARCH_API_KEY` secret |
+| Anthropic API key | Ledger step 7/live chat/research | In Claude Console, create a personal key for private development or service-account key for the deployed workload, choose an expiration, copy the one-time value, and fund API billing. Claude web/desktop paid plans do not include API usage. Official setup: <https://platform.claude.com/docs/en/get-api-key>; billing separation: <https://support.claude.com/en/articles/9876003-i-have-a-paid-claude-subscription-pro-max-team-or-enterprise-plans-why-do-i-have-to-pay-separately-to-use-the-claude-api-and-console>. | `ANTHROPIC_API_KEY` secret |
+| Anthropic model ID | Ledger step 7/live chat/research | Choose a current model ID from Anthropic's model documentation/Models API. Start with the current Sonnet-class model for the speed/quality balance, but keep it configuration rather than code. | `ANTHROPIC_MODEL` config |
+| Optional Anthropic workspace ID | Only if the key can address multiple workspaces | Copy the workspace ID required by the selected key; omit otherwise. | `ANTHROPIC_WORKSPACE_ID` secret/config |
+| Vercel account and project | Ledger step 1 for build; step 12 for live deploy | Connect the git repository as a Vite project, retain the generated preview/production flow, and redeploy after adding environment variables. Official Vite guide: <https://vercel.com/docs/frameworks/frontend/vite>. | Project/deployment, not an application secret |
+| Upstash Redis database | Ledger step 4/live rate limiting | Install the Upstash integration in Vercel, create/link one free Redis database, connect it to the Dorothy Ann project, and redeploy. Official integration: <https://upstash.com/docs/redis/howto/vercelintegration>. | `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` secrets |
+| Personal unlock passphrase | Ledger step 4 or before first live deploy | Choose a unique high-entropy passphrase and run `npm run auth:hash`; enter it only at the no-echo prompt. Keep the passphrase in a password manager. | Only the generated `APP_PASSPHRASE_SCRYPT_HASH`; never the passphrase |
+| Session signing keys | Ledger step 4 | Run `npm run secrets:generate`; retain the generated active key. Future rotations add a new active key while temporarily retaining the old verification key. | `SESSION_SIGNING_KEYS` secret |
+| Limiter-key secret | Ledger step 4 | Generated by the same script; it must be independent from session signing. | `LIMITER_KEY_SECRET` secret |
+
+The generated scripts must print shell-safe values but never write live secrets into tracked files. `auth:hash` reads from an interactive no-echo prompt, confirms the passphrase, generates a random salt, and prints the versioned scrypt hash. `secrets:generate` uses cryptographically secure random bytes and prints distinct session/limiter values.
+
+### How to provide values locally
+
+After Ledger step 1 creates `.env.example`, copy it without committing the result:
+
+```bash
+cp .env.example .env.local
+```
+
+Use fixture mode until a live adapter is being exercised:
+
+```dotenv
+DOROTHY_FIXTURE_MODE=true
+```
+
+For live local testing, set these in `.env.local`:
+
+```dotenv
+DOROTHY_FIXTURE_MODE=false
+BRAVE_SEARCH_API_KEY=
+ANTHROPIC_API_KEY=
+ANTHROPIC_MODEL=
+# ANTHROPIC_WORKSPACE_ID=  # only when required
+APP_PASSPHRASE_SCRYPT_HASH=
+SESSION_SIGNING_KEYS=
+LIMITER_KEY_SECRET=
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+```
+
+Node 22 local scripts load `.env.local`; Vite receives no secret values. `.gitignore` must cover `.env`, `.env.*`, and permit only `.env.example`. Before every commit/deploy, `git status` and the built `dist/` secret scan must remain clean.
+
+### How to provide values to Vercel
+
+Use Vercel Project → Settings → Environment Variables or the interactive CLI. Mark API keys, hashes, signing keys, limiter secrets, and Upstash credentials as **Secret**. Add them to Production and Preview only when those environments should make live paid calls; Development is optional if `.env.local` is the local source of truth. Vercel applies environment changes only to new deployments, so redeploy afterward. Official environment guide: <https://vercel.com/docs/environment-variables>.
+
+CLI shape (the command prompts for each value; do not put the value on the command line):
+
+```bash
+vercel link
+vercel env add DOROTHY_FIXTURE_MODE production     # enter false
+vercel env add BRAVE_SEARCH_API_KEY production
+vercel env add ANTHROPIC_API_KEY production
+vercel env add ANTHROPIC_MODEL production
+vercel env add APP_PASSPHRASE_SCRYPT_HASH production
+vercel env add SESSION_SIGNING_KEYS production
+vercel env add LIMITER_KEY_SECRET production
+# Upstash integration normally injects its two variables automatically.
+vercel --prod
+```
+
+Preview deployments default to `DOROTHY_FIXTURE_MODE=true`: provide preview auth/session/Upstash secrets so the real unlock flow works, but omit Brave/Anthropic keys to prevent accidental provider spend. Production uses `DOROTHY_FIXTURE_MODE=false` with all live secrets. Switch previews to live providers only as an explicit later choice. `vercel env pull .env.local` is optional when Vercel should be the source of local development values; review the resulting file and keep it gitignored. Official CLI reference: <https://vercel.com/docs/cli/env>.
+
+### Recommended ownership and rotation
+
+- Use separate Brave and Anthropic keys named for Dorothy Ann; do not reuse keys from pi.dev or unrelated projects.
+- Prefer an Anthropic service-account key for a long-lived deployment when available; a personal key is acceptable for private development.
+- Set key expiration/usage alerts in provider consoles where supported.
+- Rotate one provider at a time, add the replacement to Vercel, redeploy, smoke test, then revoke the old key.
+- Rotate `SESSION_SIGNING_KEYS` by deploying a new active key plus the old verification key; after the 30-day absolute session window, remove the old key.
+- Rotating `LIMITER_KEY_SECRET` abandons old limiter buckets, which is acceptable during an intentional rotation.
+- Never place thread content in Upstash; it remains in browser IndexedDB.
+
+### Operator readiness checklist
+
+- [ ] Brave account, active API plan, and Dorothy Ann key created.
+- [ ] Anthropic Console/API billing available and Dorothy Ann key created.
+- [ ] Current Anthropic model ID selected.
+- [ ] Vercel account/project linked to the repository.
+- [ ] Upstash Redis created/linked to the Vercel project.
+- [ ] Personal passphrase stored in a password manager; scrypt hash generated.
+- [ ] Session and limiter secrets generated independently.
+- [ ] Production secrets added to Vercel and deployment recreated.
+- [ ] Preview configured with fixture providers; production configured with live providers.
+- [ ] Local fixture flow passes before any live credentials are added.
+- [ ] Live smoke passes: unlock, cheap lookup, research, follow-up chat, report export.
+- [ ] Provider usage/billing dashboards checked after the first smoke test.
+
+Missing live inputs block only the corresponding adapter smoke/deployment step, not fixture-mode implementation.
 
 ## Open Questions
 
