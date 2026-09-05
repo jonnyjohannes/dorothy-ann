@@ -1,4 +1,4 @@
-import type { AssistantContent, AssistantContentPart, SourceId } from "./types";
+import type { AssistantContent, AssistantContentPart, SourceId } from "./types.js";
 
 export class CitationSentinelParser {
   private buffer = "";

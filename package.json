@@ -19,6 +19,7 @@
     "secrets:generate": "tsx scripts/secrets-generate.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
     "@hono/node-server": "^1.19.0",
     "@mozilla/readability": "^0.6.0",
     "@react-aria/button": "^3.14.0",
