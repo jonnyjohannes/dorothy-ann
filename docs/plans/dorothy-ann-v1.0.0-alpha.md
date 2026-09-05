@@ -5,7 +5,7 @@
 - Status: in progress
 - Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha.md`
 - Last updated: 2026-09-05
-- Current focus: refining the UI feedback pass: drawer topic-plus navigation, smaller home hierarchy, single Go action, styled mode control, and settings-only appearance controls
+- Current focus: adding contextual follow-up chat beneath completed research and widening the desktop evidence column to a one-quarter layout share
 - Handoff lives in: [`## Handoff`](#handoff)
 - Next action: approve implementation via `feature-builder`, beginning with Plan Ledger step 1
 
