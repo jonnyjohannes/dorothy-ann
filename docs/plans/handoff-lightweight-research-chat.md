@@ -4,13 +4,13 @@
 
 - Status: planning
 - Last updated: 2026-09-05
-- Current focus: completing exact authenticated HTTP/SSE request/response contracts
+- Current focus: completing exact lookup, research, retry, and SSE request/response contracts
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: settle the personal-deployment access boundary, then finish transport contracts
+- Next action: define the remaining application HTTP contracts, then align normalized domain types and the Plan Ledger
 
 ## Handoff
 
-The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB through the small `idb` promise/schema wrapper from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. `idb` remains private to the infrastructure adapter. Continue by settling the personal-deployment access boundary and completing exact HTTP/SSE contracts.
+The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB through the small `idb` promise/schema wrapper from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. `idb` remains private to the infrastructure adapter. The hosted app is personal/single-owner and uses a portable passphrase auth adapter: a dedicated `/unlock` screen exchanges the entered passphrase for a signed secure session cookie, while protected application routes depend only on normalized `AuthContext`. Continue by completing lookup, research, retry, and SSE contracts, then align normalized domain types and the Plan Ledger.
 
 ## Goal
 
@@ -706,6 +706,75 @@ These are estimates for a narrow single-user build, not a commitment. The main s
 
 Credentials should be deployment secrets and remain server-side. Even in the static proof, the browser should never receive long-lived provider credentials. The initial product is single-user; it should avoid building general account management, while still keeping an authentication boundary around private threads and provider routes.
 
+## Authentication and Access Boundary
+
+The first deployment is personal and single-owner, but passphrase handling must remain an adapter rather than an application-core dependency:
+
+```ts
+interface AuthClient {
+  getSession(): Promise<AuthSession | null>;
+  beginLogin(returnTo: string): Promise<void>;
+  logout(): Promise<void>;
+}
+
+interface RequestAuthenticator {
+  authenticate(request: Request): Promise<AuthContext | null>;
+}
+
+interface AuthContext {
+  subject: string; // "owner" in the initial deployment
+  method: string;  // "passphrase" initially
+}
+```
+
+Protected lookup, research, extraction, model, and configuration handlers receive `AuthContext`; they do not parse cookies, verify passphrases, or import a concrete auth implementation. The runtime adapter mounts the concrete login/session routes. A future OAuth session, passkey flow, or trusted identity header can replace both auth adapters without changing research orchestration.
+
+### Unlock Interaction
+
+An unauthenticated visit shows a dedicated `/unlock` page before loading topic content:
+
+```text
+open app or deep link
+        ↓
+GET /api/auth/session
+        ├── authenticated → render requested route
+        └── unauthenticated → /unlock?returnTo=<local path>
+                                  ↓
+                           enter passphrase
+                                  ↓
+                    POST /api/auth/passphrase
+                                  ↓
+                  secure session cookie + return
+```
+
+The unlock form uses a password input compatible with password managers. The passphrase exists only long enough to submit over HTTPS; it is never written to localStorage, IndexedDB, frontend configuration, logs, analytics, URLs, or exported artifacts. `returnTo` accepts only validated same-origin paths. The profile menu exposes `Lock / sign out`.
+
+If authentication expires during a turn, the client preserves the local user turn and last completed research stage, opens the unlock flow, and retries only the interrupted stage after authentication succeeds.
+
+### Initial Auth HTTP Contract
+
+```text
+GET  /api/auth/session
+  200 { authenticated: false }
+  200 { authenticated: true, session: { subject, method, expiresAt } }
+
+POST /api/auth/passphrase
+  body: { passphrase: string }
+  200 { authenticated: true, session: { subject, method, expiresAt } }
+      + Set-Cookie: __Host-dorothy-ann-session=…;
+        HttpOnly; Secure; SameSite=Lax; Path=/
+  400 malformed request
+  401 invalid passphrase
+  429 rate limited
+
+POST /api/auth/logout
+  204 + expired __Host-dorothy-ann-session cookie
+```
+
+The initial server auth adapter verifies the submitted passphrase against a strong password hash stored in deployment secrets and issues a signed, expiring session for `subject: "owner"`. A separate signing secret permits session invalidation/rotation without changing the passphrase. Login attempts pass through a `LoginAttemptLimiter` adapter backed by a deployment-appropriate durable limiter; process-local counters are not sufficient in serverless runtimes.
+
+The browser app shell must not read or display IndexedDB topic content until authentication succeeds. This gate protects access through the app, not against someone who already controls the local browser profile or device; local thread encryption is outside MVP scope.
+
 ## Security Constraints
 
 - Authenticate access to all conversation and configuration routes.
@@ -768,9 +837,8 @@ The application may later become installable as a PWA, but offline support shoul
 1. **Explicit macro syntax:** is the visible route chip plus terminal `?` sufficient, or should power-user prefixes such as `/research` and `/lookup` also be supported?
 2. **Pi artifact contract:** is downloadable/copyable Markdown sufficient initially, or should the MVP target a specific pi.dev import/paste convention?
 3. **Artifact scope:** after answer-level and whole-topic export, is arbitrary message/source selection necessary for the MVP?
-4. **Deployment boundary:** is the initial deployment strictly personal, or should the domain and authentication model preserve a future multi-user boundary?
-5. **Access mechanism:** what protects the hosted provider proxy without shipping a reusable secret in frontend code?
+4. **Session policy:** what idle/absolute expiry should the personal browser session use, and should `Lock` revoke only the current browser or all sessions?
 
 ## Next
 
-Settle the personal-deployment access boundary, then define exact HTTP/SSE contracts around the lookup, promotion, extraction, and follow-up interactions before selecting concrete providers.
+Define exact HTTP/SSE contracts around lookup, promotion, extraction, retry, and follow-up interactions, then align normalized domain types, implementation steps, and the Plan Ledger before selecting concrete providers.
