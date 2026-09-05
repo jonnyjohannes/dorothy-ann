@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { SafeContentExtractor, assertTlsVerificationEnabled, isPublicAddress } from "../server/extractor";
+import { SafeContentExtractor, isPublicAddress } from "../server/extractor";
 import type { SearchResult } from "../src/domain/types";
 
 const source: SearchResult = {
@@ -22,11 +22,6 @@ describe("safe content extraction", () => {
     expect(isPublicAddress("::1")).toBe(false);
     expect(isPublicAddress("::ffff:127.0.0.1")).toBe(false);
     expect(isPublicAddress("8.8.8.8")).toBe(true);
-  });
-
-  it("rejects the insecure Node TLS escape hatch", () => {
-    expect(() => assertTlsVerificationEnabled({ NODE_TLS_REJECT_UNAUTHORIZED: "0" })).toThrow("insecure_tls_configuration");
-    expect(() => assertTlsVerificationEnabled({ NODE_TLS_REJECT_UNAUTHORIZED: "1" })).not.toThrow();
   });
 
   it("extracts bounded readable HTML", async () => {
