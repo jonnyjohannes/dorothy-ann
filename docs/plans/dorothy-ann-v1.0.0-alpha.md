@@ -36,13 +36,14 @@ This section records the implementation reality where it differs from the origin
 - Auth primitives and routes exist, but protected-route middleware, same-origin enforcement, rolling/absolute session behavior in the request path, and the Upstash limiter wiring are not complete; the app currently uses the in-memory limiter in `createApp`.
 - Brave lookup and Anthropic adapters are live-wired locally, but the full contract matrix, prompt-injection fixtures, interruption/rate-limit mapping, and persisted usage boundaries remain incomplete.
 - The extractor has URL validation, manual redirects, content-type/timeout/character bounds, and Readability, but does not yet use a validated/pinned DNS connection or streamed decoded-byte limits. It must not be treated as production-hardened until step 6 closes.
+- Local live extraction encountered certificate-chain failures, and `NODE_TLS_REJECT_UNAUTHORIZED=0` was used as a temporary workaround. That workaround is explicitly prohibited for the implementation and deployment. The completion path is to diagnose the trust chain, use a locally trusted CA through `NODE_EXTRA_CA_CERTS` or an equivalent narrowly scoped Undici TLS configuration when a corporate/dev proxy is involved, leave Node certificate verification enabled, and treat genuinely invalid public certificates as deterministic source skips. No CA material belongs in git, browser variables, request payloads, or logs.
 - Research orchestration is a working baseline rather than the complete contract: it lacks concurrent extraction scheduling, frozen persisted evidence packs, stage-specific retries, stop/EOF handling, heartbeats, duplicate/out-of-order event guards, and atomic turn persistence.
 - The report UI is a useful editable answer/transcript workbench, but it is not yet the planned `reportMachine`/`ArtifactDraftStore` autosaving workbench and does not yet implement topic report generation, native share fallback, or backup UI.
 - Vercel deployment has not been executed. Deployment remains explicitly Vercel-only for this alpha; local implementation and smoke verification happen first, then deployment configuration and live smoke tests happen as the final ledger step.
 
 ### Remaining completion backlog
 
-1. Finish extractor security: pinned DNS/connection lookup, streamed decoded-byte bounds, redirect/private-address/rebinding/oversized fixtures, and production-safe error taxonomy.
+1. Finish extractor security: pinned DNS/connection lookup, streamed decoded-byte bounds, redirect/private-address/rebinding/oversized fixtures, production-safe error taxonomy, and TLS trust handling. Add a startup/local diagnostic that rejects or clearly warns on `NODE_TLS_REJECT_UNAUTHORIZED=0`; document `NODE_EXTRA_CA_CERTS` for trusted local proxy CAs; verify production uses normal certificate validation and skips bad-cert sources without weakening TLS.
 2. Finish transport/application contracts: request auth/origin/size guards, concurrent bounded extraction, frozen evidence persistence, stage retries, stop/EOF/heartbeat behavior, event sequencing guards, and atomic completion persistence.
 3. Finish auth wiring: protected lookup/turn/research/report handlers, rolling and absolute expiry, same-origin checks, Upstash limiter selection, and auth contract tests.
 4. Finish storage recovery: migrations, corrupt-record isolation, quota/unavailable states, artifact draft autosave/resume/discard, backup import/export, and conflict/recovery tests/UI.
@@ -2072,6 +2073,7 @@ The browser app shell must not read or display IndexedDB topic content until aut
 - Restrict redirect behavior during extraction.
 - Give retrieved content no executable tools or authority.
 - Avoid prompt and conversation telemetry by default.
+- Never disable TLS certificate verification. `NODE_TLS_REJECT_UNAUTHORIZED=0` is not an accepted local, preview, or production configuration. Local custom trust must be supplied through an operator-managed CA bundle or narrowly scoped TLS configuration; fetched pages cannot influence trust configuration.
 
 ## Cost Controls
 
@@ -2218,6 +2220,10 @@ UPSTASH_REDIS_REST_TOKEN=
 ```
 
 Node 22 local scripts load `.env.local`; Vite receives no secret values. `.gitignore` must cover `.env`, `.env.*`, and permit only `.env.example`. Before every commit/deploy, `git status` and the built `dist/` secret scan must remain clean.
+
+### Local TLS trust handoff
+
+Do not put `NODE_TLS_REJECT_UNAUTHORIZED=0` in `.env.local`, shell startup files, npm scripts, Vercel variables, or deployment configuration. If the local network uses a TLS-inspecting proxy, obtain its trusted CA PEM through the operator-managed development process and run the Node server with `NODE_EXTRA_CA_CERTS=/absolute/path/to/dev-proxy-ca.pem`; keep that PEM outside the repository and password manager/secret handoff as appropriate. If no proxy is involved, repair the local Node trust-store/certificate-chain issue instead. Verify with a normal Node HTTPS request and `GET /api/providers/status`, then run the live research smoke test with certificate verification enabled. Vercel production must use its normal CA bundle; a source with an invalid certificate is skipped rather than fetched insecurely.
 
 ### How to provide values to Vercel
 
