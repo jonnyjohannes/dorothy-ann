@@ -4,13 +4,13 @@
 
 - Status: planning
 - Last updated: 2026-09-05
-- Current focus: defining turn failure semantics and exact HTTP/SSE request/response contracts for the settled browser flow
+- Current focus: completing exact HTTP/SSE request/response contracts and deciding the first persistence milestone
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: decide how partial research failures persist and retry, then complete the transport contracts
+- Next action: decide whether the first useful deployment requires cross-device persistence, then finish transport contracts around the chosen store
 
 ## Handoff
 
-The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Continue by defining turn failure semantics and exact HTTP/SSE contracts.
+The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. Continue by deciding the first persistence milestone and completing exact HTTP/SSE contracts.
 
 ## Goal
 
@@ -297,10 +297,14 @@ type TurnEvent =
   | {
       type: "turn.failed";
       turnId: TurnId;
+      stage: TurnStage;
       code: TurnErrorCode;
       retryable: boolean;
       message: string;
+      researchRun?: ResearchRun;
     };
+
+type TurnStage = "search" | "extraction" | "synthesis" | "transport";
 ```
 
 Lookup does not use this expensive orchestration path. It calls `SearchProvider.search` through a bounded lookup endpoint and returns normalized `SearchResult[]`. Promotion passes those normalized results into research orchestration rather than invoking search again. Cancellation, retry, and persistence must use stable turn/run IDs so a disconnected stream cannot create duplicate messages or research runs.
@@ -352,32 +356,47 @@ Provider responses should be normalized at the boundary. Stored threads should n
 
 ### Core Domain Objects
 
+A turn is an explicit aggregate because a user message, research evidence, failure state, and optional assistant answer must survive independently:
+
 ```text
 Thread
   ├── metadata
   ├── model configuration reference
   ├── search configuration reference
-  └── Messages[]
+  └── Turn[]
+
+Turn
+  ├── stable turn ID
+  ├── mode: chat | research
+  ├── status: pending | running | completed | failed | interrupted
+  ├── user Message
+  ├── assistant Message?
+  ├── ResearchRun?
+  └── TurnFailure?
 
 Message
+  ├── stable message ID
   ├── role
   ├── content
-  ├── usage metadata
-  └── ResearchRun?
+  └── usage metadata
 
 ResearchRun
+  ├── stable research-run ID
+  ├── status: searching | extracting | ready | partial | insufficient_evidence | completed | failed
   ├── query or queries
   ├── SearchResult[]
-  └── extraction metadata
+  └── extraction outcomes
 
 SearchResult
   ├── stable source ID
   ├── rank
   ├── title
-  ├── URL
+  ├── URL and canonical URL
   ├── snippet
-  └── extracted content?
+  └── extraction outcome and bounded content?
 ```
+
+Flattening completed turns yields the ordered message sequence sent to a chat provider. A failed turn remains valid even when it has no assistant message; this is what lets the UI preserve the user's request and collected evidence without pretending an answer completed.
 
 Sources should be stored separately from generated prose rather than embedded only inside provider response JSON. This keeps citation rendering, retries, exports, and provider changes tractable.
 
@@ -407,6 +426,22 @@ Citation rules:
 - answer-level and transcript exports derive the same message-local numbering deterministically and place that answer's numbered source list immediately after its prose, so numbering scope remains unambiguous.
 
 Stored content must not use visible citation numbers as foreign keys. This permits source deduplication, retries, provider changes, and deterministic re-rendering without rewriting generated prose.
+
+### Failure and Retry Contract
+
+Failures preserve successful earlier stages and expose stage-specific recovery:
+
+| Failure | Persisted state | UI behavior | Retry scope |
+|---|---|---|---|
+| Search fails | user message, failed turn, query | show error and `Retry search`; no Dorothy Ann answer | search onward |
+| Some extraction fails, at least one page viable | all results and per-page outcomes | continue synthesis; visibly state that fewer than the configured target were usable | no automatic retry |
+| No pages are viable | results and extraction outcomes; `insufficient_evidence` run | show results and explain that research could not be supported; do not say “According to my research…” | extraction or edited/new query |
+| Synthesis fails before completion | complete research run; no completed assistant message | keep evidence visible and show `Retry answer` | synthesis only, using preserved evidence |
+| Stream/connection is interrupted | last fully persisted stage; interrupted turn | show the transient partial buffer as interrupted, but do not export or treat it as a completed answer | resume if transport supports it; otherwise retry the active stage with the same stable IDs |
+
+Streamed prose is a transient UI buffer until `turn.completed` supplies the normalized assistant message. If synthesis or transport fails, that buffer may remain dimmed for inspection until retry or dismissal, but it is not included in future model context, persistence as a completed message, or export. A retry updates the existing `Turn` and `ResearchRun`; it does not append duplicate user messages or evidence.
+
+If one or two viable pages support synthesis, Dorothy Ann may still answer, but the response must disclose that fewer than the configured three pages were usable. Extraction failures remain inspectable metadata and are never passed to the model as evidence.
 
 ## Proposed System Flow
 
@@ -706,9 +741,8 @@ The application may later become installable as a PWA, but offline support shoul
 1. **Explicit macro syntax:** is the visible route chip plus terminal `?` sufficient, or should power-user prefixes such as `/research` and `/lookup` also be supported?
 2. **Pi artifact contract:** is downloadable/copyable Markdown sufficient initially, or should the MVP target a specific pi.dev import/paste convention?
 3. **Artifact scope:** after answer-level and whole-topic export, is arbitrary message/source selection necessary for the MVP?
-4. **Failure behavior:** how should partial sources and streamed prose appear and persist when search, extraction, synthesis, or the client connection fails?
-5. **Persistence milestone:** is local browser continuity enough to evaluate the product, or is cross-device continuity required for the first useful deployment?
-6. **Deployment boundary:** is the initial deployment strictly personal, or should the architecture preserve a future multi-user boundary?
+4. **Persistence milestone:** is local browser continuity enough to evaluate the product, or is cross-device continuity required for the first useful deployment?
+5. **Deployment boundary:** is the initial deployment strictly personal, or should the architecture preserve a future multi-user boundary?
 
 ## Next
 
