@@ -1920,7 +1920,17 @@ interface ArtifactDraft {
 
 An `ArtifactDraftStore` backed by the same database owns workbench drafts. The `by-source-key` index is unique, permitting at most one active draft per `sourceKey`; reopening that export offers Resume or Start over. Deterministic and generated artifacts are saved once complete, edits autosave with a short debounce, and Back offers Keep draft, Discard, or Stay when dirty. Copy/download/share does not silently delete a draft. Drafts are excluded from thread archives and topic history, are not listed as durable artifacts, survive archive/refresh/browser restart, and are deleted with their source topic or by explicit discard.
 
-`RemoteThreadStore` can later map the same normalized objects to authenticated API calls and server persistence. The UI should not branch on local versus remote storage; synchronization status, if eventually added, should be an adapter-provided capability/state.
+`RemoteThreadStore` can later map the same normalized objects to authenticated API calls and server persistence. Upstash Redis is technically one possible backend for that adapter, but selecting it for login limiting does **not** select it for thread storage. The browser must never receive Upstash credentials or call Redis directly; an authenticated server adapter would own thread keys, summary indexes, atomic updates, quotas, and migrations.
+
+If cross-device persistence is earned, evaluate three distinct shapes rather than treating remote Redis as a drop-in browser-storage swap:
+
+1. **remote source of truth** — `RemoteThreadStore` replaces `LocalThreadStore` after authenticated import;
+2. **local cache plus remote sync** — compose both stores and explicitly design conflict/offline semantics;
+3. **manual continuity** — retain IndexedDB and use the existing archive export/import flow.
+
+Upstash could support the first shape for a single owner using versioned thread blobs and summary indexes. A relational/document store may be a better durable system of record if ownership, querying, conflict history, or multi-user behavior grows. Thread content also has different privacy/retention requirements than expiring HMAC limiter counters; do not place it in the limiter namespace by default, and reassess encryption-at-rest, backup, deletion, size, and cost before choosing any remote store.
+
+The UI should not branch on local versus remote storage; synchronization status, if eventually added, should be an adapter-provided capability/state.
 
 ## Context Management
 
