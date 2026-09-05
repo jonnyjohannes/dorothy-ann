@@ -4,13 +4,13 @@
 
 - Status: planning
 - Last updated: 2026-09-05
-- Current focus: expanding the agreed happy-path shell into an exhaustive transition matrix and responsive state/error variants
+- Current focus: drawing responsive loading, empty, partial, error, and recovery variants from the completed exhaustive transition matrix
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: enumerate alternate/error transitions by area, then draw the corresponding desktop/mobile variants
+- Next action: add grouped desktop/mobile variant wireframes and resolve the export-draft persistence requirement exposed by the matrix
 
 ## Handoff
 
-The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. The MVP adds no slash commands or bang aliases. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB through the small `idb` promise/schema wrapper from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. `idb` remains private to the infrastructure adapter. The hosted app is personal/single-owner and uses a portable passphrase auth adapter: a dedicated `/unlock` screen exchanges the entered passphrase for a signed secure session cookie with a seven-day idle and 30-day absolute expiry, while protected application routes depend only on normalized `AuthContext`. MVP export scope is also settled: export one researched answer or a whole topic as an editable **Dorothy Ann report**, and export a whole topic as a deterministic transcript; arbitrary message/source selection and direct pi integration are deferred. Before transport work continues, complete and agree on the browser state matrix and paired desktop/mobile layouts described in `Browser Interaction Design`. A happy-path matrix and wireframe set are now drafted. Topic navigation is settled as a closed-by-default drawer on desktop and mobile, leaving only main content plus optional evidence visible. On desktop, the evidence panel opens automatically when research sources arrive, remains user-collapsible, and reopens/focuses when a citation is activated; mobile evidence remains an on-demand bottom sheet. Export uses a compact format-choice modal followed by a dedicated full-screen artifact workbench route on desktop and mobile. The happy-path shell is now agreed; multiply it into exhaustive loading, empty, partial, error, and recovery variants. After that, finish lookup, research, retry, and SSE contracts and align normalized domain types and the Plan Ledger.
+The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. The MVP adds no slash commands or bang aliases. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB through the small `idb` promise/schema wrapper from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. `idb` remains private to the infrastructure adapter. The hosted app is personal/single-owner and uses a portable passphrase auth adapter: a dedicated `/unlock` screen exchanges the entered passphrase for a signed secure session cookie with a seven-day idle and 30-day absolute expiry, while protected application routes depend only on normalized `AuthContext`. MVP export scope is also settled: export one researched answer or a whole topic as an editable **Dorothy Ann report**, and export a whole topic as a deterministic transcript; arbitrary message/source selection and direct pi integration are deferred. Before transport work continues, complete and agree on the browser state matrix and paired desktop/mobile layouts described in `Browser Interaction Design`. A happy-path matrix and wireframe set are now drafted. Topic navigation is settled as a closed-by-default drawer on desktop and mobile, leaving only main content plus optional evidence visible. On desktop, the evidence panel opens automatically when research sources arrive, remains user-collapsible, and reopens/focuses when a citation is activated; mobile evidence remains an on-demand bottom sheet. Export uses a compact format-choice modal followed by a dedicated full-screen artifact workbench route on desktop and mobile. The happy-path shell is now agreed and the exhaustive MVP transition matrix is drafted. Continue by drawing grouped loading, empty, partial, error, and recovery variants, including the export-draft persistence behavior the matrix exposed. After that, finish lookup, research, retry, and SSE contracts and align normalized domain types and the Plan Ledger.
 
 ## Goal
 
@@ -213,8 +213,8 @@ A second provider should be added after the first end-to-end workflow works, pri
 ### TODO: Complete the Browser State Layouts
 
 - [x] Draft and agree on the happy-path state transition matrix and paired desktop/mobile shell.
-- [~] Expand the matrix into an exhaustive transition table covering every product-significant loading, empty, partial, error, and recovery state.
-- [ ] Draw the corresponding desktop/mobile variants and verify actions, focus, persistence, events, and accessibility before finalizing transport contracts.
+- [x] Expand the matrix into an exhaustive transition table covering every product-significant loading, empty, partial, error, and recovery state.
+- [~] Draw the corresponding desktop/mobile variants and verify actions, focus, persistence, events, and accessibility before finalizing transport contracts.
 
 The design pass must cover this state matrix:
 
@@ -263,6 +263,170 @@ This first matrix establishes the main route through the product. The exhaustive
 | C1 | Follow-up streaming | submit C0 | stop | user turn + stable IDs | completion → R4-style completed turn |
 | E0 | Export choice | answer/topic export action | choose report/transcript where applicable | no artifact edits yet | deterministic render or generation → E1 |
 | E1 | Editable preview | E0 | edit, copy, download, or share | artifact draft separate from topic | complete action → prior topic; cancel → prior topic |
+
+### Exhaustive MVP State-Transition Matrix
+
+The tables below expand the happy path into every product-significant MVP transition. “Persist” means commit through `ThreadStore`; transient buffers and focus state remain UI-only unless stated otherwise.
+
+#### Access
+
+| From | Event / guard | To | Persist and recovery behavior |
+|---|---|---|---|
+| A0 session check | valid session | requested H0, L1, R4, or E3 route | do not read topic content before validation; restore requested local route |
+| A0 | no/expired session | A1 unlock | retain only validated same-origin `returnTo` |
+| A0 | session endpoint unavailable | A2 access unavailable | no unlock submission; retry session check |
+| A1 unlock | valid passphrase | requested route | set secure cookie; clear input; announce success |
+| A1 | invalid passphrase | A1-invalid | clear passphrase, keep focus, announce error; allow retry |
+| A1 / A1-invalid | limiter rejects | A1-limited | disable submit until server-provided retry time; preserve no passphrase |
+| A1-limited | retry window elapses | A1 | re-enable form and focus input |
+| any protected state | request returns 401 before work starts | A1-expired | preserve local draft/turn; unlock then replay the unstarted action once |
+| R1–R3/C1/E2 | auth/connection ends after work starts | interrupted state for that area + A1-expired | preserve last completed stage; never blindly replay a possibly completed model call |
+| authenticated state | user selects Lock | A1 | clear cookie and in-memory sensitive buffers; leave IndexedDB untouched but unread by app shell |
+
+#### Initial Query and Routing
+
+| From | Event / guard | To | Persist and recovery behavior |
+|---|---|---|---|
+| H0 empty home | focus/type keyword or unpunctuated text | H1 lookup-routed draft | draft UI-only; chip and submit label announce `lookup` |
+| H0/H1 | terminal `?` added | H2 research-routed draft | draft UI-only; chip and submit label announce `research` |
+| H2 | terminal `?` removed before explicit override | H1 | recompute route visibly |
+| H1/H2 | user changes route chip | H1-pinned or H2-pinned | pin route for this draft; punctuation no longer overrides |
+| H1/H2 | query becomes empty/whitespace | H0 | disable submit; do not create a turn |
+| H1 | submit | L0 | preserve query in loading view; no topic persistence required |
+| H2 | submit | R0 | create topic if needed; persist user turn and stable IDs before network work |
+| H0–H2 | choose recent topic | C0/R4 for topic | load full thread lazily; restore saved conversation position when available |
+
+#### Lookup and Promotion
+
+| From | Event / guard | To | Persist and recovery behavior |
+|---|---|---|---|
+| L0 loading | lookup succeeds with results | L1 results | keep normalized results in current view for opening/promotion; announce count |
+| L0 | lookup succeeds empty | L2 no results | preserve query; offer edit or research, but do not invent links |
+| L0 | lookup fails retryably | L3 lookup error | preserve query; retry repeats lookup only |
+| L0 | user cancels | H1 | abort request where possible; restore query and focus input |
+| L1 | keyboard/pointer activates result | external source | open according to browser preference; retain results page |
+| L1 | query edited | H1/H2 | invalidate old result set for promotion once resubmitted |
+| L1 | `Research this with Dorothy Ann` | R0 promoted | create topic/run with original query, ranks, and source IDs; do not repeat search |
+| L2 | edit query | H1/H2 | restore query input selected/focused |
+| L2 | explicitly research same query | R0 | perform normal research search because there is no useful set to promote |
+| L3 | retry | L0 | same query and new request ID |
+| L3 | edit | H1/H2 | return query to composer |
+
+#### Research
+
+| From | Event / guard | To | Persist and recovery behavior |
+|---|---|---|---|
+| R0 created | stream accepted / `turn.started` | R1 searching | mark turn running |
+| R1 | `research.query` | R1 | display query; persist it on run |
+| R1 | `research.sources` with results | R2 extracting | persist normalized results; desktop opens evidence; mobile announces source count |
+| R1 | search returns no results | R2-zero-results | persist insufficient-evidence run; show edit/retry; no synthesis |
+| R1 | `turn.failed(stage=search)` | R1-failed | persist failed run; retry resumes at search |
+| R1 | Stop | R-stopped | abort; persist interrupted/stopped turn with no assistant message |
+| R2 | each extraction outcome | R2 | persist outcome; advance viable/target progress; skipped pages do not consume target |
+| R2 | reaches three viable pages | R3 synthesizing | freeze bounded evidence set for this synthesis |
+| R2 | candidates exhausted with one/two viable | R3-partial | synthesize with mandatory reduced-evidence caveat |
+| R2 | candidates exhausted with zero viable | R2-insufficient | preserve results/outcomes; no Dorothy Ann claim or synthesis |
+| R2 | extraction infrastructure fails after one/two viable | R2-failed-partial | offer synthesize-with-caveat or retry extraction; do not auto-decide |
+| R2 | extraction infrastructure fails with zero viable | R2-failed | retry extraction or edit/new query |
+| R2 | Stop | R-stopped | retain sources/outcomes; no synthesis |
+| R3/R3-partial | `answer.delta` | same state | append transient structured parts; do not persist as completed answer |
+| R3/R3-partial | `turn.completed` | R4/R4-partial | atomically persist assistant message, run, status, usage; partial variant includes caveat |
+| R3/R3-partial | synthesis failure | R3-failed | discard persisted-answer status, retain transient buffer dimmed and evidence; retry synthesis only |
+| R3/R3-partial | Stop or connection loss | R3-interrupted | same preservation as failure; retry synthesis with same evidence/stable IDs |
+| R2-insufficient | retry extraction | R2 | retry only failed/eligible candidates; retain prior outcomes for inspection |
+| R2-insufficient | edit/new query | H2 | preserve failed topic turn; begin a new research turn rather than mutating history |
+| R4/R4-partial | ask chat follow-up | C1 | persist new user turn before streaming |
+| R4/R4-partial | ask fresh research | R0 | persist new research turn; new run has its own three-page target |
+| R4/R4-partial | activate citation | V1 focused evidence | resolve message-local number to stable source ID |
+| any failed/interrupted R state | retry | stage-specific running state | update existing turn/run; never append duplicate user message |
+
+#### Chat Follow-up
+
+| From | Event / guard | To | Persist and recovery behavior |
+|---|---|---|---|
+| C0 idle | submit in default chat mode | C1 streaming | persist user turn; send bounded completed context only |
+| C0 | select research then submit | R0 | persist as research turn; punctuation alone does not change mode |
+| C0 | edit prior user message | C0-edit | create editable copy; original history remains until resubmit confirmation |
+| C0-edit | resubmit | C1 or R0 | branch by replacing downstream turns only after explicit confirmation; preserve an exportable pre-edit snapshot until save succeeds |
+| C1 | `answer.delta` | C1 | transient assistant buffer only |
+| C1 | `turn.completed` | C2 complete | atomically persist assistant message/status/usage; return composer to chat |
+| C1 | Stop / failure / disconnect | C1-interrupted | keep user turn, dim transient prose, offer `Retry answer`; no partial context/export |
+| C1-interrupted | retry | C1 | reuse stable turn ID and same bounded context |
+| C2 | Retry answer | C1 | replace assistant answer only after new completion; retain old answer until then |
+
+#### Evidence
+
+| From | Event / guard | To | Persist and recovery behavior |
+|---|---|---|---|
+| R2 desktop | sources arrive | V0 panel open | UI preference for current run only; source data already persisted |
+| V0 | collapse | V-hidden | remember for current run; keep source-count affordance visible |
+| V-hidden/V0 | citation activated | V1 source focused | open panel/sheet, scroll source into view, return focus to citation on close |
+| mobile answer | source-count activated | V0-sheet | open modal bottom sheet without moving answer scroll |
+| V1 | expand excerpt | V2 excerpt | show only stored bounded content; label snippet vs extracted passage |
+| V1/V2 | Open original | external source | open safely in new browser context; retain local state |
+| V0/V1 | failed/blocked source selected | V3 unavailable | show reason category and metadata; never fabricate excerpt |
+| V0-sheet | swipe/close/Escape | prior answer | restore activating control focus and answer scroll |
+
+#### Topics
+
+| From | Event / guard | To | Persist and recovery behavior |
+|---|---|---|---|
+| any authenticated app state | open `[☰]` | T0 topic drawer | overlay without resizing; trap focus; Escape closes |
+| T0 | select topic | C0/R4 for topic | close drawer, lazily load thread, restore position |
+| T0 | New topic | H0 | close drawer and focus query |
+| T0 | rename | T1 rename | inline/dialog input with existing title; save updates full record + summary transactionally |
+| T0 | Archive | T0 recent list updated | set explicit archive state transactionally; offer undo announcement |
+| T0 | Archived | T2 archive view | list archived summaries; restore returns item to recent |
+| T0/T2 | Delete | T3 confirm delete | name topic and explain local permanence; default focus Cancel |
+| T3 | confirm | T0/T2 or H0 if active | delete full + summary records transactionally; no silent undo promise |
+| T3 | cancel/Escape | prior drawer | no mutation; restore Delete button focus |
+| topic load | record missing/corrupt | S4 recovery | keep summary if useful; offer recovery export/delete |
+
+#### Export and Artifact Workbench
+
+| From | Event / guard | To | Persist and recovery behavior |
+|---|---|---|---|
+| R4 answer | Export report | E1 deterministic workbench | render answer report locally; no chooser/model call |
+| topic header | Export topic | E0 chooser | focus selected default `Dorothy Ann report`; Escape returns to topic |
+| E0 | choose transcript | E1 deterministic workbench | render locally from completed turns |
+| E0 | choose report | E2 generating workbench | call one bounded condensation request; preserve topic unchanged |
+| E2 | generation deltas/completes | E3 clean workbench | transient until complete, then store workbench draft separately from topic |
+| E2 | failure/disconnect | E2-failed | retain topic and any dimmed transient draft; retry generation only |
+| E1/E3 | edit | E4 dirty workbench | autosave ephemeral draft locally; never mutate topic |
+| E1/E3/E4 | Copy | same + success notice | clipboard failure leaves content selected and offers manual copy |
+| E1/E3/E4 | Download | same + success notice | create `.md` locally; failure retains draft |
+| E1/E3/E4 | Share supported | native share → same | cancellation is neutral; failure returns with draft intact |
+| E1/E3/E4 | Share unsupported | same | hide/disable with explanation; Copy/Download remain |
+| E4 | Back/close | E4-confirm | choose Keep draft, Discard, or Stay; no silent loss |
+| E1/E3 | Back | prior topic | restore conversation scroll/focus |
+| workbench route reload | saved draft exists | E3/E4 | restore draft and dirty state |
+| workbench route reload | no draft + deterministic request | E1 | reconstruct from topic |
+| workbench route reload | no draft + generated report | E2-recover | offer regenerate; do not imply prior edits survived |
+
+#### Browser Storage, Import, and Migration
+
+| From | Event / guard | To | Persist and recovery behavior |
+|---|---|---|---|
+| app after auth | open IndexedDB succeeds | requested app state | load summaries only, then lazy full threads |
+| app after auth | IndexedDB unavailable | S1 storage unavailable | keep current session in memory; prominently offer artifact/archive download; explain reload risk |
+| any atomic save | success | originating state | update UI only from committed normalized record where practical |
+| any atomic save | quota exceeded | S2 quota | retain current exportable state in memory; offer archive/export and storage cleanup; do not report saved |
+| topic load/migration | one record corrupt | S3 corrupt record | isolate record; keep app usable; offer raw recovery export and deletion |
+| database upgrade | envelope migration succeeds | requested state | commit upgraded envelope; preserve IDs/timestamps |
+| database upgrade | envelope migration fails | S4 migration recovery | do not overwrite source record; offer recovery export; block only affected topic |
+| settings/topic drawer | Export archive | S5 archive creating | deterministic local serialization; download on success; report excluded/corrupt records explicitly |
+| settings/topic drawer | Import archive selected | S6 import preview | validate version/content before writes; report add/replace/skip counts |
+| S6 | confirm import | prior app state | transactionally add/replace according to explicit conflict policy; return `ImportReport` |
+| S6 | cancel/invalid archive | prior state/S6 error | no writes |
+
+#### Global Interaction Rules
+
+- Every async state has an announced text label, not a spinner/color alone.
+- `Escape` cancels the smallest active overlay first; it never silently deletes a draft or persisted turn.
+- Stop is best-effort: the client aborts transport, marks the existing turn interrupted, and ignores late events that do not match the active request ID.
+- A page reload reconstructs only committed turns. Transient model prose is never promoted to completed content after reload.
+- Auth and storage failures supersede the current visual state but retain the local recoverable payload described above.
+- Only one modal surface is active: topic drawer, evidence sheet, confirmation dialog, export chooser, or mobile workbench transition.
 
 ### Draft Responsive Shell
 
