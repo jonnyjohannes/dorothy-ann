@@ -5,7 +5,7 @@
 - Status: in progress
 - Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha.md`
 - Last updated: 2026-09-05
-- Current focus: browser topic drawer now supports rename/delete/new-topic actions; continue the report workbench, retry semantics, and extractor hardening before the next UI design cycle
+- Current focus: the alpha UI workbench, retry affordance, lookup promotion, and report export path are implemented; finish accessibility/E2E verification and extractor hardening before the next UI design cycle
 - Handoff lives in: [`## Handoff`](#handoff)
 - Next action: approve implementation via `feature-builder`, beginning with Plan Ledger step 1
 
@@ -2097,9 +2097,9 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [~] 6. Safe extraction — deliverable: SSRF-safe bounded Node extractor with Readability; current: URL/content-type/timeout/character bounds and initial fixtures implemented; remaining: pinned DNS connection, streaming byte cap, redirect/rebinding/oversized fixture matrix.
 - [~] 7. Anthropic adapter — deliverable: chat/research/report streaming with validated citation sentinels; current: adapter, evidence envelope, usage normalization, citation replay fixtures, and deterministic report endpoint implemented; remaining: provider interruption/injection/persistence-boundary coverage and live route integration.
 - [~] 8. Orchestration/SSE — deliverable: turn/report streams, bounded extraction, stage-aware retry; current: fixture `/api/turn` and `/api/research` lifecycle contracts verified through extraction and exactly one completion event; remaining: persistence, retries, interruption semantics, and live provider wiring.
-- [~] 9. Shell and lookup UI — deliverable: auth shell, drawer, mode routing, lookup/promotion states; current: browser mode routing, local API proxy, lookup/research results, IndexedDB topic summaries, reopen/rename/delete/new-topic actions, and desktop/mobile evidence presentation wired; remaining: persisted auth shell, promotion action, accessible recovery states, and E2E coverage.
+- [~] 9. Shell and lookup UI — deliverable: auth shell, drawer, mode routing, lookup/promotion states; current: browser mode routing, local API proxy, lookup/research results, IndexedDB topic summaries, reopen/rename/delete/new-topic actions, and desktop/mobile evidence presentation wired; remaining: persisted auth shell, accessible recovery states, and E2E coverage.
 - [ ] 10. Research/chat/evidence UI — deliverable: accepted turn/evidence states and recovery interactions; verify: machine-state components plus full/partial/failure/reload E2E paths.
-- [~] 11. Reports and recovery UI — deliverable: Markdown workbench, drafts, export/share, data backup; current: deterministic answer-report HTTP endpoint completed; remaining: local workbench, drafts, topic/transcript scope, and backup UI.
+- [~] 11. Reports and recovery UI — deliverable: Markdown workbench, drafts, export/share, data backup; current: editable report workbench with Edit/Preview, copy, download, and answer export route implemented; remaining: autosaved drafts, topic/transcript scope, native share, and backup UI.
 - [ ] 12. Hardened Vercel alpha — deliverable: configured secure deployment; verify: full CI commands, axe, secret scan, live provider smoke, portability parity, and SSRF probes.
 
 ## Verification
