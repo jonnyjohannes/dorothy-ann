@@ -113,9 +113,10 @@ function pinnedAgent(addresses: PublicAddress[]): Agent {
   let index = 0;
   return new Agent({
     connect: {
-      lookup: (_hostname, _options, callback) => {
+      lookup: (_hostname, options, callback) => {
         const address = addresses[index++ % addresses.length];
-        callback(null, address.address, address.family);
+        if ("all" in options && options.all) callback(null, [address]);
+        else callback(null, address.address, address.family);
       },
     },
   });
