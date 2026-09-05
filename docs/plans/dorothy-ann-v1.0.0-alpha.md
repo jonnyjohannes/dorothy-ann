@@ -7,7 +7,7 @@
 - Last updated: 2026-09-05
 - Current focus: milestone 6 verification — fixture/component/browser gates are green; remaining work is authenticated live acceptance, deeper failure-matrix coverage, and Vercel deployment hardening
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: run the authenticated browser acceptance flow with the operator passphrase, verify live lookup/research/follow-up/report and certificate-valid extraction, then configure and deploy the Vercel production project
+- Next action: use the operator passphrase locally (never send it here) to verify authenticated live lookup/research/follow-up/report and certificate-valid extraction; then configure and deploy the Vercel production project
 
 ## Handoff
 
@@ -2134,7 +2134,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [~] 3. IndexedDB storage — deliverable: thread/summary/draft stores, migrations, backup import/export; current: versioned upgrade path, validated thread saves/loads, atomic topic cleanup, conflict round trips, autosaved artifact drafts, and drawer backup import/export UI implemented; remaining: explicit quota/unavailable UX and corrupt-record recovery tests.
 - [~] 4. Owner auth — deliverable: scrypt passphrase, signed sessions, auth routes, in-memory/Upstash limiters; current: protected lookup/turn/research/report routes, same-origin mutation checks, request-size bounds, rolling refresh, and Upstash limiter selection implemented; remaining: live authenticated contract matrix, absolute-expiry edge tests, and full UI auth-shell integration.
 - [~] 5. Brave lookup — deliverable: normalized `SearchProvider` and `/api/lookup`; current: live/fixture normalization, protected route, same-origin/body guards, and browser lookup pass; remaining: full provider error matrix and explicit no-extraction/no-model contract assertions.
-- [~] 6. Safe extraction — deliverable: SSRF-safe bounded Node extractor with Readability; current: pinned public DNS addresses, pinned Undici connection lookup, streamed decoded-byte bounds, expanded reserved/mapped-address checks, and insecure TLS escape-hatch rejection implemented and verified; remaining: broader redirect/rebinding/oversized integration matrix and live certificate-chain smoke.
+- [~] 6. Safe extraction — deliverable: SSRF-safe bounded Node extractor with Readability; current: pinned public DNS addresses, pinned Undici connection lookup for both lookup callback modes, streamed decoded-byte bounds, expanded reserved/mapped-address checks, and insecure TLS escape-hatch rejection implemented and verified; remaining: broader redirect/rebinding/oversized integration matrix and operator-provided CA certificate-chain smoke.
 - [~] 7. Anthropic adapter — deliverable: chat/research/report streaming with validated citation sentinels; current: adapter, evidence envelope, usage normalization, citation replay fixtures, provider error normalization, protected live chat route, and deterministic report endpoint implemented; remaining: interruption/injection/persistence-boundary coverage and live research synthesis verification.
 - [~] 8. Orchestration/SSE — deliverable: turn/report streams, bounded extraction, stage-aware retry; current: research now bounds to three sources, extracts with configurable concurrency, emits frozen evidence IDs, observes request aborts, and sends SSE heartbeats; remaining: persisted stage state, retries, explicit stop/EOF contract tests, duplicate/out-of-order guards, and live provider interruption mapping.
 - [~] 9. Shell and lookup UI — deliverable: auth shell, drawer, mode routing, lookup/promotion states; current: fixture/live auth gate, unlock redirect, browser mode routing, local API proxy, lookup/research results, topic drawer, and source links wired; remaining: deeper focus restoration, full auth expiry UX, and browser execution coverage.
@@ -2143,6 +2143,20 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [~] 12. Hardened Vercel alpha — deliverable: configured secure deployment; current: security headers, request bounds, secret scan, provider readiness, TLS rejection guard, fixture browser smoke, and axe smoke pass locally; remaining: authenticated live lookup/research/chat/report smoke, SSRF probes, Vercel environment configuration, deployment, and production verification.
 
 ## Verification
+
+Latest local verification on 2026-09-05:
+
+- `npm run lint` passed.
+- `npm run typecheck` passed.
+- `npm test` passed: 37 tests across 10 files.
+- `npm run build` passed.
+- `CI=1 NODE_TLS_REJECT_UNAUTHORIZED=1 npm run test:e2e` passed: 4 Chromium/WebKit fixture and axe smoke tests.
+- `git diff --check` passed and the working tree is clean.
+- `GET /api/providers/status` passed with live search/chat/extraction readiness.
+- Startup correctly rejects the local `NODE_TLS_REJECT_UNAUTHORIZED=0` hack.
+- Direct TLS extraction reached the real certificate handshake and failed closed with `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`; no insecure fallback was used.
+
+Remaining acceptance requires the operator to remove `NODE_TLS_REJECT_UNAUTHORIZED=0`, provide a trusted local CA via the documented parent-process `NODE_EXTRA_CA_CERTS` path if needed, unlock the live app interactively, and verify paid-provider flows before Vercel deployment.
 
 Required local commands (scripts created in step 1):
 
