@@ -5,15 +5,53 @@
 - Status: in progress
 - Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha.md`
 - Last updated: 2026-09-05
-- Current focus: persisting follow-up chat turns in topics and making transcript export include the complete conversation
+- Current focus: synchronized completion pass after hands-on UI validation; close the documented security, recovery, verification, and deployment backlog before Vercel deployment
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: approve implementation via `feature-builder`, beginning with Plan Ledger step 1
+- Next action: execute the Remaining Completion Backlog in order, starting with extractor hardening and transport/application contract completion; deploy to Vercel only after the local live-key acceptance gate passes
 
 ## Handoff
 
-Read `Current State`, `Concrete Application Stack`, `Browser Interaction Design`, `Application HTTP and Streaming Contract`, `Explicit Non-Goals`, `Implementation Plan`, and `Operator Setup and Secret Handoff` first. Product, interfaces, browser states, transport contracts, dependencies, implementation steps, and verification are settled. The alpha is a Vercel-hosted React/Vite SPA with a portable Hono backend, browser-only IndexedDB threads, Brave search, application-owned extraction, Anthropic synthesis, passphrase auth, and Markdown reports.
+Read `Current State`, `Implementation Sync and Deviations`, `Concrete Application Stack`, `Browser Interaction Design`, `Application HTTP and Streaming Contract`, `Explicit Non-Goals`, `Implementation Plan`, and `Operator Setup and Secret Handoff` first. The original product contract remains the target; `Implementation Sync and Deviations` records what is implemented, what was added, and what must still be closed. Local live keys are available for acceptance testing, but deployment is deferred to the final Vercel step. The alpha is a Vercel-hosted React/Vite SPA with a portable Hono backend, browser-only IndexedDB threads, Brave search, application-owned extraction, Anthropic synthesis, passphrase auth, and Markdown reports.
 
-Ledger steps 1–5 are complete and verified. Authentication now has scrypt hash verification, signed expiring cookies with previous-key verification, fixture-safe auth routes, cookie logout, in-memory rate limiting, and an Upstash limiter seam. Brave lookup now normalizes bounded ranked results, deduplicates canonical URLs, handles provider failures, and serves fixture/live provider paths without involving model or extraction code. Step 6 has a working Readability/content-type/URL-validation baseline, but remains active until production fetches use the validated DNS result and streamed byte bounds. A new fixture-only `/api/turn` SSE endpoint emits ordered chat/research lifecycle events with exactly one terminal completion event. Follow-up chat turns now append to the existing IndexedDB topic and the transcript workbench exports all saved turns. The provider-neutral Anthropic adapter now builds delimited evidence envelopes, streams normalized content, parses citation sentinels across chunk boundaries, rejects unknown source IDs as plain text, and captures usage. A deterministic `/api/report` endpoint returns an editable Markdown answer report. The new fixture `/api/research` endpoint now runs query → sources → extraction → synthesis → completion events. The Vite browser shell now calls `/api/lookup` and `/api/research`, renders ranked sources and answers, proxies `/api` to the local Node runtime, and persists completed lookup/research topics through the IndexedDB stores. The topic drawer loads saved summaries, saved topics can be reopened, renamed, and explicitly deleted with confirmation; New topic returns to the focused home composer. The desktop evidence column exposes attached source links and mobile collapses it below the answer. `GET /api/providers/status` exposes boolean readiness only, never credentials. Retry semantics, report workbench, and final extractor hardening remain active. Fixture mode allows implementation through step 11 without live credentials; step 12 needs the deployment inputs. Do not add remote thread storage, sync, autonomous research, context compaction, topic archiving, edit-history branching, rich editors, or second-provider work to the alpha.
+Ledger steps 1–5 have working verified baselines but remain open for the completion work recorded in `Implementation Sync and Deviations`. Authentication now has scrypt hash verification, signed expiring cookies with previous-key verification, fixture-safe auth routes, cookie logout, in-memory rate limiting, and an Upstash limiter seam. Brave lookup now normalizes bounded ranked results, deduplicates canonical URLs, handles provider failures, and serves fixture/live provider paths without involving model or extraction code. Step 6 has a working Readability/content-type/URL-validation baseline, but remains active until production fetches use the validated DNS result and streamed byte bounds. A new fixture-only `/api/turn` SSE endpoint emits ordered chat/research lifecycle events with exactly one terminal completion event. Follow-up chat turns now append to the existing IndexedDB topic and the transcript workbench exports all saved turns. The provider-neutral Anthropic adapter now builds delimited evidence envelopes, streams normalized content, parses citation sentinels across chunk boundaries, rejects unknown source IDs as plain text, and captures usage. A deterministic `/api/report` endpoint returns an editable Markdown answer report. The new fixture `/api/research` endpoint now runs query → sources → extraction → synthesis → completion events. The Vite browser shell now calls `/api/lookup` and `/api/research`, renders ranked sources and answers, proxies `/api` to the local Node runtime, and persists completed lookup/research topics through the IndexedDB stores. The topic drawer loads saved summaries, saved topics can be reopened, renamed, and explicitly deleted with confirmation; New topic returns to the focused home composer. The desktop evidence column exposes attached source links and mobile collapses it below the answer. `GET /api/providers/status` exposes boolean readiness only, never credentials. Retry semantics, report workbench, and final extractor hardening remain active. Fixture mode allows implementation through step 11 without live credentials; step 12 needs the deployment inputs. Do not add remote thread storage, sync, autonomous research, context compaction, topic archiving, edit-history branching, rich editors, or second-provider work to the alpha.
+
+## Implementation Sync and Deviations
+
+This section records the implementation reality where it differs from the original settled plan. These are tracked completion items, not silent scope changes.
+
+### Implemented additions and product refinements
+
+- `GET /api/providers/status` was added as a secret-free local/deployment readiness probe.
+- `POST /api/report` was added for deterministic answer-scoped Markdown reports.
+- `POST /api/research` was added as the staged research SSE boundary: query → sources → extraction → synthesis → completion.
+- `POST /api/turn` supports fixture and live Anthropic follow-up chat streams.
+- The browser UI now persists lookup/research/chat turns in IndexedDB, exposes a topic drawer with rename/delete/new-topic actions, shows a desktop evidence column, offers a report workbench, exports full transcripts, supports lookup promotion, and provides `/settings` Appearance controls with light/dark/auto themes.
+- The visual design was intentionally simplified after hands-on review: full-width shell, Helvetica Neue/system sans, Magic School Bus yellow accent, rotating `make mistakes` / `get messy` home copy, and an external mode/Go control.
+
+### Deviations and incomplete original requirements
+
+- XState machines and React Aria Components are not yet implemented; async UI state currently uses local React state and native controls.
+- `npm run test:e2e`, Playwright desktop/mobile coverage, axe checks, and MSW browser fixtures are not yet implemented.
+- The IndexedDB adapter has the core thread/summary/draft shapes and transactions, but migration failure recovery, quota/unavailable/corrupt-record UX, draft autosave/resume/discard, and backup import/export UI remain incomplete.
+- Auth primitives and routes exist, but protected-route middleware, same-origin enforcement, rolling/absolute session behavior in the request path, and the Upstash limiter wiring are not complete; the app currently uses the in-memory limiter in `createApp`.
+- Brave lookup and Anthropic adapters are live-wired locally, but the full contract matrix, prompt-injection fixtures, interruption/rate-limit mapping, and persisted usage boundaries remain incomplete.
+- The extractor has URL validation, manual redirects, content-type/timeout/character bounds, and Readability, but does not yet use a validated/pinned DNS connection or streamed decoded-byte limits. It must not be treated as production-hardened until step 6 closes.
+- Research orchestration is a working baseline rather than the complete contract: it lacks concurrent extraction scheduling, frozen persisted evidence packs, stage-specific retries, stop/EOF handling, heartbeats, duplicate/out-of-order event guards, and atomic turn persistence.
+- The report UI is a useful editable answer/transcript workbench, but it is not yet the planned `reportMachine`/`ArtifactDraftStore` autosaving workbench and does not yet implement topic report generation, native share fallback, or backup UI.
+- Vercel deployment has not been executed. Deployment remains explicitly Vercel-only for this alpha; local implementation and smoke verification happen first, then deployment configuration and live smoke tests happen as the final ledger step.
+
+### Remaining completion backlog
+
+1. Finish extractor security: pinned DNS/connection lookup, streamed decoded-byte bounds, redirect/private-address/rebinding/oversized fixtures, and production-safe error taxonomy.
+2. Finish transport/application contracts: request auth/origin/size guards, concurrent bounded extraction, frozen evidence persistence, stage retries, stop/EOF/heartbeat behavior, event sequencing guards, and atomic completion persistence.
+3. Finish auth wiring: protected lookup/turn/research/report handlers, rolling and absolute expiry, same-origin checks, Upstash limiter selection, and auth contract tests.
+4. Finish storage recovery: migrations, corrupt-record isolation, quota/unavailable states, artifact draft autosave/resume/discard, backup import/export, and conflict/recovery tests/UI.
+5. Finish provider verification: complete Anthropic replay/security fixtures, usage normalization, live error mapping, and no-provider-payload persistence assertions.
+6. Finish UI workflow states: XState or an explicitly documented replacement for the named workflows, stop/retry/interrupted/partial/zero-evidence states, citation focus restoration, and authenticated deep-link restoration.
+7. Finish export UX: topic report generation, deterministic transcript/report snapshots, draft workbench persistence, native share/copy/download fallbacks, and backup controls.
+8. Add quality coverage: Playwright desktop Chromium/mobile WebKit paths, RTL/MSW interaction tests, axe checks, responsive keyboard/focus verification, and `npm run test:e2e`.
+9. Run full local acceptance with live keys: cheap lookup, research, follow-up chat, transcript/report export, auth expiry, retry/interruption, SSRF probes, and browser reload recovery.
+10. Deploy only after the local gate: configure Vercel Node function, SPA rewrites, production/preview environment variables, Upstash, security headers, secret scan, local/Vercel contract parity, and production smoke tests.
 
 ## Summary
 
@@ -2089,11 +2127,11 @@ The application may later become installable as a PWA, but offline support shoul
 
 Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blocked.
 
-- [x] 1. Portable scaffold — deliverable: single-package React/Vite/Hono app with Node and Vercel adapters plus fixture mode; verify: `npm ci`, lint, typecheck, test, build, and local health/session/lookup smoke checks passed.
-- [x] 2. Domain and policies — deliverable: normalized schemas, routing, evidence, citations, context, deterministic exports; verify: table/replay tests, citation chunk-boundary tests, source dedupe tests, and lint/typecheck/build passed.
-- [x] 3. IndexedDB storage — deliverable: thread/summary/draft stores, migrations, backup import/export; verify: `fake-indexeddb` transaction, conflict, draft resume, deletion cleanup, and round-trip tests passed.
-- [x] 4. Owner auth — deliverable: scrypt passphrase, signed sessions, auth routes, in-memory/Upstash limiters; verify: scrypt/session/expiry/rotation/cookie/limiter tests and full typecheck/lint/build passed.
-- [x] 5. Brave lookup — deliverable: normalized `SearchProvider` and `/api/lookup`; verify: normalization, malformed payload, dedupe, API-boundary, provider-error tests plus full lint/typecheck/build passed.
+- [~] 1. Portable scaffold — deliverable: single-package React/Vite/Hono app with Node and Vercel adapters plus fixture mode; current: scaffold and local runtime pass; remaining: Vercel build/deep-link smoke and final security configuration.
+- [~] 2. Domain and policies — deliverable: normalized schemas, routing, evidence, citations, context, deterministic exports; current: core types/policies/citation/export paths pass; remaining: complete boundary schema coverage, context projection, migration schemas, and property/snapshot verification.
+- [~] 3. IndexedDB storage — deliverable: thread/summary/draft stores, migrations, backup import/export; current: core stores, atomic thread saves, topic cleanup, and conflict round trips pass; remaining: migrations, recovery states, draft lifecycle, and backup UI.
+- [~] 4. Owner auth — deliverable: scrypt passphrase, signed sessions, auth routes, in-memory/Upstash limiters; current: primitives/routes and adapter tests pass; remaining: protected application routes, origin checks, request-path expiry, Upstash wiring, and contract parity.
+- [~] 5. Brave lookup — deliverable: normalized `SearchProvider` and `/api/lookup`; current: live/fixture normalization and browser lookup pass; remaining: auth/origin/body guards, full provider error matrix, and no-extraction/no-model contract assertions.
 - [~] 6. Safe extraction — deliverable: SSRF-safe bounded Node extractor with Readability; current: URL/content-type/timeout/character bounds and initial fixtures implemented; remaining: pinned DNS connection, streaming byte cap, redirect/rebinding/oversized fixture matrix.
 - [~] 7. Anthropic adapter — deliverable: chat/research/report streaming with validated citation sentinels; current: adapter, evidence envelope, usage normalization, citation replay fixtures, and deterministic report endpoint implemented; remaining: provider interruption/injection/persistence-boundary coverage and live route integration.
 - [~] 8. Orchestration/SSE — deliverable: turn/report streams, bounded extraction, stage-aware retry; current: fixture `/api/turn` and `/api/research` lifecycle contracts verified through extraction and exactly one completion event; remaining: persistence, retries, interruption semantics, and live provider wiring.
@@ -2132,7 +2170,7 @@ Alpha acceptance assertions:
 
 ## Operator Setup and Secret Handoff
 
-Implementation works in fixture mode without accounts or secrets. The operator supplies live services incrementally; secrets never go in chat, git, issue text, screenshots, browser configuration, or a `VITE_*` variable. The repository will provide a committed `.env.example` containing names/defaults only and a gitignored `.env.local` for live local development.
+Implementation works in fixture mode without accounts or secrets. Jonny has supplied local Brave and Anthropic credentials out-of-band in `.env.local`; do not copy, print, commit, or paste those values. They are for the local acceptance gate only until the Vercel environment is configured. The operator supplies live services incrementally; secrets never go in chat, git, issue text, screenshots, browser configuration, or a `VITE_*` variable. The repository will provide a committed `.env.example` containing names/defaults only and a gitignored `.env.local` for live local development.
 
 ### What Jonny needs to obtain
 
