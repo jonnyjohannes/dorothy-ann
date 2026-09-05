@@ -1,8 +1,9 @@
-# dorothy-ann: Search, Research Chat, and Pi Artifact Workbench
+# Dorothy Ann v1.0.0-alpha
 
 ## Current State
 
 - Status: planning
+- Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha.md`
 - Last updated: 2026-09-05
 - Current focus: writing the final atomic Implementation Plan and mirrored Plan Ledger
 - Handoff lives in: [`## Handoff`](#handoff)
