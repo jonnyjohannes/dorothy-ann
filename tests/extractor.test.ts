@@ -50,6 +50,16 @@ describe("safe content extraction", () => {
     expect(result).toMatchObject({ status: "failed", code: "fetch_failed", retryable: false });
   });
 
+  it("revalidates manual redirects before fetching the destination", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: "https://example.com/next" } }))
+      .mockResolvedValueOnce(new Response("This redirected page contains enough safe content.", { headers: { "content-type": "text/plain" } }));
+    const result = await new SafeContentExtractor({ ...config, minCharacters: 10 }, fetcher)
+      .extract(source, { maxCharacters: 100, timeoutMs: 1000 });
+    expect(result.status).toBe("viable");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
   it("skips unsupported content", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response("pdf", { headers: { "content-type": "application/pdf" } }));
     const result = await new SafeContentExtractor({ ...config, maxFetchBytes: 100 }, fetcher)

@@ -5,9 +5,9 @@
 - Status: in progress
 - Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha.md`
 - Last updated: 2026-09-05
-- Current focus: milestone 6 verification — fixture/component/browser gates are green; remaining work is authenticated live acceptance, deeper failure-matrix coverage, and Vercel deployment hardening
+- Current focus: final completion pass — recovery and focus contracts are advancing; next is authenticated live acceptance and deployment hardening
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: use the operator passphrase locally (never send it here) to verify authenticated live lookup/research/follow-up/report and certificate-valid extraction; then configure and deploy the Vercel production project
+- Next action: run the full verification suite, then use the operator-only passphrase/CA setup for live acceptance and finish the Vercel checklist
 
 ## Handoff
 
@@ -30,16 +30,15 @@ This section records the implementation reality where it differs from the origin
 
 ### Deviations and incomplete original requirements
 
-- XState machines and React Aria Components are not yet implemented; async UI state currently uses local React state and native controls.
-- `npm run test:e2e`, Playwright desktop/mobile coverage, axe checks, and MSW browser fixtures are not yet implemented.
-- The IndexedDB adapter has the core thread/summary/draft shapes and transactions, but migration failure recovery, quota/unavailable/corrupt-record UX, draft autosave/resume/discard, and backup import/export UI remain incomplete.
-- Auth primitives and routes exist, but protected-route middleware, same-origin enforcement, rolling/absolute session behavior in the request path, and the Upstash limiter wiring are not complete; the app currently uses the in-memory limiter in `createApp`.
-- Brave lookup and Anthropic adapters are live-wired locally, but the full contract matrix, prompt-injection fixtures, interruption/rate-limit mapping, and persisted usage boundaries remain incomplete.
-- The extractor has URL validation, manual redirects, content-type/timeout/character bounds, and Readability, but does not yet use a validated/pinned DNS connection or streamed decoded-byte limits. It must not be treated as production-hardened until step 6 closes.
-- Local live extraction encountered certificate-chain failures, and `NODE_TLS_REJECT_UNAUTHORIZED=0` was used as a temporary workaround. That workaround is not part of the supported development or deployment procedure, but the application does not forbid an operator from setting it. The completion path is to diagnose the trust chain, use a locally trusted CA through `NODE_EXTRA_CA_CERTS` or an equivalent narrowly scoped Undici TLS configuration when a corporate/dev proxy is involved, keep Node certificate verification enabled for acceptance/deployment, and treat genuinely invalid public certificates as deterministic source skips. No CA material belongs in git, browser variables, request payloads, or logs.
-- Research orchestration is a working baseline rather than the complete contract: it lacks concurrent extraction scheduling, frozen persisted evidence packs, stage-specific retries, stop/EOF handling, heartbeats, duplicate/out-of-order event guards, and atomic turn persistence.
-- The report UI is a useful editable answer/transcript workbench, but it is not yet the planned `reportMachine`/`ArtifactDraftStore` autosaving workbench and does not yet implement topic report generation, native share fallback, or backup UI.
-- Vercel deployment has not been executed. Deployment remains explicitly Vercel-only for this alpha; local implementation and smoke verification happen first, then deployment configuration and live smoke tests happen as the final ledger step.
+- XState machines and React Aria Components remain deferred implementation details; the accepted alpha behavior is currently implemented with local React state and native controls. This is only a remaining item if the named library-level architecture is required rather than the observable state contract.
+- Playwright Chromium/WebKit and axe smoke coverage is implemented and passing. Broader MSW browser fixtures and recovery-path E2E coverage remain.
+- IndexedDB has versioned upgrade handling, validated thread saves/loads, atomic deletion cleanup, autosaved drafts, resume/start-over behavior, and backup import/export UI. Remaining recovery work is explicit quota/unavailable/corrupt-record UX and deterministic artifact/recovery tests.
+- Auth primitives, protected application routes, same-origin mutation checks, rolling refresh, request bounds, and Upstash selection are implemented. Remaining work is the live authenticated contract matrix, absolute-expiry edge coverage, and final browser expiry behavior.
+- Brave and Anthropic adapters are live-wired locally. Remaining provider work is the full malformed/error matrix, prompt-injection/interruption fixtures, persistence-boundary assertions, and authenticated live research verification.
+- The extractor has pinned public DNS connection selection, streamed decoded-byte limits, redirect validation, content-type/timeout bounds, Readability, and operator-controlled TLS trust handling. Remaining work is the broader redirect/rebinding/oversized integration matrix and trusted-CA live smoke.
+- Research orchestration now bounds concurrent extraction, emits frozen evidence IDs, observes aborts, and sends heartbeats. Remaining work is persisted stage state, stage retries, explicit event sequencing/Stop/EOF contract tests, and atomic completion persistence.
+- The report/transcript workbench has autosaved drafts, resume/start-over, copy/download/share fallback, and backup controls. Remaining work is dirty Back confirmation, backup recovery polish, topic-report generation, and deterministic artifact tests.
+- Vercel deployment has not been executed. Deployment remains explicitly Vercel-only for this alpha; local authenticated acceptance comes first, followed by Vercel configuration and production smoke tests.
 
 ### Remaining completion backlog
 
@@ -2131,15 +2130,15 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 
 - [~] 1. Portable scaffold — deliverable: single-package React/Vite/Hono app with Node and Vercel adapters plus fixture mode; current: scaffold and local runtime pass; remaining: Vercel build/deep-link smoke and final security configuration.
 - [~] 2. Domain and policies — deliverable: normalized schemas, routing, evidence, citations, context, deterministic exports; current: core types/policies/citation/export paths pass; remaining: complete boundary schema coverage, context projection, migration schemas, and property/snapshot verification.
-- [~] 3. IndexedDB storage — deliverable: thread/summary/draft stores, migrations, backup import/export; current: versioned upgrade path, validated thread saves/loads, atomic topic cleanup, conflict round trips, autosaved artifact drafts, and drawer backup import/export UI implemented; remaining: explicit quota/unavailable UX and corrupt-record recovery tests.
+- [~] 3. IndexedDB storage — deliverable: thread/summary/draft stores, migrations, backup import/export; current: versioned upgrade path, validated thread saves/loads, atomic topic cleanup, conflict round trips, autosaved artifact drafts, drawer backup import/export UI, and malformed-backup recovery implemented; remaining: explicit quota/unavailable UX and corrupt-record recovery tests.
 - [~] 4. Owner auth — deliverable: scrypt passphrase, signed sessions, auth routes, in-memory/Upstash limiters; current: protected lookup/turn/research/report routes, same-origin mutation checks, request-size bounds, rolling refresh, and Upstash limiter selection implemented; remaining: live authenticated contract matrix, absolute-expiry edge tests, and full UI auth-shell integration.
 - [~] 5. Brave lookup — deliverable: normalized `SearchProvider` and `/api/lookup`; current: live/fixture normalization, protected route, same-origin/body guards, and browser lookup pass; remaining: full provider error matrix and explicit no-extraction/no-model contract assertions.
 - [~] 6. Safe extraction — deliverable: SSRF-safe bounded Node extractor with Readability; current: pinned public DNS addresses, pinned Undici connection lookup for both lookup callback modes, streamed decoded-byte bounds, expanded reserved/mapped-address checks, and documented TLS trust handoff; remaining: broader redirect/rebinding/oversized integration matrix and operator-provided CA certificate-chain smoke.
 - [~] 7. Anthropic adapter — deliverable: chat/research/report streaming with validated citation sentinels; current: adapter, evidence envelope, usage normalization, citation replay fixtures, provider error normalization, protected live chat route, and deterministic report endpoint implemented; remaining: interruption/injection/persistence-boundary coverage and live research synthesis verification.
 - [~] 8. Orchestration/SSE — deliverable: turn/report streams, bounded extraction, stage-aware retry; current: research now bounds to three sources, extracts with configurable concurrency, emits frozen evidence IDs, observes request aborts, and sends SSE heartbeats; remaining: persisted stage state, retries, explicit stop/EOF contract tests, duplicate/out-of-order guards, and live provider interruption mapping.
-- [~] 9. Shell and lookup UI — deliverable: auth shell, drawer, mode routing, lookup/promotion states; current: fixture/live auth gate, unlock redirect, browser mode routing, local API proxy, lookup/research results, topic drawer, and source links wired; remaining: deeper focus restoration, full auth expiry UX, and browser execution coverage.
-- [~] 10. Research/chat/evidence UI — deliverable: accepted turn/evidence states and recovery interactions; current: staged SSE rendering, evidence presentation, interrupted Stop behavior, retry affordance, chat retry state, and fixture/live auth integration implemented; remaining: citation focus restoration, full partial/zero-evidence state matrix, and E2E paths.
-- [~] 11. Reports and recovery UI — deliverable: Markdown workbench, drafts, export/share, data backup; current: editable report/transcript workbench, IndexedDB autosave/resume, start-over, copy/download/share fallback, and drawer backup import/export implemented; remaining: dirty Back confirmation, backup recovery UX polish, and deterministic artifact tests.
+- [~] 9. Shell and lookup UI — deliverable: auth shell, drawer, mode routing, lookup/promotion states; current: fixture/live auth gate, unlock redirect, browser mode routing, local API proxy, lookup/research results, topic drawer, source links, and passing fixture browser smoke wired; remaining: deeper focus restoration, full auth expiry UX, and recovery-path browser coverage.
+- [~] 10. Research/chat/evidence UI — deliverable: accepted turn/evidence states and recovery interactions; current: staged SSE rendering, evidence presentation, interrupted Stop behavior, retry affordance, chat retry state, citation focus restoration, fixture/live auth integration, and basic Chromium/WebKit coverage implemented; remaining: full partial/zero-evidence state matrix and recovery E2E paths.
+- [~] 11. Reports and recovery UI — deliverable: Markdown workbench, drafts, export/share, data backup; current: editable report/transcript workbench, IndexedDB autosave/resume, start-over, dirty Back confirmation, copy/download/share fallback, drawer backup import/export, and malformed-backup recovery implemented; remaining: backup recovery UX polish, topic-report generation, and deterministic artifact tests.
 - [~] 12. Hardened Vercel alpha — deliverable: configured secure deployment; current: security headers, request bounds, secret scan, provider readiness, documented TLS trust handoff, fixture browser smoke, and axe smoke pass locally; remaining: authenticated live lookup/research/chat/report smoke, SSRF probes, Vercel environment configuration, deployment, and production verification.
 
 ## Verification
@@ -2148,7 +2147,7 @@ Latest local verification on 2026-09-05:
 
 - `npm run lint` passed.
 - `npm run typecheck` passed.
-- `npm test` passed: 37 tests across 10 files.
+- `npm test` passed: 38 tests across 10 files.
 - `npm run build` passed.
 - `CI=1 NODE_TLS_REJECT_UNAUTHORIZED=1 npm run test:e2e` passed: 4 Chromium/WebKit fixture and axe smoke tests.
 - `git diff --check` passed and the working tree is clean.

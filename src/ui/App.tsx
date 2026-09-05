@@ -353,6 +353,7 @@ function renderCitations(answer: string, sources: Result[]) {
         key={index}
         href={`#source-${match[1]}`}
         title={sources[sourceIndex].title}
+        onClick={() => window.setTimeout(() => document.getElementById(`source-${match[1]}`)?.focus(), 0)}
       >
         [{sourceIndex + 1}]
       </a>
@@ -469,6 +470,7 @@ function ExportWorkbench() {
   const [preview, setPreview] = useState(false);
   const [artifactId] = useState(() => id());
   const [draftLoaded, setDraftLoaded] = useState(false);
+  const [savedMarkdown, setSavedMarkdown] = useState("");
   const [message, setMessage] = useState("");
   const sourceKey = `${route.threadId ?? "new"}:${route.draftId ?? "report"}`;
   const initialMarkdown = `# Dorothy Ann report: ${params.get("title") ?? "Untitled topic"}\n\n## Conclusion\n\n${params.get("answer") ?? ""}\n\n> This is research context, not executed or independently verified work.\n`;
@@ -477,11 +479,11 @@ function ExportWorkbench() {
     setDraftLoaded(false);
     void (async () => {
       const draft = await draftStore.loadBySourceKey(sourceKey);
-      if (draft) { if (!cancelled) setMarkdown(draft.markdown); }
+      if (draft) { if (!cancelled) { setMarkdown(draft.markdown); setSavedMarkdown(draft.markdown); } }
       else if (route.draftId === "transcript" && route.threadId) {
         const thread = await store.load(route.threadId);
-        if (thread && !cancelled) setMarkdown(transcriptMarkdown(thread));
-      }
+        if (thread && !cancelled) { const transcript = transcriptMarkdown(thread); setMarkdown(transcript); setSavedMarkdown(transcript); }
+      } else if (!cancelled) setSavedMarkdown(initialMarkdown);
       if (!cancelled) setDraftLoaded(true);
     })();
     return () => { cancelled = true; };
@@ -489,7 +491,7 @@ function ExportWorkbench() {
   useEffect(() => {
     if (!draftLoaded) return;
     const timer = window.setTimeout(() => {
-      void draftStore.save({ schemaVersion: 1, id: artifactId as never, threadId: (route.threadId ?? "new") as never, sourceKey, format: route.draftId === "transcript" ? "transcript" : "dorothy_ann_report", scope: route.draftId === "transcript" ? "topic" : "answer", markdown, sourceUpdatedAt: now(), dirty: true, createdAt: now(), updatedAt: now() });
+      void draftStore.save({ schemaVersion: 1, id: artifactId as never, threadId: (route.threadId ?? "new") as never, sourceKey, format: route.draftId === "transcript" ? "transcript" : "dorothy_ann_report", scope: route.draftId === "transcript" ? "topic" : "answer", markdown, sourceUpdatedAt: now(), dirty: false, createdAt: now(), updatedAt: now() }).then(() => setSavedMarkdown(markdown));
     }, 400);
     return () => window.clearTimeout(timer);
   }, [draftLoaded, markdown, route.draftId, route.threadId, sourceKey]);
@@ -520,7 +522,7 @@ function ExportWorkbench() {
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <Link to="/" className={styles.brand}>
+        <Link to="/" className={styles.brand} onClick={(event) => { if (draftLoaded && markdown !== savedMarkdown && !window.confirm("Leave without saving this edit?")) event.preventDefault(); }}>
           ← dorothy-ann
         </Link>
         <span className={styles.kicker}>report workbench</span>
@@ -538,6 +540,7 @@ function ExportWorkbench() {
           <button onClick={() => void share()}>Share</button>
           <button onClick={() => void startOver()}>Start over</button>
         </div>
+        {draftLoaded && markdown !== savedMarkdown && <p role="status">Saving draft…</p>}
         {message && <p role="status">{message}</p>}
         {preview ? (
           <article className={styles.preview}>
@@ -801,6 +804,7 @@ function Topic() {
             {state.sources.map((source) => (
               <article
                 id={`source-${source.sourceId}`}
+                tabIndex={-1}
                 className={styles.evidenceItem}
                 key={source.sourceId}
               >
