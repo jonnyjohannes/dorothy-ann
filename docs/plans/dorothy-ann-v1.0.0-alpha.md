@@ -2,20 +2,34 @@
 
 ## Current State
 
-- Status: planning
+- Status: ready
 - Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha.md`
 - Last updated: 2026-09-05
-- Current focus: writing the final atomic Implementation Plan and mirrored Plan Ledger
+- Current focus: implementation-ready alpha after scope, portability, and minimalism review
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: replace the coarse build sequence with independently verifiable steps, then run the implementability check
+- Next action: approve implementation via `feature-builder`, beginning with Plan Ledger step 1
 
 ## Handoff
 
-The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. Vercel is the committed deployment target, while application core, Hono routes, provider adapters, and persisted formats remain portable. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. The MVP adds no slash commands or bang aliases. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB through the small `idb` promise/schema wrapper from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. `idb` remains private to the infrastructure adapter. The hosted app is personal/single-owner and uses a portable passphrase auth adapter: a dedicated `/unlock` screen exchanges the entered passphrase for a signed secure session cookie with a seven-day idle and 30-day absolute expiry, while protected application routes depend only on normalized `AuthContext`. MVP export scope is also settled: export one researched answer or a whole topic as an editable **Dorothy Ann report**, and export a whole topic as a deterministic transcript; arbitrary message/source selection and direct pi integration are deferred. Before transport work continues, complete and agree on the browser state matrix and paired desktop/mobile layouts described in `Browser Interaction Design`. A happy-path matrix and wireframe set are now drafted. Topic navigation is settled as a closed-by-default drawer on desktop and mobile, leaving only main content plus optional evidence visible. On desktop, the evidence panel opens automatically when research sources arrive, remains user-collapsible, and reopens/focuses when a citation is activated; mobile evidence remains an on-demand bottom sheet. Export uses a compact format-choice modal followed by a dedicated full-screen artifact workbench route on desktop and mobile. The happy-path shell is now agreed and the exhaustive MVP transition matrix is drafted. The exhaustive loading, empty, partial, error, and recovery variants are now drafted. Export-draft recovery is settled through an IndexedDB `artifactDrafts` store: generated and edited workbench content autosaves independently from topics, can be resumed or explicitly discarded, and does not become a general artifact library. The browser interaction baseline is accepted. Exact lookup, turn, retry, and topic-report HTTP/SSE contracts are drafted around a stateless authenticated backend and browser-owned threads. Every referenced ID, thread, turn, message, source, extraction, context, error, archive, report, and provider-boundary type is now defined in the normalized domain model. The concrete shell is now Vite + TypeScript for the frontend, Hono over standard Web APIs for the backend, a thin Vercel deployment adapter as the committed target, and a thin Node adapter for local execution. React is selected as the Vite UI framework. React Router owns browser routes. XState models only the interruption-heavy auth, lookup/research turn, and topic-report workflows; ordinary disclosure, focus, and form state remains local React state, with no global client store. React Aria Components supplies accessible dialogs, modals, menus, buttons, fields, and focus behavior; topic drawers and mobile evidence sheets are styled `Dialog`/`Modal` variants rather than custom focus traps. Markdown rendering uses `react-markdown` + `remark-gfm` + `rehype-sanitize`; the artifact workbench uses a plain autosaving textarea with an Edit/Preview toggle and no rich-editor dependency. Styling uses CSS Modules plus global CSS custom-property design tokens, with no runtime CSS-in-JS or utility framework. Verification uses Vitest, React Testing Library, Playwright desktop/mobile projects, axe-core browser checks, `fake-indexeddb`, and MSW fixtures. Content extraction is application-owned through a Vercel Node/portable Node adapter using a safe `undici` fetcher, `linkedom`, and Mozilla Readability; unsupported PDFs and JavaScript-only pages are skipped in the MVP. The durable login limiter is Upstash Redis through `@upstash/ratelimit`, isolated behind `LoginAttemptLimiter`; local development uses an in-memory adapter. Expected personal usage fits comfortably inside Upstash's free tier, and only HMAC-keyed attempt counters—not passphrases, prompts, or threads—enter Redis. Continue by replacing the coarse build sequence with an atomic Implementation Plan and mirrored Plan Ledger.
+Read `Current State`, `Concrete Application Stack`, `Browser Interaction Design`, `Application HTTP and Streaming Contract`, `Explicit Non-Goals`, and `Implementation Plan` first. Product, interfaces, browser states, transport contracts, dependencies, implementation steps, and verification are settled. The alpha is a Vercel-hosted React/Vite SPA with a portable Hono backend, browser-only IndexedDB threads, Brave search, application-owned extraction, Anthropic synthesis, passphrase auth, and Markdown reports.
 
-## Goal
+Begin with Plan Ledger step 1 and update `Current State`, this handoff, and ledger markers as work proceeds. Fixture mode allows implementation through step 11 without live credentials; step 12 needs the deployment inputs. Do not add remote thread storage, sync, autonomous research, context compaction, topic archiving, edit-history branching, rich editors, or second-provider work to the alpha.
 
-Build **dorothy-ann**, a self-deployed, mobile-friendly web client that can become the user's default search surface. It should handle cheap everyday web lookups, source-aware Dorothy Ann research, conversational follow-ups, lightweight topic sessions, and clean, editable artifacts that move useful context from the browser into pi.dev for coding, planning, investigation, or handoff.
+## Summary
+
+Dorothy Ann v1.0.0-alpha is a personal, source-aware browser search surface with two explicit costs: quick ranked lookup and bounded researched answers. It keeps threads in the current browser, exposes evidence, supports follow-up chat, and exports editable Markdown without coupling domain data to a provider or hosting runtime.
+
+## Problem Statement
+
+Ordinary search is fast for navigation but weak for researched synthesis; generic chat obscures evidence and produces context that is awkward to move into durable work. The alpha validates whether one browser surface can preserve fast lookup while making deeper research inspectable, conversational, and easy to export.
+
+## Goals
+
+- Make keyword lookups feel search-engine fast and require no model call.
+- Produce a bounded, cited “According to my research…” answer from up to three viable pages.
+- Keep follow-up chat, source inspection, and report export ergonomic on desktop and mobile.
+- Keep stored data and application orchestration provider-neutral and runtime-portable.
+- Deploy safely to Vercel without exposing credentials or storing threads server-side.
 
 The product is intentionally an ephemeral thinking surface—not a knowledge base, coding agent, or permanent memory system. Its durable output is the artifact the user chooses to export, not an invisible memory layer.
 
@@ -45,7 +59,7 @@ The core value is not generic LLM chat. It is the combination of:
 3. A recognizable research-report voice: “according to my research…” followed by a useful synthesis, not an opaque chatbot answer.
 4. Lightweight, topic-oriented conversations rather than a permanent knowledge base.
 5. A high-signal, editable artifact export as a first-class completion action.
-6. A low-friction bridge into pi.dev: selected context should arrive with sources, decisions, open questions, and next actions intact.
+6. A low-friction bridge into pi.dev: exported reports should preserve sources, decisions, open questions, and next actions.
 7. User-controlled deployment and credentials.
 
 ## Core Requirements
@@ -54,9 +68,9 @@ The core value is not generic LLM chat. It is the combination of:
 
 - Stream model responses.
 - Render Markdown and code safely.
-- Support stop, retry, edit-and-resend, and copy.
+- Support stop, retry, and copy. Editing an earlier turn and branching/replacing downstream history is deferred.
 - Remain comfortable on desktop and narrow mobile screens.
-- Allow a model to be selected per thread without coupling stored conversations to one provider's response format.
+- Persist the deployment-assigned model reference as metadata without exposing model/provider selection in the alpha UI.
 
 ### Query Paths
 
@@ -65,13 +79,14 @@ A new query must take one of two visibly different paths:
 - **lookup** — call the search provider and render ranked results without extraction or model synthesis. This is the low-cost, low-latency path for navigational and utility queries such as `weather` or `life alive`.
 - **research** — search, extract up to the deployment-configured number of viable pages (three by default), and stream a Dorothy Ann synthesis with citations. The resulting page is already a chat thread, so the user can ask follow-up questions without entering another mode or moving elsewhere.
 
-Routing should be predictable and reversible. The current recommendation is a deterministic browser-side router with a visible mode chip:
+Routing is predictable and reversible. A pure browser function and visible mode chip apply these rules:
 
 - ordinary keyword-like input defaults to `lookup`;
 - a query ending in `?` explicitly selects `research`;
 - an explicit `lookup` / `research` control always overrides inference;
 - the selected path is visible before submission and can be changed with the keyboard or pointer;
-- unpunctuated input remains on the cheap lookup path, but question-shaped results may offer a non-blocking `Research this with Dorothy Ann` action;
+- unpunctuated input remains on the cheap lookup path;
+- after lookup, show the non-blocking `Research this with Dorothy Ann` suggestion only when the trimmed query has at least four tokens and starts with a fixed interrogative prefix (`what`, `what's`, `why`, `how`, `when`, `where`, `who`, `which`, `is`, `are`, `can`, `could`, `should`, `does`, `do`, or `did`);
 - no model call is required merely to decide which path to use.
 
 The punctuation rule and visible route chip are the only MVP routing controls; slash commands and bang aliases are deferred. The punctuation rule applies only to new queries. Inside an existing topic, follow-up questions default to contextual chat even when they end in `?`; fresh research requires an explicit per-turn selection.
@@ -87,19 +102,15 @@ The product must preserve the distinction between retrieved evidence and model s
 
 A thread needs only:
 
-- title;
-- created and updated timestamps;
-- optional system instruction;
-- selected model configuration;
-- selected search configuration;
-- ordered messages;
-- research runs and sources attached to the relevant turn.
+- title and timestamps;
+- deployment-assigned model/search references;
+- ordered turns;
+- research runs and sources attached to relevant turns.
 
 Required actions:
 
-- create;
+- create with a deterministic title from the first query (trimmed and capped at 60 characters);
 - rename;
-- archive;
 - delete;
 - export.
 
@@ -107,7 +118,7 @@ Folders, tags, embeddings, semantic retrieval, and cross-thread memory are outsi
 
 ### Dorothy Ann Reports, Transcripts, and Pi.dev Handoff
 
-Export is a primary workflow, not a miscellaneous settings action. The user should be able to turn either a whole thread or a selected slice of research into an artifact without cleaning up provider-specific JSON or losing source provenance.
+Export is a primary workflow, not a miscellaneous settings action. The user should be able to turn either one researched answer or a whole topic into an artifact without cleaning up provider-specific JSON or losing source provenance.
 
 Support:
 
@@ -192,6 +203,7 @@ The identity belongs to the application layer, not a model provider. The system 
 
 Settled:
 
+- **toolchain:** one npm package with committed `package-lock.json`, TypeScript strict mode, and Node 22 pinned in `engines`/local tooling;
 - **deployment target:** Vercel for production and preview deployments;
 - **frontend UI/build:** React + Vite + TypeScript;
 - **routing:** React Router with `/unlock`, `/`, `/topics/:threadId`, and `/topics/:threadId/export/:draftId` routes;
@@ -201,12 +213,15 @@ Settled:
 - **report editor:** autosaving native textarea with Edit/Preview toggle; no rich editor in MVP;
 - **styling:** CSS Modules for components plus global CSS custom-property tokens; no CSS-in-JS or utility framework;
 - **tests:** Vitest + React Testing Library + MSW + `fake-indexeddb`; Playwright desktop/mobile E2E with axe-core checks;
-- **backend HTTP layer:** Hono using standard Web `Request`/`Response` and SSE-compatible streaming;
+- **schemas/transport:** Zod at HTTP, provider-normalization, backup-import, and persisted-envelope boundaries; `eventsource-parser` for POSTed SSE responses;
+- **backend HTTP layer:** Hono using standard Web `Request`/`Response` and SSE-compatible streaming; `@hono/node-server` locally and the thin Hono Vercel adapter in `api/index.ts`;
+- **search/chat providers:** Brave through standard `fetch`; Anthropic through `@anthropic-ai/sdk`, both behind ports;
 - **extraction:** Vercel Node adapter using `undici` + `linkedom` + `@mozilla/readability` behind `ContentExtractor`;
 - **login limiter:** Upstash Redis + `@upstash/ratelimit` behind `LoginAttemptLimiter`; in-memory local adapter;
 - **portability boundary:** Hono application/orchestration code contains no Vercel imports; a thin Vercel function entrypoint binds environment, secrets, limits, and platform request lifecycle;
 - **local runtime:** a thin Node adapter runs the same Hono application and API contracts used on Vercel;
-- **browser persistence:** IndexedDB through `idb`.
+- **browser persistence:** IndexedDB through `idb`;
+- **quality tooling:** ESLint for TypeScript/React/import-boundary rules; no separate formatter requirement.
 
 React is the selected UI framework. It is used as a client-side Vite SPA, not through Next.js or another full-stack React framework. React Router owns URL parsing, deep links, browser Back behavior, and restoration hooks. XState machines live outside React components and consume normalized application events:
 
@@ -245,11 +260,7 @@ Domain types, research orchestration, export rendering, and storage adapters rem
 
 ## Initial Provider Strategy
 
-The first provider should optimize for the user's existing workflow and API access before optimizing for a provider's branded research product. The product is not meant to recreate Perplexity's consumer interface. Its value is a user-controlled research-and-handoff layer: local threads, inspectable evidence, a distinctive “according to my research…” report, and editable artifacts for pi.dev.
-
-Perplexity remains a viable optional adapter, especially if its API research behavior is useful, but it should not be the architectural recommendation or product dependency. A Perplexity Pro subscription and Perplexity API access are separate concerns; the existing subscription should not be assumed to provide the API key or API credits.
-
-For the first real prototype, use **Brave Search API** as the `SearchProvider` and **Anthropic API** as the `ChatProvider`. This gives the personal pi.dev workflow and dorothy-ann a common LLM vendor while keeping web retrieval independent and application-controlled. Use separate Anthropic API keys for pi.dev and dorothy-ann when the account supports it; keep them under the same personal billing relationship to preserve one vendor/payment surface while limiting credential blast radius and making usage attributable.
+The alpha uses **Brave Search API** as the `SearchProvider` and **Anthropic API** as the `ChatProvider`. This gives the personal pi.dev workflow and dorothy-ann a common LLM vendor while keeping web retrieval independent and application-controlled. Use separate Anthropic API keys for pi.dev and dorothy-ann when the account supports it; keep them under the same personal billing relationship to preserve one vendor/payment surface while limiting credential blast radius and making usage attributable.
 
 Brave owns ranked discovery only. Dorothy Ann must not receive a provider-generated research answer from Brave or Anthropic's hosted web-search tool in the MVP. The application owns the bounded pipeline:
 
@@ -277,7 +288,7 @@ ChatProvider (Anthropic initially)
   └── EvidencePack + context → streamed ChatProviderEvent[]
 ```
 
-Do not store raw provider payloads as the domain model. Candidate replacement search adapters include Tavily or Exa; candidate replacement chat adapters include OpenAI or Gemini. A second provider should be added after the first end-to-end workflow works, primarily to replay the same `EvidencePack` through another chat/search implementation and test whether the domain and exports remain provider-neutral. Provider choice remains configurable per deployment, not user-configurable in the first UI.
+Do not store raw provider payloads as the domain model. Provider choice remains deployment configuration behind the ports, not user-configurable UI. A second implementation is unnecessary for alpha; fake adapters and contract tests verify the seam.
 
 ## Content Extraction Adapter
 
@@ -323,7 +334,7 @@ Fixture tests must cover public HTML, plain text, malformed HTML, redirects, red
 
 ## Browser Interaction Design
 
-### TODO: Complete the Browser State Layouts
+### Browser State Layout Completion
 
 - [x] Draft and agree on the happy-path state transition matrix and paired desktop/mobile shell.
 - [x] Expand the matrix into an exhaustive transition table covering every product-significant loading, empty, partial, error, and recovery state.
@@ -337,11 +348,11 @@ The design pass must cover this state matrix:
 | Initial query | empty home, typing with inferred lookup, terminal-`?` research routing, explicit route override, submitting |
 | Lookup | loading, ranked results, keyboard-focused top result, no results, failure/retry, question-shaped research suggestion, promotion to research |
 | Research | searching, sources arrived, extracting, synthesizing, complete answer, fewer-than-three viable sources, zero viable sources, search/extraction/synthesis failure, interrupted stream, stage-specific retry |
-| Chat follow-up | idle composer, contextual chat streaming/completed, explicit fresh-research selection, stop, retry, edit-and-resend |
+| Chat follow-up | idle composer, contextual chat streaming/completed, explicit fresh-research selection, stop, retry |
 | Evidence | inline source summary, desktop drawer, mobile bottom sheet, citation focus, extracted excerpt, original-source exit, blocked/failed source |
-| Topics | recent-topic list, active topic, rename, archive, delete confirmation, empty/archive views |
+| Topics | recent-topic list, active topic, rename, delete confirmation, empty view |
 | Export | answer report, topic report/transcript choice, report generation, editable preview, copy/download/native share, unsupported-share fallback, export failure |
-| Storage | initial load, save in progress if surfaced, quota/unavailable/corrupt record, archive export/import, migration failure with recovery export |
+| Storage | initial load, save in progress if surfaced, quota/unavailable/corrupt record, backup export/import, migration failure with recovery export |
 
 For each state, the agreed design should make these details explicit:
 
@@ -352,11 +363,11 @@ For each state, the agreed design should make these details explicit:
 - which backend response or stream event drives the state;
 - accessible labels and non-color-only status cues.
 
-The wireframes may group states that share a shell, but loading, empty, partial, error, and recovery variants must be shown rather than implied. This TODO is a planning deliverable, not implementation work.
+The wireframes may group states that share a shell, but loading, empty, partial, error, and recovery variants must be shown rather than implied. This state design is the accepted alpha interaction contract.
 
-### Draft Happy-Path State Transition Matrix
+### Happy-Path State Transition Matrix
 
-This first matrix establishes the main route through the product. The exhaustive pass will add every alternate/error transition and stable state listed above.
+This matrix isolates the main route through the product; the exhaustive matrix immediately after it defines alternate and recovery transitions.
 
 | ID | State | Entered from / trigger | Primary visible action | Persists on entry | Happy-path exit |
 |---|---|---|---|---|---|
@@ -459,8 +470,6 @@ The tables below expand the happy path into every product-significant MVP transi
 |---|---|---|---|
 | C0 idle | submit in default chat mode | C1 streaming | persist user turn; send bounded completed context only |
 | C0 | select research then submit | R0 | persist as research turn; punctuation alone does not change mode |
-| C0 | edit prior user message | C0-edit | create editable copy; original history remains until resubmit confirmation |
-| C0-edit | resubmit | C1 or R0 | branch by replacing downstream turns only after explicit confirmation; preserve an exportable pre-edit snapshot until save succeeds |
 | C1 | `answer.delta` | C1 | transient assistant buffer only |
 | C1 | `turn.completed` | C2 complete | atomically persist assistant message/status/usage; return composer to chat |
 | C1 | Stop / failure / disconnect | C1-interrupted | keep user turn, dim transient prose, offer `Retry answer`; no partial context/export |
@@ -488,10 +497,8 @@ The tables below expand the happy path into every product-significant MVP transi
 | T0 | select topic | C0/R4 for topic | close drawer, lazily load thread, restore position |
 | T0 | New topic | H0 | close drawer and focus query |
 | T0 | rename | T1 rename | inline/dialog input with existing title; save updates full record + summary transactionally |
-| T0 | Archive | T0 recent list updated | set explicit archive state transactionally; offer undo announcement |
-| T0 | Archived | T2 archive view | list archived summaries; restore returns item to recent |
-| T0/T2 | Delete | T3 confirm delete | name topic and explain local permanence; default focus Cancel |
-| T3 | confirm | T0/T2 or H0 if active | delete full + summary records transactionally; no silent undo promise |
+| T0 | Delete | T3 confirm delete | name topic and explain local permanence; default focus Cancel |
+| T3 | confirm | T0 or H0 if active | delete full + summary records transactionally; no silent undo promise |
 | T3 | cancel/Escape | prior drawer | no mutation; restore Delete button focus |
 | topic load | record missing/corrupt | S4 recovery | keep summary if useful; offer recovery export/delete |
 
@@ -524,16 +531,16 @@ The tables below expand the happy path into every product-significant MVP transi
 | From | Event / guard | To | Persist and recovery behavior |
 |---|---|---|---|
 | app after auth | open IndexedDB succeeds | requested app state | load summaries only, then lazy full threads |
-| app after auth | IndexedDB unavailable | S1 storage unavailable | keep current session in memory; prominently offer artifact/archive download; explain reload risk |
+| app after auth | IndexedDB unavailable | S1 storage unavailable | keep current session in memory; prominently offer artifact/data-backup download; explain reload risk |
 | any atomic save | success | originating state | update UI only from committed normalized record where practical |
-| any atomic save | quota exceeded | S2 quota | retain current exportable state in memory; offer archive/export and storage cleanup; do not report saved |
+| any atomic save | quota exceeded | S2 quota | retain current exportable state in memory; offer backup/export and storage cleanup; do not report saved |
 | topic load/migration | one record corrupt | S3 corrupt record | isolate record; keep app usable; offer raw recovery export and deletion |
 | database upgrade | envelope migration succeeds | requested state | commit upgraded envelope; preserve IDs/timestamps |
 | database upgrade | envelope migration fails | S4 migration recovery | do not overwrite source record; offer recovery export; block only affected topic |
-| settings/topic drawer | Export archive | S5 archive creating | deterministic local serialization; download on success; report excluded/corrupt records explicitly |
-| settings/topic drawer | Import archive selected | S6 import preview | validate version/content before writes; report add/replace/skip counts |
+| settings/topic drawer | Export data backup | S5 backup creating | deterministic local serialization; download on success; report excluded/corrupt records explicitly |
+| settings/topic drawer | Import backup selected | S6 import preview | validate version/content before writes; report add/replace/skip counts |
 | S6 | confirm import | prior app state | transactionally add/replace according to explicit conflict policy; return `ImportReport` |
-| S6 | cancel/invalid archive | prior state/S6 error | no writes |
+| S6 | cancel/invalid backup | prior state/S6 error | no writes |
 
 #### Global Interaction Rules
 
@@ -544,7 +551,7 @@ The tables below expand the happy path into every product-significant MVP transi
 - Auth and storage failures supersede the current visual state but retain the local recoverable payload described above.
 - Only one modal surface is active: topic drawer, evidence sheet, confirmation dialog, export chooser, or mobile workbench transition.
 
-### Draft Responsive Shell
+### Responsive Shell
 
 Desktop uses a stable content-first shell with a closed-by-default topic drawer. The only side-by-side regions are main content and optional evidence, avoiding a cramped three-column layout. Topic navigation is always reachable from the header but never reserves width.
 
@@ -571,7 +578,6 @@ DESKTOP — topic drawer open (overlays; does not resize content)
 │ • composition…           │                                                            │
 │ • sqlite vs…             │                                                            │
 │                          │                                                            │
-│ [Archived]               │                                                            │
 │ [Settings] [Lock]        │                                                            │
 └──────────────────────────┴────────────────────────────────────────────────────────────┘
 ```
@@ -595,7 +601,7 @@ MOBILE — shared shell
 └────────────────────────────────┘
 ```
 
-### Draft Happy-Path Wireframes
+### Happy-Path Wireframes
 
 #### Access and Initial Query
 
@@ -783,7 +789,7 @@ MOBILE — full-screen artifact workbench
 
 Answer-level `Export report` skips format/scope choice and opens its deterministic workbench route directly. Topic-level export asks for report versus transcript; report generation shows progress in the workbench before editable Markdown appears. Browser Back returns to the topic and restores its scroll position.
 
-### Draft Loading, Error, and Recovery Wireframes
+### Loading, Error, and Recovery Wireframes
 
 These variants reuse the agreed shells. Desktop places recoverable status near the affected content; mobile uses the full content width above the sticky primary action. Neither layout relies on toast-only errors.
 
@@ -904,7 +910,7 @@ MOBILE — search failed / user stopped
 
 The explicit `Answer with this evidence` choice appears only after an extraction infrastructure failure with one or two viable pages. Normal candidate exhaustion with one or two pages proceeds automatically with the caveat. Zero viable pages never show a synthesis action unless extraction later succeeds.
 
-#### Chat Edit, Retry, and Interruption Variants
+#### Chat Retry and Interruption Variants
 
 ```text
 DESKTOP — interrupted chat
@@ -918,20 +924,9 @@ DESKTOP — interrupted chat
 │ [chat ▾] Ask a follow-up…                                               [↑] │
 └──────────────────────────────────────────────────────────────────────────────┘
 
-MOBILE — edit-and-resend confirmation
-┌────────────────────────────────┐
-│ Edit your earlier question     │
-│ ┌────────────────────────────┐ │
-│ │ revised question…          │ │
-│ └────────────────────────────┘ │
-│ Later replies will be replaced │
-│ after the new reply succeeds.  │
-│                                │
-│ [Cancel] [Resend and replace]  │
-└────────────────────────────────┘
 ```
 
-Retrying a completed answer leaves the prior answer visible until replacement completes. Edit-and-resend must not destroy downstream turns before the replacement is safely stored.
+Retrying a completed answer leaves the prior answer visible until replacement completes. Editing earlier turns and branching/replacing downstream history is deferred from the alpha.
 
 #### Evidence Variants
 
@@ -954,7 +949,7 @@ Failed sources retain title, URL, rank, snippet, and a safe reason category. The
 #### Topic Drawer Variants
 
 ```text
-DESKTOP — rename / archive views             MOBILE — delete confirmation
+DESKTOP — rename                             MOBILE — delete confirmation
 ┌──────────────────────────┐                 ┌──────────────────────────────┐
 │ Topics               [×] │                 │ Delete “Composition…”?      │
 │ [+ New topic]            │                 │                              │
@@ -962,9 +957,7 @@ DESKTOP — rename / archive views             MOBILE — delete confirmation
 │ [Composition over…    ]  │ ← inline rename │ and its sources permanently.│
 │ [Save] [Cancel]          │                 │                              │
 │                          │                 │ [Cancel] [Delete topic]      │
-│ Archived (2)             │                 └──────────────────────────────┘
-│ • old topic       [Restore]
-└──────────────────────────┘
+└──────────────────────────┘                 └──────────────────────────────┘
 
 DESKTOP/MOBILE — empty drawer content
 ┌──────────────────────────┐
@@ -976,7 +969,7 @@ DESKTOP/MOBILE — empty drawer content
 └──────────────────────────┘
 ```
 
-Delete defaults focus to Cancel. Archive offers an announced undo action; permanent delete does not claim an undo capability.
+Delete defaults focus to Cancel and does not claim an undo capability.
 
 #### Artifact Workbench Variants
 
@@ -1024,14 +1017,14 @@ Copy/download/share results use an inline status region in the workbench header;
 DESKTOP — quota/unavailable banner
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ ! Changes aren't saved on this device. Current content remains exportable.  │
-│ [Download current report] [Export archive] [Storage help]                   │
+│ [Download current report] [Export data backup] [Storage help]                   │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ preserved in-memory topic / answer                                           │
 └──────────────────────────────────────────────────────────────────────────────┘
 
 MOBILE — corrupt topic recovery             DESKTOP — import preview
 ┌────────────────────────────────┐           ┌──────────────────────────────────┐
-│ This topic couldn't be loaded. │           │ Import Dorothy Ann archive       │
+│ This topic couldn't be loaded. │           │ Import Dorothy Ann backup       │
 │ Other topics are still safe.   │           │                                  │
 │                                │           │ Add 4 topics                      │
 │ [Download recovery data]       │           │ Replace 1 matching topic         │
@@ -1128,7 +1121,7 @@ type ExportRequest =
   | { format: "transcript"; scope: "topic"; threadId: ThreadId };
 ```
 
-An answer-scoped Dorothy Ann report deterministically renders the question, researched answer, caveats, and message-local numbered sources; it requires no additional model call. A topic-scoped report may use one model call to condense the thread into objective, findings, evidence, decisions, open questions, and next actions. A transcript is always deterministic. Every artifact becomes editable workbench state before copy/download/share, and edits affect only that artifact—not the stored topic. The workbench has its own route beneath the topic so browser Back returns to the preserved conversation position. Refresh reconstructs deterministic exports; handling refresh during a generated or edited draft belongs to the exhaustive storage/error-state pass.
+An answer-scoped Dorothy Ann report deterministically renders the question, researched answer, caveats, and message-local numbered sources; it requires no additional model call. A topic-scoped report may use one model call to condense the thread into objective, findings, evidence, decisions, open questions, and next actions. A transcript is always deterministic. Every artifact becomes editable workbench state before copy/download/share, and edits affect only that artifact—not the stored topic. The workbench has its own route beneath the topic so browser Back returns to the preserved conversation position. Refresh reconstructs deterministic exports and restores saved generated/edited `ArtifactDraft` state from IndexedDB.
 
 A lookup-only result does not produce a Dorothy Ann report because Dorothy Ann has not researched it. `Export links` may create a small deterministic Markdown link list without invoking a model, or the user may promote the lookup to research first.
 
@@ -1202,6 +1195,7 @@ interface TurnStreamRequestBase {
   turnId: TurnId;
   userMessage: UserMessage;
   context: ThreadContextInput;
+  knownSources: Array<Pick<SearchResult, "sourceId" | "canonicalUrl">>;
 }
 
 type TurnStreamRequest =
@@ -1230,11 +1224,10 @@ type TurnStreamRequest =
 
 interface ThreadContextInput {
   turns: CompletedContextTurn[];
-  visibleSummary?: string;
 }
 ```
 
-Only completed assistant messages enter `ThreadContextInput`; interrupted prose and failed extraction content are excluded. The backend reapplies deployment context/token/character limits and returns `413 context_too_large` rather than silently dropping recent user content. A future explicit compaction flow may supply `visibleSummary`.
+Only completed assistant messages enter `ThreadContextInput`; interrupted prose and failed extraction content are excluded. The backend reapplies deployment context/token/character limits and returns `413 context_too_large` rather than silently truncating history. The alpha then offers report/transcript export and a new topic; automatic or model-assisted context compaction is deferred.
 
 `allowPartialSynthesis` is accepted only when retrying an extraction failure that preserved one or two viable pages and the user selected `Answer with this evidence`. Normal candidate exhaustion with partial viable evidence does not require this flag.
 
@@ -1375,6 +1368,8 @@ interface ResearchPolicy {
 }
 ```
 
+Alpha defaults are explicit and server-enforced: query 2,000 characters; 10 search results; at most 200 known topic sources; at most 8 extraction candidates; 3 concurrent fetches; 8 seconds and 2 MB decoded response body per fetch; 5 redirects; 20,000 extracted characters per viable page; 50,000 extracted characters total; 120,000 input-context characters; and 4,096 output tokens. Extraction schedules candidates in rank order, stops scheduling once three viable pages exist, and ignores safe late in-flight results beyond the target.
+
 The runtime adapter loads and validates this server-side deployment configuration. Research requests do not carry an extraction-count override, and the MVP UI exposes no corresponding control. A later user setting may be added if repeated requests for broader research show that it is useful.
 
 ## System Abstractions
@@ -1429,15 +1424,14 @@ interface ExtractionLimits {
 }
 
 interface ThreadStore {
-  list(options?: { archived?: boolean }): Promise<ThreadSummary[]>;
+  list(): Promise<ThreadSummary[]>;
   load(threadId: ThreadId): Promise<Thread | null>;
   save(thread: Thread): Promise<void>;
-  archive(threadId: ThreadId): Promise<void>;
   remove(threadId: ThreadId): Promise<void>;
-  exportData(threadIds?: ThreadId[]): Promise<ThreadArchive>;
-  inspectImport(archive: ThreadArchive): Promise<ImportPreview>;
+  exportData(threadIds?: ThreadId[]): Promise<ThreadBackup>;
+  inspectImport(backup: ThreadBackup): Promise<ImportPreview>;
   importData(
-    archive: ThreadArchive,
+    backup: ThreadBackup,
     options: { onConflict: "skip" | "replace" },
   ): Promise<ImportReport>;
 }
@@ -1473,7 +1467,7 @@ SOURCE source_2
 
 The application creates an `EvidencePack` only after search results have been normalized, URLs have passed safety checks, canonical URLs have been deduplicated, and extraction outcomes have established viable pages. Search snippets and extracted passages remain visibly distinct in the UI and in the model envelope. A source can remain visible as discovered evidence without becoming eligible for synthesis if extraction failed.
 
-Anthropic receives the `EvidencePack` for `research_synthesis` and topic-report requests; it does not perform search in the initial implementation. The system instruction must say that all evidence is untrusted reference material, that instructions inside retrieved pages have no authority, and that claims may cite only supplied `SourceId` values. The adapter converts model citation references into normalized `AssistantContentPart[]`; visible citation numbers are still assigned by the application.
+Anthropic receives the `EvidencePack` for `research_synthesis` and topic-report requests; it does not perform search in the initial implementation. The system instruction must say that all evidence is untrusted reference material, that instructions inside retrieved pages have no authority, and that claims may cite only supplied `SourceId` values. The prompt requires citation sentinels in the exact form `[[cite:<SourceId>]]`. The Anthropic adapter incrementally parses these sentinels across arbitrary stream chunk boundaries into `AssistantContentPart[]`; it emits ordinary text unchanged and emits a citation part only when the ID belongs to the request's allowed evidence set. Unknown or malformed sentinels render as non-linked text and produce a validation warning, never a fabricated citation. The parser is provider-adapter code behind `ChatProvider`, and visible citation numbers are still assigned by the application.
 
 Because the pack is deterministic and serializable, completed packs should be usable as replay fixtures for prompt/model evaluation without repeating Brave searches or page extraction. Initial tuning should focus on system instructions, evidence-envelope shape, citation validation, output limits, and model choice—not fine-tuning. Store enough provenance to explain which search results and extracted pages produced each completed answer, while keeping raw provider payloads outside the domain model.
 
@@ -1501,11 +1495,8 @@ interface Thread {
   title: string;
   createdAt: IsoTimestamp;
   updatedAt: IsoTimestamp;
-  archivedAt?: IsoTimestamp;
-  systemInstruction?: string;
   modelRef: string;
   searchRef: string;
-  visibleContextSummary?: string;
   turns: Turn[];
 }
 
@@ -1514,7 +1505,6 @@ interface ThreadSummary {
   title: string;
   createdAt: IsoTimestamp;
   updatedAt: IsoTimestamp;
-  archivedAt?: IsoTimestamp;
   lastTurnPreview?: string;
 }
 
@@ -1626,7 +1616,7 @@ type ExtractionOutcome =
     };
 ```
 
-`SourceId` is stable within a topic and its exports. The client reconciles new results by canonical URL against existing topic sources and reuses the existing ID; otherwise it preserves the server-issued opaque ID. Duplicate canonical URLs in one result set collapse to the highest-ranked result while retaining provenance in extraction metadata.
+`SourceId` is stable within a topic and its exports. For a turn request, the browser projects every existing topic source into `knownSources`; the server validates that bounded map and reuses its ID when a normalized canonical URL matches, otherwise issuing a new opaque ID before emitting `research.sources`. This keeps later citation events and persisted sources on one ID without client-side stream rewriting. Duplicate canonical URLs in one result set collapse to the highest-ranked result while retaining provenance in extraction metadata.
 
 Failure and transport types are explicit:
 
@@ -1700,15 +1690,15 @@ interface ExportArtifact {
   sourceUpdatedAt: IsoTimestamp;
 }
 
-interface ThreadArchive {
-  archiveVersion: 1;
+interface ThreadBackup {
+  backupVersion: 1;
   exportedAt: IsoTimestamp;
   threads: Array<{ schemaVersion: 1; thread: Thread }>;
 }
 
 interface ImportIssue {
   threadId?: ThreadId;
-  code: "invalid_archive" | "unsupported_version" | "invalid_thread";
+  code: "invalid_backup" | "unsupported_version" | "invalid_thread";
   message: string;
 }
 
@@ -1771,92 +1761,24 @@ Streamed prose is a transient UI buffer until `turn.completed` supplies the norm
 
 If one or two viable pages support synthesis, Dorothy Ann may still answer, but the response must disclose that fewer than the configured three pages were usable. Extraction failures remain inspectable metadata and are never passed to the model as evidence.
 
-## Proposed System Flow
-
-### Ordinary Chat Turn
+## End-to-End Orchestration
 
 ```text
-user submits message
-        ↓
-persist user message
-        ↓
-build bounded conversation context
-        ↓
-stream request through ChatProvider
-        ↓
-render partial response
-        ↓
-persist completed assistant message and usage metadata
+lookup:   query → Brave SearchProvider → normalized results → browser
+research: query/results → safe extraction until 3 viable pages
+          → frozen EvidencePack → Anthropic stream → cited turn
+chat:     bounded completed context → Anthropic stream → completed turn
+export:   answer report/transcript → deterministic local Markdown
+          topic report → one Anthropic condensation → editable local draft
 ```
 
-### Explicit Research Turn
-
-```text
-user submits message with search enabled
-        ↓
-persist user message
-        ↓
-derive one or more search queries
-        ↓
-SearchProvider returns ranked results
-        ↓
-show result cards immediately
-        ↓
-extract ranked candidates until targetViablePages (default 3)
-or the result set is exhausted
-        ↓
-construct research context with stable source IDs
-        ↓
-stream synthesis through ChatProvider
-        ↓
-render citations against source IDs
-        ↓
-persist assistant message + ResearchRun + usage metadata
-```
-
-The first implementation should avoid an autonomous multi-step research loop. A bounded sequence—one search, extraction up to the configured viable-page target, and one synthesis—is sufficient to validate the product.
-
-### Lookup Promotion
-
-```text
-user selects “Research this with Dorothy Ann”
-        ↓
-create ResearchRun from the existing query and SearchResult[]
-        ↓
-walk results in rank order, skipping non-viable pages
-        ↓
-stop at targetViablePages (default 3) or exhaustion
-        ↓
-stream one cited synthesis through ChatProvider
-```
-
-Promotion never repeats the initial search. If the existing results are weak, the user can edit the query and deliberately submit a new research turn.
-
-### Export Flow
-
-```text
-user chooses export format
-        ↓
-load normalized thread and attached sources
-        ↓
-transcript export?
-        ├── yes → deterministic Markdown rendering
-        └── no  → Dorothy Ann report
-                    ├── answer scope → deterministic rendering
-                    └── topic scope  → one model-assisted condensation
-        ↓
-preview artifact
-        ↓
-copy / download / share
-```
-
-Transcript and answer-scoped Dorothy Ann report export must not require a model call. Topic-scoped Dorothy Ann report export may use one, but the generated artifact must be editable before leaving the application.
+Lookup promotion reuses normalized results and does not search again. Research performs one bounded search, one extraction pass, and one synthesis—no autonomous loop. Retries resume only the failed stage from persisted browser state. Partial prose remains transient until a terminal completion event.
 
 ## Storage Strategy
 
-The initial storage decision is local-browser-only, not storage-hardcoded. `LocalThreadStore` is the MVP implementation; `ThreadStore` remains the application boundary. There is no synchronization or cross-device continuity in the first deployment. Deterministic archive export/import is required so browser-local data can be backed up, moved manually, and migrated into a future remote store.
+The initial storage decision is local-browser-only, not storage-hardcoded. `LocalThreadStore` is the MVP implementation; `ThreadStore` remains the application boundary. There is no synchronization or cross-device continuity in the first deployment. Deterministic backup export/import is required so browser-local data can be backed up, moved manually, and migrated into a future remote store.
 
-The canonical `ThreadStore` contract is defined in `System Abstractions`. It covers list/load/save/archive/remove plus deterministic archive inspection, import, and export while leaving IndexedDB mechanics out of the domain.
+The canonical `ThreadStore` contract is defined in `System Abstractions`. It covers list/load/save/remove plus deterministic backup inspection, import, and export while leaving IndexedDB mechanics out of the domain.
 
 Storage requirements:
 
@@ -1865,7 +1787,7 @@ Storage requirements:
 - keep serialization/migrations inside the storage adapter;
 - make writes atomic enough that a refresh cannot leave a half-written thread;
 - handle unavailable, full, or corrupted browser storage without losing the current exportable artifact;
-- keep archived/deleted semantics explicit rather than relying on UI filtering;
+- make deletion explicit and transactional;
 - avoid assuming all devices share a clock, browser, or storage quota.
 
 `LocalThreadStore` uses IndexedDB through `idb` from the first proof. `idb` is an implementation detail of this adapter and must not appear in application-core interfaces. Thread summary indexes and full normalized thread records are stored separately so listing topics does not deserialize extracted page content. Saving a turn and its updated thread summary occurs in one transaction. IndexedDB schema upgrades own persisted-data migration and must preserve exportability if an individual record cannot be migrated.
@@ -1917,157 +1839,110 @@ interface ArtifactDraft {
 }
 ```
 
-`LocalThreadStore.save` opens a read-write transaction across `threads` and `threadSummaries` and commits both records together. Archive state remains explicit in normalized thread data; deletion removes the full record, summary, and associated artifact drafts in one transaction. Database-version upgrades run through `idb`'s `upgrade` callback; domain schema migration remains a separately testable pure function over `StoredThreadEnvelope`.
+`LocalThreadStore.save` opens a read-write transaction across `threads` and `threadSummaries` and commits both records together. Deletion removes the full record, summary, and associated artifact drafts in one transaction. Database-version upgrades run through `idb`'s `upgrade` callback; domain schema migration remains a separately testable pure function over `StoredThreadEnvelope`.
 
-An `ArtifactDraftStore` backed by the same database owns workbench drafts. The `by-source-key` index is unique, permitting at most one active draft per `sourceKey`; reopening that export offers Resume or Start over. Deterministic and generated artifacts are saved once complete, edits autosave with a short debounce, and Back offers Keep draft, Discard, or Stay when dirty. Copy/download/share does not silently delete a draft. Drafts are excluded from thread archives and topic history, are not listed as durable artifacts, survive archive/refresh/browser restart, and are deleted with their source topic or by explicit discard.
+An `ArtifactDraftStore` backed by the same database owns workbench drafts. The `by-source-key` index is unique, permitting at most one active draft per `sourceKey`; reopening that export offers Resume or Start over. Deterministic and generated artifacts are saved once complete, edits autosave with a short debounce, and Back offers Keep draft, Discard, or Stay when dirty. Copy/download/share does not silently delete a draft. Drafts are excluded from thread backups and topic history, are not listed as durable artifacts, survive refresh/browser restart, and are deleted with their source topic or by explicit discard.
 
-`RemoteThreadStore` can later map the same normalized objects to authenticated API calls and server persistence. Upstash Redis is technically one possible backend for that adapter, but selecting it for login limiting does **not** select it for thread storage. The browser must never receive Upstash credentials or call Redis directly; an authenticated server adapter would own thread keys, summary indexes, atomic updates, quotas, and migrations.
+Remote storage and sync are not alpha work. `ThreadStore` intentionally leaves room for a future authenticated `RemoteThreadStore`, but no remote implementation, composition layer, ownership field, or sync status belongs in this plan. Upstash stores limiter counters only and is not the thread database.
 
-If cross-device persistence is earned, evaluate three distinct shapes rather than treating remote Redis as a drop-in browser-storage swap:
+## Context Budget
 
-1. **remote source of truth** — `RemoteThreadStore` replaces `LocalThreadStore` after authenticated import;
-2. **local cache plus remote sync** — compose both stores and explicitly design conflict/offline semantics;
-3. **manual continuity** — retain IndexedDB and use the existing archive export/import flow.
+The alpha sends completed turns in order up to a server-enforced request budget. It never silently summarizes or drops turns. If the bounded request is too large, return `413 context_too_large` and offer two explicit exits: export a Dorothy Ann report/transcript, or begin a new topic. Context compaction and hidden memory are deferred.
 
-Upstash could support the first shape for a single owner using versioned thread blobs and summary indexes. A relational/document store may be a better durable system of record if ownership, querying, conflict history, or multi-user behavior grows. Thread content also has different privacy/retention requirements than expiring HMAC limiter counters; do not place it in the limiter namespace by default, and reassess encryption-at-rest, backup, deletion, size, and cost before choosing any remote store.
+## Deployment and Portability
 
-The UI should not branch on local versus remote storage; synchronization status, if eventually added, should be an adapter-provided capability/state.
-
-## Context Management
-
-Short threads can send the complete transcript. As a thread approaches a configurable context budget, the interface should make that state visible and offer explicit choices:
+Vercel is the committed alpha deployment target. The frontend is a Vite SPA; `/api/*` is handled by a Vercel Node Function that mounts the same Hono app used by the local Node runtime. IndexedDB remains the only thread/artifact store.
 
 ```text
-thread approaches context budget
-        ├── compact earlier messages into a visible summary
-        ├── export and begin a new thread
-        └── continue with higher cost or reduced history
+browser
+  ├── Vite/React SPA
+  ├── IndexedDB LocalThreadStore + ArtifactDraftStore
+  └── same-origin /api requests
+             ↓
+      thin Vercel adapter
+             ↓
+      portable Hono app
+        ├── auth + limiter ports
+        ├── Brave SearchProvider
+        ├── safe ContentExtractor
+        └── Anthropic ChatProvider
 ```
 
-Compaction must not create hidden memory. Store and display the generated context summary as part of the thread so the user can inspect what future responses receive.
-
-## Deployment and Credential Boundary
-
-There are two legitimate initial deployment shapes:
-
-### Option A: static frontend plus server-side proxy
+Use one package/repository rather than a monorepo. Directory boundaries provide enough separation for the alpha:
 
 ```text
-static frontend host
-        ├── browser-local ThreadStore implementation
-        ├── browser UI and Markdown export
-        └── calls same-origin or proxied requests
-                 ↓
-        edge function / serverless proxy
-                 └── provider calls with server-side secrets
-```
-
-GitHub Pages can host the static frontend, but it provides no special advantage once a backend proxy is required. It remains useful if free static hosting, GitHub-based deployment, or familiarity are priorities. The trade-off is two separately configured deployments, cross-origin/auth configuration, and potentially separate domains.
-
-Vercel + Functions is the committed deployment target because it offers convenient frontend hosting, previews, serverless functions, and secret configuration. This is a product/deployment decision, not an application-core dependency. Cloudflare Pages + Workers remains a possible future adapter and portability check, not an alternate MVP target.
-
-This deployment does **not** provide cross-device continuity: IndexedDB belongs to one browser profile on one device. It does provide safe provider-key storage when the proxy keeps credentials server-side. Direct calls to model/search APIs from the browser may fail because of CORS, expose secrets, or create uncontrolled spend.
-
-The local-only choice should not leak into the rest of the application. The UI and domain services should depend on the existing asynchronous `ThreadStore` interface, not on `localStorage`, IndexedDB, serialization details, or browser APIs. The first implementation can be `LocalThreadStore`; a later `RemoteThreadStore` can satisfy the same contract without changing chat, research, export, or thread UI behavior.
-
-## Portability and Deployment Boundaries
-
-No hosting platform should be structurally critical to the application. The deployable system should have three independently replaceable layers:
-
-```text
-application core
-  ├── normalized domain types
-  ├── chat/search/extraction/export interfaces
-  ├── research orchestration
-  └── thread and artifact behavior
-          │
-          ├── runtime adapter
-          │     ├── local HTTP server
-          │     ├── Vercel Function (initial target)
-          │     └── Cloudflare Worker / other serverless adapter
-          │
-          └── infrastructure adapters
-                ├── LocalThreadStore
-                ├── RemoteThreadStore
-                ├── provider implementations
-                └── secret/configuration bindings
+src/
+  domain/                 normalized types, schemas, migrations
+  application/            orchestration, exports, citation/context policy
+  ports/                  provider, auth, limiter, storage interfaces
+  adapters/browser/       idb stores, clipboard/download/share
+  ui/                     React routes, machines, components, CSS
+server/
+  app.ts                  provider-neutral Hono routes/middleware
+  adapters/               Brave, Anthropic, extraction, auth, Upstash
+  runtime/node.ts         local Node entrypoint
+api/
+  index.ts                thin Vercel entrypoint
 ```
 
 Portability invariants:
 
-- application-core code imports no Vercel, Cloudflare, framework, or browser-storage package;
-- provider adapters consume a small configuration object and return normalized domain values;
-- runtime adapters translate platform-specific request/response objects to standard Web `Request`/`Response` behavior;
-- secrets enter only through runtime configuration and are never represented in frontend configuration;
-- storage implementations satisfy `ThreadStore`; the UI does not know whether data is local, remote, relational, or object-backed;
-- export rendering is deterministic and runnable locally without a hosted platform;
-- a local command can exercise the same HTTP API used by the deployed frontend;
-- deployment-specific conveniences may be used in adapters, but they must not change domain behavior or data formats.
+- `src/domain`, `src/application`, and `src/ports` import no React, Hono, Vercel, provider SDK, `idb`, or Node-only package.
+- `server/app.ts` depends on injected ports/config and standard Web `Request`/`Response`; it imports no Vercel API.
+- only `api/index.ts` translates Vercel runtime/environment details into the Hono app.
+- only `server/runtime/node.ts` owns local-server setup.
+- only the extraction adapter may use Node DNS/`undici`; replacing it does not alter orchestration or domain values.
+- provider payloads are normalized before leaving their adapter and are never persisted.
+- browser code receives no provider, session-signing, limiter, or passphrase secret. No secret may use a `VITE_` prefix.
+- deterministic exports and domain migrations run without network or Vercel.
+- contract tests run the same Hono app through in-memory fake ports; one local smoke test and one deployed smoke test must produce the same API/event shapes.
 
-The initial target may use Vercel conveniences—preview deployments, project environment variables, function routing, and observability—without making Vercel APIs part of the application core. A second runtime adapter should be a verification exercise, not a rewrite.
+`vercel.json` selects the Node runtime/API entrypoint and rewrites non-API deep links to the SPA. It may configure duration/region/headers, but may not change domain behavior. A future Cloudflare or other runtime is a new adapter, not alpha work.
 
-Therefore a static deployment is safe only if either:
-
-- the first proof uses mocked/fixture providers; or
-- it calls a separately hosted backend/proxy whose credentials and limits are server-side.
-
-### Secret placement for the static proof
-
-The LLM and search provider keys must never be placed in the GitHub Pages bundle, HTML, JavaScript, source maps, browser storage, or request parameters. Anything shipped to the browser should be treated as public and recoverable by the user or an attacker.
-
-The minimum safe architecture is:
+Required deployment configuration:
 
 ```text
-static frontend host
-        │ public HTTPS request
-        ▼
-small server-side proxy / edge function
-        ├── provider keys in encrypted deployment secrets
-        ├── request validation and limits
-        ├── provider API calls
-        └── normalized response back to browser
+ANTHROPIC_API_KEY
+ANTHROPIC_MODEL                 required; deployment-selected, not persisted provider payload
+BRAVE_SEARCH_API_KEY
+APP_PASSPHRASE_SCRYPT_HASH     versioned salt/parameters/hash string
+SESSION_SIGNING_KEYS           active + optional previous HMAC keys for rotation
+LIMITER_KEY_SECRET             HMAC secret for client-IP limiter keys
+UPSTASH_REDIS_REST_URL
+UPSTASH_REDIS_REST_TOKEN
+RESEARCH_TARGET_VIABLE_PAGES   default 3
+MAX_SEARCH_RESULTS              default 10
+MAX_KNOWN_SOURCES               default 200
+MAX_EXTRACTION_CANDIDATES       default 8
+EXTRACTION_CONCURRENCY          default 3
+EXTRACTION_TIMEOUT_MS           default 8000
+MAX_FETCH_BYTES                 default 2000000
+MAX_REDIRECTS                   default 5
+MAX_EXTRACTED_CHARS_PER_PAGE    default 20000
+MAX_EXTRACTED_CHARS_TOTAL       default 50000
+MAX_CONTEXT_CHARS               default 120000
+MAX_OUTPUT_TOKENS               default 4096
+LOGIN_ATTEMPTS_PER_15_MIN       default 5
+GLOBAL_LOGIN_ATTEMPTS_PER_HOUR  default 100
 ```
 
-For a personal proof, a separately deployed edge/serverless function is sufficient. Its provider keys live in the platform's secret manager/environment, never in the repository or client bundle. The proxy should allow only the operations needed by the app, enforce bounded input/output, apply rate limits, and avoid logging prompts or credentials.
-
-The proxy itself still needs an access boundary. A token embedded in the frontend is not a secret; it can prevent casual misuse but cannot stop extraction. Prefer an access layer such as a private deployment gate, Cloudflare Access/OAuth, or a user-entered rotating app token sent only to the proxy. If the proof is intentionally public, use fixtures or a zero-cost/delegated provider rather than exposing a paid provider key.
-
-### Option B: small hosted personal app
-
-```text
-static web client / hosted frontend
-        ↓ authenticated request
-small application backend
-        ├── server-side provider credentials
-        ├── RemoteThreadStore implementation
-        ├── chat provider adapter
-        ├── search provider adapter
-        └── content extraction adapter
-```
-
-This supports cross-device use, secrets, rate limits, and a real default-search workflow. It does not require a large platform: a small serverless/API deployment plus managed or embedded database is enough for the single-user MVP.
-
-### Recommended rollout
-
-Use a two-stage rollout with one domain model and a swappable storage boundary:
-
-1. **local/static proof:** a static frontend host (GitHub Pages is optional), `LocalThreadStore`, fixture or proxied providers, deterministic export. Validate the core interaction in roughly 1–3 focused days of implementation time.
-2. **cross-device upgrade, only if earned:** keep the same domain and UI contracts, implement `RemoteThreadStore` behind a small authenticated backend, and add sync/import migration. Estimate roughly 3–7 focused days after the proof, depending on the chosen hosting/auth/database services.
-
-The prototype should include an explicit export/import path even if remote storage is not planned. This protects the user's local threads from a future storage change and gives the product a useful manual cross-device escape hatch: export a thread or archive on one device, import it on another.
-
-These are estimates for a narrow single-user build, not a commitment. The main schedule risk is provider integration and authentication—not the chat UI or Markdown export. If cross-device usage is a prerequisite for judging the product, skip Option A as a product milestone and build Option B directly; the likely initial phase becomes roughly 1–2 weeks of focused implementation including deployment hardening and testing.
-
-Credentials should be deployment secrets and remain server-side. Even in the static proof, the browser should never receive long-lived provider credentials. The initial product is single-user; it should avoid building general account management, while still keeping an authentication boundary around private threads and provider routes.
+Startup validates server configuration and fails closed with names—not values—of missing/invalid variables. Local fixture mode uses fake providers and the in-memory limiter; live local mode reads the same variable names as Vercel. Provider credentials and prompts are never logged.
 
 ## Authentication and Access Boundary
 
 The first deployment is personal and single-owner, but passphrase handling must remain an adapter rather than an application-core dependency:
 
 ```ts
+interface AuthSession {
+  subject: "owner";
+  method: "passphrase";
+  expiresAt: IsoTimestamp;
+  absoluteExpiresAt: IsoTimestamp;
+}
+
 interface AuthClient {
   getSession(): Promise<AuthSession | null>;
-  beginLogin(returnTo: string): Promise<void>;
+  login(input: { passphrase: string }): Promise<AuthSession>;
   logout(): Promise<void>;
 }
 
@@ -2110,11 +1985,11 @@ If authentication expires during a turn, the client preserves the local user tur
 ```text
 GET  /api/auth/session
   200 { authenticated: false }
-  200 { authenticated: true, session: { subject, method, expiresAt } }
+  200 { authenticated: true, session: { subject, method, expiresAt, absoluteExpiresAt } }
 
 POST /api/auth/passphrase
   body: { passphrase: string }
-  200 { authenticated: true, session: { subject, method, expiresAt } }
+  200 { authenticated: true, session: { subject, method, expiresAt, absoluteExpiresAt } }
       + Set-Cookie: __Host-dorothy-ann-session=…;
         HttpOnly; Secure; SameSite=Lax; Path=/
   400 malformed request
@@ -2125,7 +2000,7 @@ POST /api/auth/logout
   204 + expired __Host-dorothy-ann-session cookie
 ```
 
-The initial server auth adapter verifies the submitted passphrase against a strong password hash stored in deployment secrets and issues a signed session for `subject: "owner"`. The session has a rolling seven-day idle expiry and a non-extendable 30-day absolute expiry measured from initial authentication. The adapter may refresh the cookie after authenticated activity without moving the absolute deadline. A separate signing secret permits session invalidation/rotation without changing the passphrase. Login attempts pass through a `LoginAttemptLimiter` adapter; process-local counters are not sufficient in serverless runtimes.
+The initial Node auth adapter verifies `APP_PASSPHRASE_SCRYPT_HASH` with `node:crypto` `scrypt` and `timingSafeEqual`; the versioned secret string contains algorithm parameters, salt, and derived hash, never the passphrase. It issues an HMAC-SHA-256 signed cookie containing only key ID, subject `owner`, method, issued-at, idle-expiry, and absolute-expiry claims. The session has a rolling seven-day idle expiry and a non-extendable 30-day absolute expiry measured from initial authentication. The adapter may refresh the cookie after authenticated activity without moving the absolute deadline. `SESSION_SIGNING_KEYS` supports one active key and previous verification keys for rotation without changing the passphrase. Login attempts pass through a `LoginAttemptLimiter` adapter; process-local counters are not sufficient in serverless runtimes.
 
 ```ts
 interface LoginAttemptLimiter {
@@ -2137,7 +2012,7 @@ interface LoginAttemptLimiter {
 }
 ```
 
-The Vercel adapter uses Upstash Redis through `@upstash/ratelimit`; local development uses an in-memory implementation with the same behavior. The Vercel runtime derives limiter keys from trusted platform client-IP metadata and HMACs them with a dedicated limiter-key secret before Redis sees them. Store only expiring per-IP and small global login counters—never raw IPs, passphrases, session cookies, prompts, sources, or thread data. Limits and windows are deployment configuration. Consume before passphrase verification and reset the per-IP bucket after a successful unlock. Disable optional analytics for the MVP to minimize stored metadata and commands.
+The Vercel adapter uses Upstash Redis through `@upstash/ratelimit`; local development uses an in-memory implementation with the same behavior. The Vercel runtime derives limiter keys from trusted platform client-IP metadata and HMACs them with a dedicated limiter-key secret before Redis sees them. Store only expiring per-IP and small global login counters—never raw IPs, passphrases, session cookies, prompts, sources, or thread data. The alpha permits five failed attempts per HMAC-derived IP key per 15 minutes plus a 100-attempt global hourly safety bucket. Consume both before passphrase verification; reset only the per-IP bucket after a successful unlock. These values remain deployment configuration. Disable optional analytics for the MVP to minimize stored metadata and commands.
 
 As of 2026-09-05, Upstash's published Redis free tier includes one database, 500,000 commands/month, 256 MB data, and 10 GB bandwidth. A personal unlock flow should remain far below those limits, so expected limiter cost is **$0/month**. If upgraded to pay-as-you-go, current command pricing is $0.20 per 100,000 commands, storage is $0.25/GB-month with the first 1 GB free, and bandwidth is free through 200 GB/month; configure a monthly budget cap before enabling paid usage. Pricing is external and must be rechecked at implementation/deployment time: <https://upstash.com/pricing/redis>.
 
@@ -2160,23 +2035,7 @@ The browser app shell must not read or display IndexedDB topic content until aut
 
 ## Cost Controls
 
-Cost is relevant but not the primary constraint. The system should make usage understandable rather than aggressively optimize every request.
-
-Track per turn, thread, and billing period where available:
-
-- model input and output tokens;
-- searches performed;
-- pages extracted;
-- estimated model cost;
-- estimated research cost.
-
-Support configurable limits for:
-
-- output tokens;
-- searches per turn;
-- extracted pages and characters;
-- context budget;
-- soft monthly spend warning.
+The alpha stores provider-reported token/search/extraction counts on each completed turn and enforces deployment-configured request limits. It does not build billing-period aggregation, estimated-cost dashboards, budgets, or user-facing tuning controls. Provider dashboards remain the billing source of truth.
 
 ## Explicit Non-Goals
 
@@ -2188,24 +2047,91 @@ Support configurable limits for:
 - Document-library management.
 - Native mobile applications.
 - Collaboration or multi-user accounts.
-- Autonomous open-ended research loops.
+- Remote thread storage, sync, or cross-device continuity.
+- Topic archiving and edit-and-resend history branching.
+- Autonomous open-ended research loops or context compaction.
+- A second provider implementation in the alpha.
+- Rich editors, syntax highlighting, rich weather/search widgets, or PDF/JavaScript rendering.
+- Usage dashboards or user-facing model/provider/research-depth settings.
 - Integration with every notes platform.
 
 The application may later become installable as a PWA, but offline support should not block validation of the core chat-search-export loop.
 
-## Proposed Build Sequence
+## Implementation Plan
 
-- [ ] **Phase 1 — validate the browser loop:** mobile/desktop query entry, one chat adapter, one search adapter, explicit research, visible result/source evidence, streamed synthesis, and deterministic Markdown export. Target: roughly 1–3 focused implementation days with fixture or proxied providers.
-- [ ] **Phase 1 — validate the pi artifact loop:** researched answer or whole topic → editable Dorothy Ann report preview → copy/download/shareable Markdown with sources, decisions, and next actions. Target: included in the same 1–3 day proof.
-- [ ] **Phase 2 — add lightweight persistence:** topic list, rename/archive/delete, normalized messages and sources. Target: part of the static proof locally, then moved behind the store boundary.
-- [ ] **Phase 3 — add cross-device continuity:** authenticated server-side `ThreadStore`, server-side provider calls, and synchronized desktop/mobile access so the tool can plausibly become the default search surface across devices. Target: roughly 3–7 additional focused implementation days, or 1–2 weeks total if this is required from the start.
-- [ ] **Improve reports:** arbitrary source/message selection, context compaction, optional report customization, and usage visibility.
-- [ ] **Test the abstractions:** add a second implementation behind the chat and search boundaries without changing domain storage, artifact format, or UI behavior.
+1. **Scaffold the portable single-package application.** Create the React/Vite SPA, strict TypeScript configuration, CSS foundations, provider-neutral Hono `createApp(dependencies)` factory, local Node entrypoint, thin Vercel entrypoint, SPA rewrites, validated configuration, and fixture mode. Keep the directory/import boundaries in `Deployment and Portability`. **Verify:** `npm ci`, lint, typecheck, unit test, production build, local auth-session request, and Vercel build all pass without live provider credentials in fixture mode.
 
-## Open Questions for the Next Session
+2. **Implement normalized domain schemas and pure policies.** Add branded IDs, thread/turn/research/source/artifact types, Zod boundary schemas, deterministic query routing/title generation, canonical source reconciliation, evidence-pack construction, citation sentinel parsing/numbering, context projection, and deterministic answer-report/transcript rendering. **Verify:** table-driven tests cover valid/invalid transitions and schemas, chunk-split/malformed/unknown citations, duplicate canonical URLs, lookup-vs-research routing, stable export output, and no provider payload in serialized fixtures.
 
-The browser interaction decisions, React + Vite + Hono + Vercel deployment stack, React Router routes, selective XState workflow boundaries, and initial provider split are settled: Brave Search for ranked discovery, application-controlled extraction, and Anthropic for chat/synthesis. The application-owned extraction implementation is settled on `undici` + `linkedom` + Mozilla Readability in the Vercel Node runtime. The durable limiter is settled on Upstash Redis + `@upstash/ratelimit` behind the portable limiter interface. Remaining plan work is to convert the coarse build phases into atomic ledger steps and choose the exact Anthropic model during implementation/configuration.
+3. **Implement IndexedDB storage and backup recovery.** Build `LocalThreadStore` and `ArtifactDraftStore` with `idb`, atomic thread/summary updates, unique draft source keys, schema migration, deterministic backup inspect/import/export, conflict policy, quota/unavailable/corrupt-record recovery, and topic deletion cleanup. **Verify:** `fake-indexeddb` tests cover transactions, failed writes, migrations, round-trip backup, conflict skip/replace, draft resume/discard, and deletion of related drafts.
 
-## Next
+4. **Implement portable owner authentication.** Add `AuthClient`, `RequestAuthenticator`, scrypt hash-generation script, passphrase verification, HMAC session cookies, expiry/key rotation, origin checks, in-memory limiter, and Upstash limiter adapter. Mount only the three specified auth routes. **Verify:** Hono contract tests cover malformed/invalid/rate-limited login, seven-day idle/30-day absolute expiry, cookie flags, current-browser logout, previous signing-key verification, no secret values in errors/logs, and parity between limiter adapters.
 
-Replace the coarse build sequence with atomic implementation steps and a mirrored Plan Ledger. Each step must name its deliverable, touched boundary, dependency, and verification method; then settle the remaining concrete provider/framework/limiter choices.
+5. **Implement Brave lookup behind `SearchProvider`.** Normalize Brave results, enforce deployment limits, assign opaque source IDs, and expose `POST /api/lookup`; retain raw payloads only inside the adapter call. **Verify:** fixture contract tests cover ranked results, empty results, provider errors/rate limits, malformed payloads, canonical URL handling, auth/origin/size rejection, and confirm lookup never invokes Anthropic or extraction.
+
+6. **Implement the safe Node content extractor.** Build validated/pinned DNS connection handling, manual safe redirects, byte/time/content-type bounds, `linkedom` + Readability normalization, and typed outcomes. **Verify:** fixture/integration tests cover public HTML/plain text, malformed HTML, duplicate canonical URLs, timeout, oversized/decompression body, unsupported PDF, empty content, direct and redirected private IPv4/IPv6/link-local destinations, and DNS-rebinding simulation.
+
+7. **Implement Anthropic chat/synthesis behind `ChatProvider`.** Construct delimited provider-neutral prompts for chat, research synthesis, and topic reports; stream normalized text/citation parts; validate citation IDs; and capture normalized usage. `ANTHROPIC_MODEL` is required deployment configuration. **Verify:** replay fixtures cover ordinary chat, three/partial-source research, prompt-injection text inside evidence, citations split across chunks, unknown citations, provider interruption/rate limiting, and absence of Anthropic payloads in persisted values.
+
+8. **Implement research orchestration and streaming routes.** Compose search, ranked concurrent extraction, frozen evidence, synthesis, stage persistence events, retry semantics, report generation, SSE sequencing/heartbeats, and request bounds in the Hono application. **Verify:** contract tests cover new research, promoted lookup without a second Brave call, three-page stop, one/two-page caveat, zero-evidence refusal, each stage failure/retry, Stop/EOF behavior, transient prose, duplicate/out-of-order event rejection, and exactly one terminal event on normal completion.
+
+9. **Build the responsive authenticated shell and lookup flow.** Implement React Router routes, `authMachine`, unlock/expiry flow, closed topic drawer, recent topics, deterministic query mode chip, lookup loading/results/empty/error states, keyboard-first result navigation, and lookup promotion. Use React Aria and CSS Modules only at the UI boundary. **Verify:** React Testing Library covers focus/live-region/keyboard behavior and MSW states; Playwright verifies desktop/mobile unlock → lookup → open/promote paths and deep-link restoration.
+
+10. **Build research, chat, and evidence interactions.** Implement `turnMachine`, research progress, desktop auto-open evidence panel, mobile evidence sheet, citations, source excerpts/failures, follow-up chat/research switch, Stop, copy, and stage-specific recovery using the accepted state matrix. **Verify:** component tests exercise every machine state; Playwright covers full/partial/zero-evidence research, citation focus restoration, chat retry, stream interruption, reload from committed stages, and no export/context use of partial prose.
+
+11. **Build Dorothy Ann reports, transcripts, and local recovery.** Implement deterministic answer reports/transcripts, `reportMachine`, one-call topic report generation, full-screen Edit/Preview workbench, autosaved drafts, resume/start-over, dirty Back confirmation, copy/download/share fallbacks, and data backup import/export UI. **Verify:** snapshot/property tests confirm deterministic Markdown and message-local citations; component/E2E tests cover generation retry, refresh/resume, dirty navigation, unsupported clipboard/share, `.md` download, and backup round trip.
+
+12. **Harden and deploy the alpha.** Apply security headers, production request/body/output limits, redacted logging, secret validation, accessibility checks, responsive polish, and Vercel environment/function configuration. Run live Brave/Anthropic/Upstash smoke tests and verify local/Vercel contract parity. **Verify:** all quality commands pass; Playwright desktop Chromium/mobile WebKit happy and representative recovery paths pass; axe reports zero serious/critical violations; built frontend contains no server secret; deployed `weather` performs no model call; promoted research performs no duplicate search; and the Vercel function cannot fetch private-network targets.
+
+## Plan Ledger
+
+Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blocked.
+
+- [ ] 1. Portable scaffold — deliverable: single-package React/Vite/Hono app with Node and Vercel adapters plus fixture mode; verify: install/lint/typecheck/test/build and both runtime smoke checks.
+- [ ] 2. Domain and policies — deliverable: normalized schemas, routing, evidence, citations, context, deterministic exports; verify: table/replay/snapshot tests and provider-payload serialization guard.
+- [ ] 3. IndexedDB storage — deliverable: thread/summary/draft stores, migrations, backup import/export; verify: `fake-indexeddb` transaction, failure, migration, conflict, and round-trip tests.
+- [ ] 4. Owner auth — deliverable: scrypt passphrase, signed sessions, auth routes, in-memory/Upstash limiters; verify: auth/expiry/cookie/rotation/limiter contract tests.
+- [ ] 5. Brave lookup — deliverable: normalized `SearchProvider` and `/api/lookup`; verify: fixture/error/bounds tests and zero Anthropic/extraction calls.
+- [ ] 6. Safe extraction — deliverable: SSRF-safe bounded Node extractor with Readability; verify: content, redirect, IP, rebinding, timeout, oversized, and unsupported-type tests.
+- [ ] 7. Anthropic adapter — deliverable: chat/research/report streaming with validated citation sentinels; verify: replay, injection, chunk boundary, unknown citation, interruption, and persistence-boundary tests.
+- [ ] 8. Orchestration/SSE — deliverable: turn/report streams, bounded extraction, stage-aware retry; verify: Hono end-to-end contract matrix and terminal-event assertions.
+- [ ] 9. Shell and lookup UI — deliverable: auth shell, drawer, mode routing, lookup/promotion states; verify: RTL/MSW plus desktop/mobile Playwright paths.
+- [ ] 10. Research/chat/evidence UI — deliverable: accepted turn/evidence states and recovery interactions; verify: machine-state components plus full/partial/failure/reload E2E paths.
+- [ ] 11. Reports and recovery UI — deliverable: Markdown workbench, drafts, export/share, data backup; verify: deterministic export tests and workbench/backup E2E paths.
+- [ ] 12. Hardened Vercel alpha — deliverable: configured secure deployment; verify: full CI commands, axe, secret scan, live provider smoke, portability parity, and SSRF probes.
+
+## Verification
+
+Required local commands (scripts created in step 1):
+
+```bash
+npm ci
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run test:e2e
+```
+
+Alpha acceptance assertions:
+
+- `weather` and `life alive` call Brave only and render keyboard-navigable ranked links.
+- A terminal-`?` query performs at most one Brave search, bounded extraction to three viable pages, and one Anthropic synthesis.
+- Promoting lookup results performs no second search.
+- Retrieved instructions cannot gain authority; only viable bounded pages enter `EvidencePack`.
+- Every rendered citation resolves to an allowed stable source ID; visible numbering restarts per answer and exports identically.
+- One/two viable pages produce a visible caveat; zero viable pages never produce “According to my research…”.
+- Interrupted prose is absent from persistence, future context, and exports; retry resumes the failed stage without duplicate local turns.
+- Threads and report drafts survive reload in the same browser; another browser/device has no data.
+- Answer reports and transcripts are deterministic/local; topic report generation is one bounded Anthropic call and remains editable.
+- All drawers, sheets, dialogs, progress, failures, and workbench actions are keyboard/screen-reader usable on desktop and mobile layouts.
+- Provider adapters can be replaced by test doubles without changing domain, orchestration, UI, storage, or artifact formats.
+- The local Node and Vercel adapters expose identical versioned API/event contracts.
+
+## Deployment Inputs
+
+Implementation can proceed entirely in fixture mode. Live smoke/deployment requires the operator to provide Brave, Anthropic, and Upstash credentials; a generated scrypt passphrase hash and signing/limiter secrets; and a current Anthropic model ID through `ANTHROPIC_MODEL`. The model value is deployment configuration, not an unresolved domain or UI decision.
+
+## Open Questions
+
+None for alpha implementation. Revisit deferred scope only after the browser lookup → research → chat → report loop is deployed and used.
