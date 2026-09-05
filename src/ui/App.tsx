@@ -1,33 +1,718 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link, Route, Routes, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  Route,
+  Routes,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { LocalThreadStore } from "../adapters/browser/local-stores";
 import type { SearchResult, Thread, ThreadSummary } from "../domain/types";
 import { canPromoteToResearch } from "../domain/policies";
 import styles from "./App.module.css";
 
 type Result = SearchResult;
-type StreamState = { stage: string; answer: string; sources: Result[]; error?: string };
+type StreamState = {
+  stage: string;
+  answer: string;
+  sources: Result[];
+  error?: string;
+};
 const store = new LocalThreadStore();
 const now = () => new Date().toISOString() as Thread["createdAt"];
 const id = () => crypto.randomUUID();
 
-function Drawer({ onClose }: { onClose: () => void }) { const [topics, setTopics] = useState<ThreadSummary[]>([]); const [editing, setEditing] = useState<string | null>(null); const [title, setTitle] = useState(""); const refresh = () => { void store.list().then(setTopics); }; useEffect(refresh, []); const rename = async (topic: ThreadSummary) => { const thread = await store.load(topic.id); if (thread && title.trim()) { await store.save({ ...thread, title: title.trim(), updatedAt: now() }); refresh(); } setEditing(null); }; const remove = async (topic: ThreadSummary) => { if (window.confirm(`Delete “${topic.title}”? This cannot be undone.`)) { await store.remove(topic.id); refresh(); } }; return <aside className={styles.drawer} aria-label="Topics"><div className={styles.drawerHeader}><h2>Topics <Link className={styles.drawerNew} to="/" onClick={onClose} aria-label="New topic">＋</Link></h2><button onClick={onClose} aria-label="Close topics">×</button></div><Link className={styles.settingsLink} to="/settings" onClick={onClose}>⚙ Settings</Link>{topics.length ? <ul>{topics.map((topic) => <li key={topic.id}>{editing === topic.id ? <form onSubmit={(event) => { event.preventDefault(); void rename(topic); }}><input aria-label={`Rename ${topic.title}`} value={title} onChange={(event) => setTitle(event.target.value)} autoFocus /><button type="submit">Save</button></form> : <><Link to={`/topics/${topic.id}`} onClick={onClose}>{topic.title}</Link><div className={styles.topicActions}><button onClick={() => { setEditing(topic.id); setTitle(topic.title); }}>Rename</button><button onClick={() => void remove(topic)}>Delete</button></div></>}</li>)}</ul> : <p className={styles.muted}>No saved topics yet.</p>}<p className={styles.drawerNote}>Saved topics and sources stay in this browser.</p><ThemeControl /></aside>; }
+function Drawer({ onClose }: { onClose: () => void }) {
+  const [topics, setTopics] = useState<ThreadSummary[]>([]);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const refresh = () => {
+    void store.list().then(setTopics);
+  };
+  useEffect(refresh, []);
+  const rename = async (topic: ThreadSummary) => {
+    const thread = await store.load(topic.id);
+    if (thread && title.trim()) {
+      await store.save({ ...thread, title: title.trim(), updatedAt: now() });
+      refresh();
+    }
+    setEditing(null);
+  };
+  const remove = async (topic: ThreadSummary) => {
+    if (window.confirm(`Delete “${topic.title}”? This cannot be undone.`)) {
+      await store.remove(topic.id);
+      refresh();
+    }
+  };
+  return (
+    <aside className={styles.drawer} aria-label="Topics">
+      <div className={styles.drawerHeader}>
+        <h2>
+          Topics{" "}
+          <Link
+            className={styles.drawerNew}
+            to="/"
+            onClick={onClose}
+            aria-label="New topic"
+          >
+            ＋
+          </Link>
+        </h2>
+        <button onClick={onClose} aria-label="Close topics">
+          ×
+        </button>
+      </div>
+      <Link className={styles.settingsLink} to="/settings" onClick={onClose}>
+        ⚙ Settings
+      </Link>
+      {topics.length ? (
+        <ul>
+          {topics.map((topic) => (
+            <li key={topic.id}>
+              {editing === topic.id ? (
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void rename(topic);
+                  }}
+                >
+                  <input
+                    aria-label={`Rename ${topic.title}`}
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    autoFocus
+                  />
+                  <button type="submit">Save</button>
+                </form>
+              ) : (
+                <>
+                  <Link to={`/topics/${topic.id}`} onClick={onClose}>
+                    {topic.title}
+                  </Link>
+                  <div className={styles.topicActions}>
+                    <button
+                      onClick={() => {
+                        setEditing(topic.id);
+                        setTitle(topic.title);
+                      }}
+                    >
+                      Rename
+                    </button>
+                    <button onClick={() => void remove(topic)}>Delete</button>
+                  </div>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className={styles.muted}>No saved topics yet.</p>
+      )}
+      <p className={styles.drawerNote}>
+        Saved topics and sources stay in this browser.
+      </p>
+      <ThemeControl />
+    </aside>
+  );
+}
 
-function Unlock() { const [passphrase, setPassphrase] = useState(""); const [message, setMessage] = useState(""); return <main className={styles.center}><section className={styles.card} aria-labelledby="unlock-title"><p className={styles.kicker}>private research desk</p><h1 id="unlock-title">dorothy-ann</h1><p>This research desk is private.</p><form onSubmit={async (event) => { event.preventDefault(); const response = await fetch("/api/auth/passphrase", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ passphrase }) }); setMessage(response.ok ? "Unlocked." : "That passphrase did not work."); }}><label htmlFor="passphrase">Passphrase</label><input id="passphrase" type="password" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} autoComplete="current-password" /><button type="submit">Unlock</button></form>{message && <p role="status">{message}</p>}</section></main>; }
+function Unlock() {
+  const [passphrase, setPassphrase] = useState("");
+  const [message, setMessage] = useState("");
+  return (
+    <main className={styles.center}>
+      <section className={styles.card} aria-labelledby="unlock-title">
+        <p className={styles.kicker}>private research desk</p>
+        <h1 id="unlock-title">dorothy-ann</h1>
+        <p>This research desk is private.</p>
+        <form
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const response = await fetch("/api/auth/passphrase", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ passphrase }),
+            });
+            setMessage(
+              response.ok ? "Unlocked." : "That passphrase did not work.",
+            );
+          }}
+        >
+          <label htmlFor="passphrase">Passphrase</label>
+          <input
+            id="passphrase"
+            type="password"
+            value={passphrase}
+            onChange={(event) => setPassphrase(event.target.value)}
+            autoComplete="current-password"
+          />
+          <button type="submit">Unlock</button>
+        </form>
+        {message && <p role="status">{message}</p>}
+      </section>
+    </main>
+  );
+}
 
-function ThemeControl() { const [theme, setTheme] = useState(() => localStorage.getItem("dorothy-ann-theme") ?? "auto"); const change = (value: string) => { setTheme(value); localStorage.setItem("dorothy-ann-theme", value); document.documentElement.dataset.theme = value; }; useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]); return <label className={styles.themeControl}>Appearance<select aria-label="Appearance" value={theme} onChange={(event) => change(event.target.value)}><option value="auto">auto</option><option value="light">light</option><option value="dark">dark</option></select></label>; }
+function ThemeControl() {
+  const [theme, setTheme] = useState(
+    () => localStorage.getItem("dorothy-ann-theme") ?? "auto",
+  );
+  const change = (value: string) => {
+    setTheme(value);
+    localStorage.setItem("dorothy-ann-theme", value);
+    document.documentElement.dataset.theme = value;
+  };
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+  return (
+    <label className={styles.themeControl}>
+      Appearance
+      <select
+        aria-label="Appearance"
+        value={theme}
+        onChange={(event) => change(event.target.value)}
+      >
+        <option value="auto">auto</option>
+        <option value="light">light</option>
+        <option value="dark">dark</option>
+      </select>
+    </label>
+  );
+}
 
-function Settings() { return <main className={styles.shell}><header className={styles.header}><Link to="/" className={styles.brand}>← dorothy-ann</Link><span className={styles.kicker}>settings</span></header><section className={styles.settings}><h1>Settings</h1><section className={styles.settingsSection}><h2>Appearance</h2><p>Choose how dorothy-ann looks on this device.</p><ThemeControl /></section></section></main>; }
+function Settings() {
+  return (
+    <main className={styles.shell}>
+      <header className={styles.header}>
+        <Link to="/" className={styles.brand}>
+          ← dorothy-ann
+        </Link>
+        <span className={styles.kicker}>settings</span>
+      </header>
+      <section className={styles.settings}>
+        <h1>Settings</h1>
+        <section className={styles.settingsSection}>
+          <h2>Appearance</h2>
+          <p>Choose how dorothy-ann looks on this device.</p>
+          <ThemeControl />
+        </section>
+      </section>
+    </main>
+  );
+}
 
-function Home() { const [query, setQuery] = useState(""); const [tagline, setTagline] = useState("make mistakes"); useEffect(() => { const lines = ["take chances", "make mistakes", "get messy"]; let index = 0; const timer = window.setInterval(() => { index = (index + 1) % lines.length; setTagline(lines[index]); }, 2400); return () => window.clearInterval(timer); }, []); const [mode, setMode] = useState<"lookup" | "research">("lookup"); const [drawer, setDrawer] = useState(false); const navigate = useNavigate(); const inferred = query.trimEnd().endsWith("?"); const activeMode = mode === "lookup" && inferred ? "research" : mode; const submit = (event: FormEvent) => { event.preventDefault(); if (query.trim()) navigate(`/topics/new?mode=${activeMode}&q=${encodeURIComponent(query.trim())}`); }; return <main className={styles.shell}><header className={styles.header}><button className={styles.iconButton} onClick={() => setDrawer(true)} aria-label="Open topics">☰</button><Link to="/" className={styles.brand}>dorothy-ann</Link><Link className={styles.iconButton} to="/settings" aria-label="Open settings">⚙</Link></header>{drawer && <Drawer onClose={() => setDrawer(false)} />}<section className={styles.hero}><p className={styles.kicker}>{tagline}</p><h1>What should we look up?</h1><form onSubmit={submit} className={styles.queryForm}><div className={styles.queryRow}><input aria-label="Search query" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ask a question or search for something" autoFocus /></div><div className={styles.submitGroup}><select aria-label="Query mode" value={activeMode} onChange={(event) => setMode(event.target.value as "lookup" | "research")}><option value="lookup">lookup</option><option value="research">research</option></select><button type="submit">Go</button></div></form><p className={styles.hint}>Add ? to ask Dorothy Ann to research.</p></section></main>; }
+function Home() {
+  const [query, setQuery] = useState("");
+  const [tagline, setTagline] = useState("make mistakes");
+  useEffect(() => {
+    const lines = ["take chances", "make mistakes", "get messy"];
+    let index = 0;
+    const timer = window.setInterval(() => {
+      index = (index + 1) % lines.length;
+      setTagline(lines[index]);
+    }, 2400);
+    return () => window.clearInterval(timer);
+  }, []);
+  const [mode, setMode] = useState<"lookup" | "research">("lookup");
+  const [drawer, setDrawer] = useState(false);
+  const navigate = useNavigate();
+  const inferred = query.trimEnd().endsWith("?");
+  const activeMode = mode === "lookup" && inferred ? "research" : mode;
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (query.trim())
+      navigate(
+        `/topics/new?mode=${activeMode}&q=${encodeURIComponent(query.trim())}`,
+      );
+  };
+  return (
+    <main className={styles.shell}>
+      <header className={styles.header}>
+        <button
+          className={styles.iconButton}
+          onClick={() => setDrawer(true)}
+          aria-label="Open topics"
+        >
+          ☰
+        </button>
+        <Link to="/" className={styles.brand}>
+          dorothy-ann
+        </Link>
+        <Link
+          className={styles.iconButton}
+          to="/settings"
+          aria-label="Open settings"
+        >
+          ⚙
+        </Link>
+      </header>
+      {drawer && <Drawer onClose={() => setDrawer(false)} />}
+      <section className={styles.hero}>
+        <p className={styles.kicker}>{tagline}</p>
+        <h1>What should we look up?</h1>
+        <form onSubmit={submit} className={styles.queryForm}>
+          <div className={styles.queryRow}>
+            <input
+              aria-label="Search query"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Ask a question or search for something"
+              autoFocus
+            />
+          </div>
+          <div className={styles.submitGroup}>
+            <select
+              aria-label="Query mode"
+              value={activeMode}
+              onChange={(event) =>
+                setMode(event.target.value as "lookup" | "research")
+              }
+            >
+              <option value="lookup">lookup</option>
+              <option value="research">research</option>
+            </select>
+            <button type="submit">Go</button>
+          </div>
+        </form>
+        <p className={styles.hint}>Add ? to ask Dorothy Ann to research.</p>
+      </section>
+    </main>
+  );
+}
 
-async function readResearchStream(response: Response, update: (state: StreamState) => void) { const text = await response.text(); const blocks = text.split("\n\n").filter(Boolean); let state: StreamState = { stage: "starting", answer: "", sources: [] }; for (const block of blocks) { const event = block.match(/^event: (.+)$/m)?.[1]; const data = block.match(/^data: (.+)$/m)?.[1]; if (!event || !data) continue; const payload = JSON.parse(data) as Record<string, unknown>; if (event === "research.sources") state = { ...state, stage: "sources found", sources: (payload.sources as Result[]) ?? [] }; else if (event === "research.extraction") state = { ...state, stage: "extracting evidence" }; else if (event === "answer.delta") state = { ...state, stage: "complete", answer: state.answer + String(payload.markdown ?? "") }; else if (event === "turn.failed") state = { ...state, stage: "failed", error: String(payload.code ?? "research failed") }; update(state); } }
+async function readResearchStream(
+  response: Response,
+  update: (state: StreamState) => void,
+) {
+  const text = await response.text();
+  const blocks = text.split("\n\n").filter(Boolean);
+  let state: StreamState = { stage: "starting", answer: "", sources: [] };
+  for (const block of blocks) {
+    const event = block.match(/^event: (.+)$/m)?.[1];
+    const data = block.match(/^data: (.+)$/m)?.[1];
+    if (!event || !data) continue;
+    const payload = JSON.parse(data) as Record<string, unknown>;
+    if (event === "research.sources")
+      state = {
+        ...state,
+        stage: "sources found",
+        sources: (payload.sources as Result[]) ?? [],
+      };
+    else if (event === "research.extraction")
+      state = { ...state, stage: "extracting evidence" };
+    else if (event === "answer.delta")
+      state = {
+        ...state,
+        stage: "complete",
+        answer: state.answer + String(payload.markdown ?? ""),
+      };
+    else if (event === "turn.failed")
+      state = {
+        ...state,
+        stage: "failed",
+        error: String(payload.code ?? "research failed"),
+      };
+    update(state);
+  }
+}
 
-function renderCitations(answer: string, sources: Result[]) { return answer.split(/(\[\[cite:[^\]]+\]\])/g).map((part, index) => { const match = /^\[\[cite:(.+)\]\]$/.exec(part); if (!match) return <span key={index}>{part}</span>; const sourceIndex = sources.findIndex((source) => source.sourceId === match[1]); return sourceIndex >= 0 ? <a className={styles.citation} key={index} href={`#source-${match[1]}`} title={sources[sourceIndex].title}>[{sourceIndex + 1}]</a> : <span key={index}>{part}</span>; }); }
+function renderCitations(answer: string, sources: Result[]) {
+  return answer.split(/(\[\[cite:[^\]]+\]\])/g).map((part, index) => {
+    const match = /^\[\[cite:(.+)\]\]$/.exec(part);
+    if (!match) return <span key={index}>{part}</span>;
+    const sourceIndex = sources.findIndex(
+      (source) => source.sourceId === match[1],
+    );
+    return sourceIndex >= 0 ? (
+      <a
+        className={styles.citation}
+        key={index}
+        href={`#source-${match[1]}`}
+        title={sources[sourceIndex].title}
+      >
+        [{sourceIndex + 1}]
+      </a>
+    ) : (
+      <span key={index}>{part}</span>
+    );
+  });
+}
 
-async function saveTopic(threadId: string, query: string, mode: string, state: StreamState) { const timestamp = now(); const sources = state.sources.map((source, index) => ({ ...source, rank: source.rank || index + 1, canonicalUrl: source.canonicalUrl || source.url })); const thread: Thread = { schemaVersion: 1, id: threadId as Thread["id"], title: query.slice(0, 60), createdAt: timestamp, updatedAt: timestamp, modelRef: "configured", searchRef: "brave", turns: [{ id: id() as Thread["turns"][number]["id"], mode: mode === "research" ? "research" : "chat", status: state.error ? "failed" : "completed", createdAt: timestamp, updatedAt: timestamp, userMessage: { id: id() as never, role: "user", content: query, createdAt: timestamp }, assistantMessage: state.answer ? { id: id() as never, role: "assistant", content: { parts: [{ type: "text", markdown: state.answer }] }, createdAt: timestamp } : undefined, researchRun: mode === "research" ? { id: id() as never, origin: "search", status: state.error ? "failed" : "completed", queries: [query], targetViablePages: 3, sources, extractions: [], evidenceSourceIds: sources.map((source) => source.sourceId), startedAt: timestamp, updatedAt: timestamp } : undefined }] }; await store.save(thread); }
+async function saveTopic(
+  threadId: string,
+  query: string,
+  mode: string,
+  state: StreamState,
+) {
+  const timestamp = now();
+  const sources = state.sources.map((source, index) => ({
+    ...source,
+    rank: source.rank || index + 1,
+    canonicalUrl: source.canonicalUrl || source.url,
+  }));
+  const thread: Thread = {
+    schemaVersion: 1,
+    id: threadId as Thread["id"],
+    title: query.slice(0, 60),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    modelRef: "configured",
+    searchRef: "brave",
+    turns: [
+      {
+        id: id() as Thread["turns"][number]["id"],
+        mode: mode === "research" ? "research" : "chat",
+        status: state.error ? "failed" : "completed",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        userMessage: {
+          id: id() as never,
+          role: "user",
+          content: query,
+          createdAt: timestamp,
+        },
+        assistantMessage: state.answer
+          ? {
+              id: id() as never,
+              role: "assistant",
+              content: { parts: [{ type: "text", markdown: state.answer }] },
+              createdAt: timestamp,
+            }
+          : undefined,
+        researchRun:
+          mode === "research"
+            ? {
+                id: id() as never,
+                origin: "search",
+                status: state.error ? "failed" : "completed",
+                queries: [query],
+                targetViablePages: 3,
+                sources,
+                extractions: [],
+                evidenceSourceIds: sources.map((source) => source.sourceId),
+                startedAt: timestamp,
+                updatedAt: timestamp,
+              }
+            : undefined,
+      },
+    ],
+  };
+  await store.save(thread);
+}
 
-function ExportWorkbench() { const [params] = useSearchParams(); const [markdown, setMarkdown] = useState(`# Dorothy Ann report: ${params.get("title") ?? "Untitled topic"}\n\n## Conclusion\n\n${params.get("answer") ?? ""}\n\n> This is research context, not executed or independently verified work.\n`); const [preview, setPreview] = useState(false); const copy = async () => { await navigator.clipboard?.writeText(markdown); }; const download = () => { const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown" })); const anchor = document.createElement("a"); anchor.href = url; anchor.download = "dorothy-ann-report.md"; anchor.click(); URL.revokeObjectURL(url); }; return <main className={styles.shell}><header className={styles.header}><Link to="/" className={styles.brand}>← dorothy-ann</Link><span className={styles.kicker}>report workbench</span></header><section className={styles.workbench}><div className={styles.workbenchActions}><button onClick={() => setPreview(false)} aria-pressed={!preview}>Edit</button><button onClick={() => setPreview(true)} aria-pressed={preview}>Preview</button><button onClick={() => void copy()}>Copy Markdown</button><button onClick={download}>Download .md</button></div>{preview ? <article className={styles.preview}><pre>{markdown}</pre></article> : <textarea aria-label="Report Markdown" value={markdown} onChange={(event) => setMarkdown(event.target.value)} />}</section></main>; }
-function Topic() { const [params] = useSearchParams(); const route = useParams(); const query = params.get("q") ?? ""; const mode = params.get("mode") ?? "lookup"; const [drawer, setDrawer] = useState(false); const [state, setState] = useState<StreamState>({ stage: "loading", answer: "", sources: [] }); const [chatInput, setChatInput] = useState(""); const [chatAnswer, setChatAnswer] = useState(""); const [chatStage, setChatStage] = useState(""); useEffect(() => { let cancelled = false; const run = async () => { try { if (!query) { const saved = route.threadId && route.threadId !== "new" ? await store.load(route.threadId) : null; const turn = saved?.turns.at(-1); if (turn && !cancelled) setState({ stage: "saved", answer: turn.assistantMessage?.content.parts.map((part) => part.type === "text" ? part.markdown : "").join("") ?? "", sources: turn.researchRun?.sources ?? [] }); return; } if (mode === "lookup") { const response = await fetch("/api/lookup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query }) }); if (!response.ok) throw new Error("lookup failed"); const data = await response.json() as { results: Result[] }; if (!cancelled) { const next = { stage: data.results.length ? "results found" : "no results", answer: "", sources: data.results }; setState(next); await saveTopic(route.threadId === "new" ? id() : route.threadId!, query, mode, next); } } else { const response = await fetch("/api/research", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query }) }); if (!response.ok) throw new Error("research failed"); await readResearchStream(response, (next) => { if (!cancelled) setState(next); }); } } catch (error) { if (!cancelled) setState((current) => ({ ...current, stage: "failed", error: error instanceof Error ? error.message : "request failed" })); } }; void run(); return () => { cancelled = true; }; }, [mode, query, route.threadId]); useEffect(() => { if (query && mode === "research" && state.stage === "complete") void saveTopic(route.threadId === "new" ? id() : route.threadId!, query, mode, state); }, [mode, query, route.threadId, state]); return <main className={styles.shell}><header className={styles.header}><button className={styles.iconButton} onClick={() => setDrawer(true)} aria-label="Open topics">☰</button><Link to="/" className={styles.brand}>dorothy-ann</Link><span className={styles.kicker}>{mode}</span></header>{drawer && <Drawer onClose={() => setDrawer(false)} />}<div className={styles.topicLayout}><section className={styles.topic}><p className={styles.kicker} aria-live="polite">{state.stage}</p><h1>{query || "Saved topic"}</h1>{state.answer && <Link className={styles.textLink} to={`/topics/${route.threadId}/export/report?title=${encodeURIComponent(query)}&answer=${encodeURIComponent(state.answer)}`}>Export report →</Link>}{state.error && <><p role="alert">{state.error}</p><button onClick={() => window.location.reload()}>Retry</button></>}{state.answer && <article className={styles.answer}><p>{renderCitations(state.answer, state.sources)}</p></article>}{state.answer && <form className={styles.chatForm} onSubmit={async (event) => { event.preventDefault(); if (!chatInput.trim()) return; const prompt = chatInput.trim(); setChatInput(""); setChatAnswer(""); setChatStage("thinking"); const response = await fetch("/api/turn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: prompt, mode: "chat", context: `${state.answer}\n\nSources:\n${state.sources.map((source) => `${source.title}: ${source.snippet ?? source.url}`).join("\n")}` }) }); if (!response.ok) { setChatStage("chat unavailable"); return; } await readResearchStream(response, (next) => { setChatAnswer(next.answer); setChatStage(next.stage); }); }}><label htmlFor="follow-up">Ask a follow-up</label><div className={styles.chatRow}><input id="follow-up" value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder="Ask about this research" /><button type="submit">Go</button></div>{chatStage && <p className={styles.muted} aria-live="polite">{chatStage}</p>}{chatAnswer && <p className={styles.chatAnswer}>{renderCitations(chatAnswer, state.sources)}</p>}</form>}{mode === "lookup" && canPromoteToResearch(query) && <Link className={styles.promotion} to={`/topics/new?mode=research&q=${encodeURIComponent(query)}`}>Research this with Dorothy Ann →</Link>}{state.sources.length > 0 && <section className={styles.resultsSection} aria-labelledby="sources-title"><h2 id="sources-title">{mode === "research" ? "What I found" : "Results"}<span className={styles.sourceCount}> {state.sources.length}</span></h2><ul className={styles.resultList}>{state.sources.map((source) => <li key={source.sourceId}><a href={source.url} target="_blank" rel="noreferrer">{source.title}</a><small>{source.displayUrl}</small>{source.snippet && <p>{source.snippet}</p>}</li>)}</ul></section>}</section>{state.sources.length > 0 && <aside className={styles.evidence} aria-label="Evidence"><h2>Evidence</h2><p>{state.sources.length} source{state.sources.length === 1 ? "" : "s"} attached to this turn.</p>{state.sources.map((source) => <article id={`source-${source.sourceId}`} className={styles.evidenceItem} key={source.sourceId}><a href={source.url} target="_blank" rel="noreferrer">{source.title}</a><small>{source.displayUrl}</small>{source.snippet && <p>{source.snippet.replace(/<[^>]+>/g, "")}</p>}</article>)}</aside>}</div></main>; }
+function ExportWorkbench() {
+  const [params] = useSearchParams();
+  const [markdown, setMarkdown] = useState(
+    `# Dorothy Ann report: ${params.get("title") ?? "Untitled topic"}\n\n## Conclusion\n\n${params.get("answer") ?? ""}\n\n> This is research context, not executed or independently verified work.\n`,
+  );
+  const [preview, setPreview] = useState(false);
+  const copy = async () => {
+    await navigator.clipboard?.writeText(markdown);
+  };
+  const download = () => {
+    const url = URL.createObjectURL(
+      new Blob([markdown], { type: "text/markdown" }),
+    );
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "dorothy-ann-report.md";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+  return (
+    <main className={styles.shell}>
+      <header className={styles.header}>
+        <Link to="/" className={styles.brand}>
+          ← dorothy-ann
+        </Link>
+        <span className={styles.kicker}>report workbench</span>
+      </header>
+      <section className={styles.workbench}>
+        <div className={styles.workbenchActions}>
+          <button onClick={() => setPreview(false)} aria-pressed={!preview}>
+            Edit
+          </button>
+          <button onClick={() => setPreview(true)} aria-pressed={preview}>
+            Preview
+          </button>
+          <button onClick={() => void copy()}>Copy Markdown</button>
+          <button onClick={download}>Download .md</button>
+        </div>
+        {preview ? (
+          <article className={styles.preview}>
+            <pre>{markdown}</pre>
+          </article>
+        ) : (
+          <textarea
+            aria-label="Report Markdown"
+            value={markdown}
+            onChange={(event) => setMarkdown(event.target.value)}
+          />
+        )}
+      </section>
+    </main>
+  );
+}
+function Topic() {
+  const [params] = useSearchParams();
+  const route = useParams();
+  const query = params.get("q") ?? "";
+  const mode = params.get("mode") ?? "lookup";
+  const [drawer, setDrawer] = useState(false);
+  const [state, setState] = useState<StreamState>({
+    stage: "loading",
+    answer: "",
+    sources: [],
+  });
+  const [chatInput, setChatInput] = useState("");
+  const [chatAnswer, setChatAnswer] = useState("");
+  const [chatStage, setChatStage] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      try {
+        if (!query) {
+          const saved =
+            route.threadId && route.threadId !== "new"
+              ? await store.load(route.threadId)
+              : null;
+          const turn = saved?.turns.at(-1);
+          if (turn && !cancelled)
+            setState({
+              stage: "saved",
+              answer:
+                turn.assistantMessage?.content.parts
+                  .map((part) => (part.type === "text" ? part.markdown : ""))
+                  .join("") ?? "",
+              sources: turn.researchRun?.sources ?? [],
+            });
+          return;
+        }
+        if (mode === "lookup") {
+          const response = await fetch("/api/lookup", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ query }),
+          });
+          if (!response.ok) throw new Error("lookup failed");
+          const data = (await response.json()) as { results: Result[] };
+          if (!cancelled) {
+            const next = {
+              stage: data.results.length ? "results found" : "no results",
+              answer: "",
+              sources: data.results,
+            };
+            setState(next);
+            await saveTopic(
+              route.threadId === "new" ? id() : route.threadId!,
+              query,
+              mode,
+              next,
+            );
+          }
+        } else {
+          const response = await fetch("/api/research", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ query }),
+          });
+          if (!response.ok) throw new Error("research failed");
+          await readResearchStream(response, (next) => {
+            if (!cancelled) setState(next);
+          });
+        }
+      } catch (error) {
+        if (!cancelled)
+          setState((current) => ({
+            ...current,
+            stage: "failed",
+            error: error instanceof Error ? error.message : "request failed",
+          }));
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, query, route.threadId]);
+  useEffect(() => {
+    if (query && mode === "research" && state.stage === "complete")
+      void saveTopic(
+        route.threadId === "new" ? id() : route.threadId!,
+        query,
+        mode,
+        state,
+      );
+  }, [mode, query, route.threadId, state]);
+  return (
+    <main className={styles.shell}>
+      <header className={styles.header}>
+        <button
+          className={styles.iconButton}
+          onClick={() => setDrawer(true)}
+          aria-label="Open topics"
+        >
+          ☰
+        </button>
+        <Link to="/" className={styles.brand}>
+          dorothy-ann
+        </Link>
+        <span className={styles.kicker}>{mode}</span>
+      </header>
+      {drawer && <Drawer onClose={() => setDrawer(false)} />}
+      <div className={styles.topicLayout}>
+        <section className={styles.topic}>
+          <p className={styles.kicker} aria-live="polite">
+            {state.stage}
+          </p>
+          <h1>{query || "Saved topic"}</h1>
+          {state.answer && (
+            <Link
+              className={styles.textLink}
+              to={`/topics/${route.threadId}/export/report?title=${encodeURIComponent(query)}&answer=${encodeURIComponent(state.answer)}`}
+            >
+              Export report →
+            </Link>
+          )}
+          {state.error && (
+            <>
+              <p role="alert">{state.error}</p>
+              <button onClick={() => window.location.reload()}>Retry</button>
+            </>
+          )}
+          {state.answer && (
+            <article className={styles.answer}>
+              <p>{renderCitations(state.answer, state.sources)}</p>
+            </article>
+          )}
+          {state.answer && (
+            <form
+              className={styles.chatForm}
+              onSubmit={async (event) => {
+                event.preventDefault();
+                if (!chatInput.trim()) return;
+                const prompt = chatInput.trim();
+                setChatInput("");
+                setChatAnswer("");
+                setChatStage("thinking");
+                const response = await fetch("/api/turn", {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({
+                    query: prompt,
+                    mode: "chat",
+                    context: `${state.answer}\n\nSources:\n${state.sources.map((source) => `${source.title}: ${source.snippet ?? source.url}`).join("\n")}`,
+                  }),
+                });
+                if (!response.ok) {
+                  setChatStage("chat unavailable");
+                  return;
+                }
+                await readResearchStream(response, (next) => {
+                  setChatAnswer(next.answer);
+                  setChatStage(next.stage);
+                });
+              }}
+            >
+              <label htmlFor="follow-up">Ask a follow-up</label>
+              <div className={styles.chatRow}>
+                <input
+                  id="follow-up"
+                  value={chatInput}
+                  onChange={(event) => setChatInput(event.target.value)}
+                  placeholder="Ask about this research"
+                />
+                <button type="submit">Go</button>
+              </div>
+              {chatStage && (
+                <p className={styles.muted} aria-live="polite">
+                  {chatStage}
+                </p>
+              )}
+              {chatAnswer && (
+                <p className={styles.chatAnswer}>
+                  {renderCitations(chatAnswer, state.sources)}
+                </p>
+              )}
+            </form>
+          )}
+          {mode === "lookup" && canPromoteToResearch(query) && (
+            <Link
+              className={styles.promotion}
+              to={`/topics/new?mode=research&q=${encodeURIComponent(query)}`}
+            >
+              Research this with Dorothy Ann →
+            </Link>
+          )}
+          {state.sources.length > 0 && (
+            <section
+              className={styles.resultsSection}
+              aria-labelledby="sources-title"
+            >
+              <h2 id="sources-title">
+                {mode === "research" ? "What I found" : "Results"}
+                <span className={styles.sourceCount}>
+                  {" "}
+                  {state.sources.length}
+                </span>
+              </h2>
+              <ul className={styles.resultList}>
+                {state.sources.map((source) => (
+                  <li key={source.sourceId}>
+                    <a href={source.url} target="_blank" rel="noreferrer">
+                      {source.title}
+                    </a>
+                    <small>{source.displayUrl}</small>
+                    {source.snippet && <p>{source.snippet}</p>}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </section>
+        {state.sources.length > 0 && (
+          <aside className={styles.evidence} aria-label="Evidence">
+            <h2>Evidence</h2>
+            <p>
+              {state.sources.length} source
+              {state.sources.length === 1 ? "" : "s"} attached to this turn.
+            </p>
+            {state.sources.map((source) => (
+              <article
+                id={`source-${source.sourceId}`}
+                className={styles.evidenceItem}
+                key={source.sourceId}
+              >
+                <a href={source.url} target="_blank" rel="noreferrer">
+                  {source.title}
+                </a>
+                <small>{source.displayUrl}</small>
+                {source.snippet && (
+                  <p>{source.snippet.replace(/<[^>]+>/g, "")}</p>
+                )}
+              </article>
+            ))}
+          </aside>
+        )}
+      </div>
+    </main>
+  );
+}
 
-export function App() { return <Routes><Route path="/unlock" element={<Unlock />} /><Route path="/settings" element={<Settings />} /><Route path="/topics/:threadId/export/:draftId" element={<ExportWorkbench />} /><Route path="/topics/:threadId" element={<Topic />} /><Route path="*" element={<Home />} /></Routes>; }
+export function App() {
+  return (
+    <Routes>
+      <Route path="/unlock" element={<Unlock />} />
+      <Route path="/settings" element={<Settings />} />
+      <Route
+        path="/topics/:threadId/export/:draftId"
+        element={<ExportWorkbench />}
+      />
+      <Route path="/topics/:threadId" element={<Topic />} />
+      <Route path="*" element={<Home />} />
+    </Routes>
+  );
+}
