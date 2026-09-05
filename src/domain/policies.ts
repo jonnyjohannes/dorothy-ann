@@ -1,4 +1,4 @@
-import type { EvidencePack, ExtractedPage, SearchResult, SourceId } from "./types";
+import type { EvidencePack, ExtractedPage, SearchResult, SourceId } from "./types.js";
 
 export type QueryMode = "lookup" | "research";
 export function inferQueryMode(query: string): QueryMode { return query.trimEnd().endsWith("?") ? "research" : "lookup"; }

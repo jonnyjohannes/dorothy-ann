@@ -5,7 +5,7 @@
 - Status: in progress
 - Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha.md`
 - Last updated: 2026-09-05
-- Current focus: portable owner authentication verified; beginning Brave lookup normalization and `/api/lookup` contract
+- Current focus: Brave lookup normalization and `/api/lookup` verified; beginning the bounded SSRF-safe Node extractor
 - Handoff lives in: [`## Handoff`](#handoff)
 - Next action: approve implementation via `feature-builder`, beginning with Plan Ledger step 1
 
@@ -13,7 +13,7 @@
 
 Read `Current State`, `Concrete Application Stack`, `Browser Interaction Design`, `Application HTTP and Streaming Contract`, `Explicit Non-Goals`, `Implementation Plan`, and `Operator Setup and Secret Handoff` first. Product, interfaces, browser states, transport contracts, dependencies, implementation steps, and verification are settled. The alpha is a Vercel-hosted React/Vite SPA with a portable Hono backend, browser-only IndexedDB threads, Brave search, application-owned extraction, Anthropic synthesis, passphrase auth, and Markdown reports.
 
-Ledger steps 1–4 are complete and verified. Authentication now has scrypt hash verification, signed expiring cookies with previous-key verification, fixture-safe auth routes, cookie logout, in-memory rate limiting, and an Upstash limiter adapter seam. Next, implement Brave lookup normalization and its contract boundary. Fixture mode allows implementation through step 11 without live credentials; step 12 needs the deployment inputs. Do not add remote thread storage, sync, autonomous research, context compaction, topic archiving, edit-history branching, rich editors, or second-provider work to the alpha.
+Ledger steps 1–5 are complete and verified. Authentication now has scrypt hash verification, signed expiring cookies with previous-key verification, fixture-safe auth routes, cookie logout, in-memory rate limiting, and an Upstash limiter seam. Brave lookup now normalizes bounded ranked results, deduplicates canonical URLs, handles provider failures, and serves fixture/live provider paths without involving model or extraction code. Next, implement the safe extractor. Fixture mode allows implementation through step 11 without live credentials; step 12 needs the deployment inputs. Do not add remote thread storage, sync, autonomous research, context compaction, topic archiving, edit-history branching, rich editors, or second-provider work to the alpha.
 
 ## Summary
 
@@ -2093,8 +2093,8 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [x] 2. Domain and policies — deliverable: normalized schemas, routing, evidence, citations, context, deterministic exports; verify: table/replay tests, citation chunk-boundary tests, source dedupe tests, and lint/typecheck/build passed.
 - [x] 3. IndexedDB storage — deliverable: thread/summary/draft stores, migrations, backup import/export; verify: `fake-indexeddb` transaction, conflict, draft resume, deletion cleanup, and round-trip tests passed.
 - [x] 4. Owner auth — deliverable: scrypt passphrase, signed sessions, auth routes, in-memory/Upstash limiters; verify: scrypt/session/expiry/rotation/cookie/limiter tests and full typecheck/lint/build passed.
-- [~] 5. Brave lookup — deliverable: normalized `SearchProvider` and `/api/lookup`; verify: fixture/error/bounds tests and zero Anthropic/extraction calls.
-- [ ] 6. Safe extraction — deliverable: SSRF-safe bounded Node extractor with Readability; verify: content, redirect, IP, rebinding, timeout, oversized, and unsupported-type tests.
+- [x] 5. Brave lookup — deliverable: normalized `SearchProvider` and `/api/lookup`; verify: normalization, malformed payload, dedupe, API-boundary, provider-error tests plus full lint/typecheck/build passed.
+- [~] 6. Safe extraction — deliverable: SSRF-safe bounded Node extractor with Readability; verify: content, redirect, IP, rebinding, timeout, oversized, and unsupported-type tests.
 - [ ] 7. Anthropic adapter — deliverable: chat/research/report streaming with validated citation sentinels; verify: replay, injection, chunk boundary, unknown citation, interruption, and persistence-boundary tests.
 - [ ] 8. Orchestration/SSE — deliverable: turn/report streams, bounded extraction, stage-aware retry; verify: Hono end-to-end contract matrix and terminal-event assertions.
 - [ ] 9. Shell and lookup UI — deliverable: auth shell, drawer, mode routing, lookup/promotion states; verify: RTL/MSW plus desktop/mobile Playwright paths.
