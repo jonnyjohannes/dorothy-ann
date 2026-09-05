@@ -4,13 +4,13 @@
 
 - Status: planning
 - Last updated: 2026-09-05
-- Current focus: completing and agreeing on desktop/mobile layouts for every product-significant browser state
+- Current focus: reviewing the draft happy-path desktop/mobile shell before multiplying it into exhaustive variants and errors
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: draft the browser state matrix and paired desktop/mobile ASCII wireframes, then return to HTTP/SSE contracts
+- Next action: agree on the sidebar/evidence/export layout, then expand the transition matrix and wireframes to every listed state
 
 ## Handoff
 
-The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. The MVP adds no slash commands or bang aliases. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB through the small `idb` promise/schema wrapper from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. `idb` remains private to the infrastructure adapter. The hosted app is personal/single-owner and uses a portable passphrase auth adapter: a dedicated `/unlock` screen exchanges the entered passphrase for a signed secure session cookie with a seven-day idle and 30-day absolute expiry, while protected application routes depend only on normalized `AuthContext`. MVP export scope is also settled: export one researched answer or a whole topic as an editable **Dorothy Ann report**, and export a whole topic as a deterministic transcript; arbitrary message/source selection and direct pi integration are deferred. Before transport work continues, complete and agree on the browser state matrix and paired desktop/mobile layouts described in `Browser Interaction Design`. Then finish lookup, research, retry, and SSE contracts and align normalized domain types and the Plan Ledger.
+The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. The MVP adds no slash commands or bang aliases. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB through the small `idb` promise/schema wrapper from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. `idb` remains private to the infrastructure adapter. The hosted app is personal/single-owner and uses a portable passphrase auth adapter: a dedicated `/unlock` screen exchanges the entered passphrase for a signed secure session cookie with a seven-day idle and 30-day absolute expiry, while protected application routes depend only on normalized `AuthContext`. MVP export scope is also settled: export one researched answer or a whole topic as an editable **Dorothy Ann report**, and export a whole topic as a deterministic transcript; arbitrary message/source selection and direct pi integration are deferred. Before transport work continues, complete and agree on the browser state matrix and paired desktop/mobile layouts described in `Browser Interaction Design`. A happy-path matrix and wireframe set are now drafted; review the shared shell first, then multiply it into exhaustive loading, empty, partial, error, and recovery variants. After that, finish lookup, research, retry, and SSE contracts and align normalized domain types and the Plan Ledger.
 
 ## Goal
 
@@ -212,7 +212,9 @@ A second provider should be added after the first end-to-end workflow works, pri
 
 ### TODO: Complete the Browser State Layouts
 
-- [ ] Draft and agree on paired desktop and mobile ASCII wireframes for every product-significant state before finalizing transport contracts.
+- [~] Draft and agree on the happy-path state transition matrix and paired desktop/mobile shell.
+- [ ] Expand the matrix into an exhaustive transition table covering every product-significant loading, empty, partial, error, and recovery state.
+- [ ] Draw the corresponding desktop/mobile variants and verify actions, focus, persistence, events, and accessibility before finalizing transport contracts.
 
 The design pass must cover this state matrix:
 
@@ -238,6 +240,238 @@ For each state, the agreed design should make these details explicit:
 - accessible labels and non-color-only status cues.
 
 The wireframes may group states that share a shell, but loading, empty, partial, error, and recovery variants must be shown rather than implied. This TODO is a planning deliverable, not implementation work.
+
+### Draft Happy-Path State Transition Matrix
+
+This first matrix establishes the main route through the product. The exhaustive pass will add every alternate/error transition and stable state listed above.
+
+| ID | State | Entered from / trigger | Primary visible action | Persists on entry | Happy-path exit |
+|---|---|---|---|---|---|
+| A0 | Session check | app/deep-link load | none; branded bounded loading state | no topic read yet | authenticated → requested route; otherwise A1 |
+| A1 | Unlock | unauthenticated A0 | enter passphrase and `Unlock` | only validated local `returnTo` | success → requested route H0/L1/R5 |
+| H0 | Empty home | authenticated root or `New topic` | focus query field | recent topic summaries loaded | typing → H1 |
+| H1 | Lookup-routed query | unpunctuated input | submit lookup; chip permits override | draft may remain in UI only | submit → L0 |
+| H2 | Research-routed query | terminal `?` or chip override | `Ask Dorothy Ann` | draft may remain in UI only | submit → R0 |
+| L0 | Lookup loading | submit H1 | cancel | query only; no topic required yet | response → L1 |
+| L1 | Lookup results | successful L0 | open focused result | query + normalized results may be held for promotion | open link exits browser; promote → R0; edit → H1/H2 |
+| R0 | Research turn created | submit H2 or promote L1 | observe/cancel search | user turn and stable IDs | first progress → R1 |
+| R1 | Searching | R0 | cancel | running turn | sources event → R2 |
+| R2 | Sources available / extracting | R1 | inspect source summary | ranked sources + run state | viable extraction → R3 |
+| R3 | Synthesizing | R2 | inspect evidence or stop | viable bounded excerpts + run state | completion → R4 |
+| R4 | Completed research answer | R3 | read/cite/open source | completed turn, answer, evidence | compose → C0; export → E0 |
+| C0 | Follow-up ready | R4 or completed C1 | submit chat; optionally switch to research | draft UI-only until submit | chat submit → C1; research submit → R0 |
+| C1 | Follow-up streaming | submit C0 | stop | user turn + stable IDs | completion → R4-style completed turn |
+| E0 | Export choice | answer/topic export action | choose report/transcript where applicable | no artifact edits yet | deterministic render or generation → E1 |
+| E1 | Editable preview | E0 | edit, copy, download, or share | artifact draft separate from topic | complete action → prior topic; cancel → prior topic |
+
+### Draft Responsive Shell
+
+Desktop uses a stable three-region shell. The evidence column exists only when a research turn has sources and can be collapsed; lookup uses the freed width. Topic navigation remains available without competing with the main answer.
+
+```text
+DESKTOP — shared shell
+┌──────────────────────┬──────────────────────────────────────┬────────────────────────┐
+│ dorothy-ann      [+] │ topic title                 [export] │ evidence           [×] │
+│                      │                                      │                        │
+│ Recent topics        │ main query / results / conversation  │ source list or focused │
+│ • composition…       │                                      │ source + excerpt       │
+│ • sqlite vs…         │                                      │                        │
+│                      │                                      │                        │
+│ [Archived]           ├──────────────────────────────────────┤                        │
+│ [Settings / Lock]    │ sticky turn composer                 │                        │
+└──────────────────────┴──────────────────────────────────────┴────────────────────────┘
+  fixed/collapsible                fluid                         optional/collapsible
+```
+
+Mobile uses one content column. Topics are a left drawer, evidence is a bottom sheet, and export preview becomes full-screen. Only one overlay is open at a time.
+
+```text
+MOBILE — shared shell
+┌────────────────────────────────┐
+│ [☰] dorothy-ann          [+]   │
+│ topic title              [•••] │
+├────────────────────────────────┤
+│                                │
+│ main query / results /         │
+│ conversation                   │
+│                                │
+│                                │
+├────────────────────────────────┤
+│ [3 sources]                    │ ← opens evidence bottom sheet
+│ [chat ▾] Ask a follow-up… [↑]  │ ← sticky above safe area/keyboard
+└────────────────────────────────┘
+```
+
+### Draft Happy-Path Wireframes
+
+#### Access and Initial Query
+
+```text
+DESKTOP — unlock                         MOBILE — unlock
+┌────────────────────────────────────┐   ┌──────────────────────────┐
+│            dorothy-ann             │   │       dorothy-ann        │
+│                                    │   │                          │
+│   This research desk is private.   │   │ This research desk is   │
+│   Passphrase                       │   │ private.                 │
+│   ┌────────────────────────────┐   │   │                          │
+│   │ ••••••••••••••             │   │   │ Passphrase               │
+│   └────────────────────────────┘   │   │ ┌──────────────────────┐ │
+│                         [Unlock]   │   │ │ •••••••••••           │ │
+└────────────────────────────────────┘   │ └──────────────────────┘ │
+                                         │ [Unlock]                 │
+                                         └──────────────────────────┘
+
+DESKTOP — home                           MOBILE — home
+┌──────────────────────┬────────────────────────────────────────────┐
+│ dorothy-ann      [+] │                                            │
+│ Recent topics        │         What should we look up?            │
+│ • composition…       │   ┌────────────────────────────────────┐   │
+│ • sqlite vs…         │   │ weather                            │   │
+│                      │   └────────────────────────────────────┘   │
+│ [Archived]           │   [lookup ▾]                       [Go]   │
+│ [Settings / Lock]    │   Add ? to ask Dorothy Ann to research.   │
+└──────────────────────┴────────────────────────────────────────────┘
+                                         ┌──────────────────────────┐
+                                         │ [☰] dorothy-ann    [+]   │
+                                         ├──────────────────────────┤
+                                         │ What should we look up?  │
+                                         │ ┌──────────────────────┐ │
+                                         │ │ weather              │ │
+                                         │ └──────────────────────┘ │
+                                         │ [lookup ▾]        [Go]  │
+                                         │ Add ? for research.     │
+                                         │                          │
+                                         │ Recent                   │
+                                         │ • composition…           │
+                                         └──────────────────────────┘
+```
+
+The home route chip changes label and submit copy together: `lookup / Go` versus `research / Ask Dorothy Ann`. The routing hint is text, not color alone.
+
+#### Lookup Results and Promotion
+
+```text
+DESKTOP — lookup results
+┌──────────────────────┬───────────────────────────────────────────────────────┐
+│ dorothy-ann      [+] │ [life alive                              ] [lookup] [→]│
+│ Recent topics        ├───────────────────────────────────────────────────────┤
+│ • composition…       │ About 10 results                                      │
+│                      │                                                       │
+│                      │ > Life Alive Organic Cafe                             │
+│                      │   lifealive.com                                       │
+│                      │   Organic cafés, menu, locations…                     │
+│                      │                                                       │
+│                      │   Life Alive — Cambridge                              │
+│                      │   maps.example…                                       │
+│                      │                                                       │
+│ [Settings / Lock]    │ [Research this with Dorothy Ann]                     │
+└──────────────────────┴───────────────────────────────────────────────────────┘
+
+MOBILE — lookup results
+┌────────────────────────────────┐
+│ [☰] dorothy-ann          [+]   │
+│ [life alive            ] [→]   │
+│ [lookup ▾]                    │
+├────────────────────────────────┤
+│ > Life Alive Organic Cafe      │
+│   lifealive.com                │
+│   Organic cafés, menu…         │
+│                                │
+│   Life Alive — Cambridge       │
+│   maps.example…                │
+│                                │
+│ [Research this with            │
+│  Dorothy Ann]                  │
+└────────────────────────────────┘
+```
+
+The first result receives initial keyboard focus after results are announced. Enter opens it; focus remains in the result list for arrow-key navigation. Promotion is secondary to opening a result.
+
+#### Research Progress and Completed Answer
+
+```text
+DESKTOP — research in progress
+┌──────────────────────┬──────────────────────────────────────┬────────────────────────┐
+│ dorothy-ann      [+] │ composition over inheritance        │ evidence           [×] │
+│ Recent topics        │                                      │ 1. source title        │
+│ • composition…       │ ✓ searched the web                  │ 2. source title        │
+│                      │ ✓ found 8 sources                    │ 3. source title        │
+│                      │ ◌ reading useful pages (2 of 3)      │                        │
+│                      │                                      │ [open original]        │
+│                      │                                      │                        │
+│ [Settings / Lock]    │                               [Stop] │                        │
+└──────────────────────┴──────────────────────────────────────┴────────────────────────┘
+
+DESKTOP — completed research + follow-up
+┌──────────────────────┬──────────────────────────────────────┬────────────────────────┐
+│ dorothy-ann      [+] │ composition over inheritance [export]│ evidence           [×] │
+│ Recent topics        │                                      │ [1] source title       │
+│ • composition…       │ Dorothy Ann                          │     bounded excerpt…   │
+│                      │ According to my research…            │ [open original]        │
+│                      │                                      │                        │
+│                      │ Composition usually… [1]             │ [2] source title       │
+│                      │                                      │ [3] source title       │
+│                      │ What I found                          │                        │
+│                      │ • … [2]                              │                        │
+│                      │                                      │                        │
+│                      │ [Export report] [Copy]               │                        │
+│                      ├──────────────────────────────────────┤                        │
+│ [Settings / Lock]    │ [chat ▾] Ask a follow-up…       [↑] │                        │
+└──────────────────────┴──────────────────────────────────────┴────────────────────────┘
+
+MOBILE — progress                    MOBILE — completed + evidence sheet
+┌────────────────────────────────┐   ┌────────────────────────────────┐
+│ [☰] dorothy-ann          [+]   │   │ [☰] composition…        [•••] │
+│ composition over…              │   ├────────────────────────────────┤
+├────────────────────────────────┤   │ Dorothy Ann                    │
+│ ✓ searched the web             │   │ According to my research…     │
+│ ✓ found 8 sources              │   │                                │
+│ ◌ reading pages (2 of 3)       │   │ Composition usually… [1]      │
+│                                │   │                                │
+│ Sources  [view 8]              │   │ [Export report] [Copy]        │
+│                                │   ├────────────────────────────────┤
+│                         [Stop] │   │ [3 sources]                    │
+└────────────────────────────────┘   │ [chat ▾] Follow-up…       [↑] │
+                                     ├────────────────────────────────┤
+                                     │ Evidence                 [×]  │ ← bottom sheet
+                                     │ [1] source title              │
+                                     │     bounded excerpt…          │
+                                     │ [Open original]               │
+                                     └────────────────────────────────┘
+```
+
+On mobile, opening evidence preserves scroll position in the answer. Closing the sheet returns focus to the citation that opened it. On desktop, citations focus the persistent evidence column.
+
+#### Export Choice and Editable Preview
+
+```text
+DESKTOP — topic export modal
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Export topic                                                            [×] │
+│ (•) Dorothy Ann report   ( ) Transcript                                     │
+│                                                                              │
+│ Scope: Whole topic                                                           │
+│                                                                              │
+│ [Cancel]                                                   [Create preview]  │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+DESKTOP — editable preview                 MOBILE — full-screen preview
+┌────────────────────────────────────────┐ ┌──────────────────────────────┐
+│ Dorothy Ann report              [×]   │ │ [←] Dorothy Ann report      │
+│ ┌────────────────────────────────────┐ │ ├──────────────────────────────┤
+│ │ # Composition over inheritance    │ │ │ # Composition over…         │
+│ │                                   │ │ │                              │
+│ │ According to my research…         │ │ │ According to my research…   │
+│ │                                   │ │ │                              │
+│ │ ## Sources                        │ │ │ ## Sources                   │
+│ │ 1. …                              │ │ │ 1. …                         │
+│ └────────────────────────────────────┘ │ │                              │
+│ [Copy] [Download .md] [Share]          │ ├──────────────────────────────┤
+└────────────────────────────────────────┘ │ [Copy] [Download] [Share]    │
+                                           └──────────────────────────────┘
+```
+
+Answer-level `Export report` skips format/scope choice and opens its deterministic preview directly. Topic-level export asks for report versus transcript; report generation shows progress in the preview shell before editable Markdown appears.
 
 ### New Query
 
