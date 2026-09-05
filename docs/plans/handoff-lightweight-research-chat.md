@@ -4,13 +4,13 @@
 
 - Status: planning
 - Last updated: 2026-09-05
-- Current focus: selecting the thin IndexedDB access layer and completing exact HTTP/SSE request/response contracts
+- Current focus: completing exact authenticated HTTP/SSE request/response contracts
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: choose native IndexedDB versus a small wrapper, then finish transport contracts
+- Next action: settle the personal-deployment access boundary, then finish transport contracts
 
 ## Handoff
 
-The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. Continue by choosing the thin IndexedDB access layer and completing exact HTTP/SSE contracts.
+The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB through the small `idb` promise/schema wrapper from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. `idb` remains private to the infrastructure adapter. Continue by settling the personal-deployment access boundary and completing exact HTTP/SSE contracts.
 
 ## Goal
 
@@ -550,7 +550,34 @@ Storage requirements:
 - keep archived/deleted semantics explicit rather than relying on UI filtering;
 - avoid assuming all devices share a clock, browser, or storage quota.
 
-`LocalThreadStore` uses IndexedDB from the first proof. Thread summary indexes and full normalized thread records should be stored separately so listing topics does not deserialize extracted page content. Saving a turn and its updated thread summary must occur in one transaction. IndexedDB schema upgrades own persisted-data migration and must preserve exportability if an individual record cannot be migrated. `RemoteThreadStore` can later map the same normalized objects to authenticated API calls and server persistence. The UI should not branch on local versus remote storage; synchronization status, if eventually added, should be an adapter-provided capability/state.
+`LocalThreadStore` uses IndexedDB through `idb` from the first proof. `idb` is an implementation detail of this adapter and must not appear in application-core interfaces. Thread summary indexes and full normalized thread records are stored separately so listing topics does not deserialize extracted page content. Saving a turn and its updated thread summary occurs in one transaction. IndexedDB schema upgrades own persisted-data migration and must preserve exportability if an individual record cannot be migrated.
+
+Initial database shape:
+
+```ts
+interface DorothyAnnDb extends DBSchema {
+  threads: {
+    key: string; // ThreadId
+    value: StoredThreadEnvelope;
+  };
+  threadSummaries: {
+    key: string; // ThreadId
+    value: ThreadSummary;
+    indexes: {
+      "by-updated-at": string; // ISO timestamp
+    };
+  };
+}
+
+interface StoredThreadEnvelope {
+  schemaVersion: number;
+  thread: Thread;
+}
+```
+
+`LocalThreadStore.save` opens a read-write transaction across `threads` and `threadSummaries` and commits both records together. Archive state remains explicit in normalized thread data; deletion removes both full and summary records in one transaction. Database-version upgrades run through `idb`'s `upgrade` callback; domain schema migration remains a separately testable pure function over `StoredThreadEnvelope`.
+
+`RemoteThreadStore` can later map the same normalized objects to authenticated API calls and server persistence. The UI should not branch on local versus remote storage; synchronization status, if eventually added, should be an adapter-provided capability/state.
 
 ## Context Management
 
@@ -741,9 +768,9 @@ The application may later become installable as a PWA, but offline support shoul
 1. **Explicit macro syntax:** is the visible route chip plus terminal `?` sufficient, or should power-user prefixes such as `/research` and `/lookup` also be supported?
 2. **Pi artifact contract:** is downloadable/copyable Markdown sufficient initially, or should the MVP target a specific pi.dev import/paste convention?
 3. **Artifact scope:** after answer-level and whole-topic export, is arbitrary message/source selection necessary for the MVP?
-4. **IndexedDB access:** should `LocalThreadStore` use the native API directly or a small promise/schema wrapper?
-5. **Deployment boundary:** is the initial deployment strictly personal, or should the architecture preserve a future multi-user boundary?
+4. **Deployment boundary:** is the initial deployment strictly personal, or should the domain and authentication model preserve a future multi-user boundary?
+5. **Access mechanism:** what protects the hosted provider proxy without shipping a reusable secret in frontend code?
 
 ## Next
 
-Choose the thin IndexedDB access layer, then define exact HTTP/SSE contracts around the settled lookup, promotion, extraction, and follow-up interactions before selecting concrete providers.
+Settle the personal-deployment access boundary, then define exact HTTP/SSE contracts around the lookup, promotion, extraction, and follow-up interactions before selecting concrete providers.
