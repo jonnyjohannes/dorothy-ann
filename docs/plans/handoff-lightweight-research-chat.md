@@ -10,7 +10,7 @@
 
 ## Handoff
 
-The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB through the small `idb` promise/schema wrapper from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. `idb` remains private to the infrastructure adapter. The hosted app is personal/single-owner and uses a portable passphrase auth adapter: a dedicated `/unlock` screen exchanges the entered passphrase for a signed secure session cookie with a seven-day idle and 30-day absolute expiry, while protected application routes depend only on normalized `AuthContext`. Continue by completing lookup, research, retry, and SSE contracts, then align normalized domain types and the Plan Ledger.
+The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB through the small `idb` promise/schema wrapper from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. `idb` remains private to the infrastructure adapter. The hosted app is personal/single-owner and uses a portable passphrase auth adapter: a dedicated `/unlock` screen exchanges the entered passphrase for a signed secure session cookie with a seven-day idle and 30-day absolute expiry, while protected application routes depend only on normalized `AuthContext`. MVP export scope is also settled: export one researched answer or a whole topic as an editable **Dorothy Ann report**, and export a whole topic as a deterministic transcript; arbitrary message/source selection and direct pi integration are deferred. Continue by completing lookup, research, retry, and SSE contracts, then align normalized domain types and the Plan Ledger.
 
 ## Goal
 
@@ -104,7 +104,7 @@ Required actions:
 
 Folders, tags, embeddings, semantic retrieval, and cross-thread memory are outside the initial scope.
 
-### Artifact Export and Pi.dev Handoff
+### Dorothy Ann Reports, Transcripts, and Pi.dev Handoff
 
 Export is a primary workflow, not a miscellaneous settings action. The user should be able to turn either a whole thread or a selected slice of research into an artifact without cleaning up provider-specific JSON or losing source provenance.
 
@@ -113,13 +113,13 @@ Support:
 - download as `.md`;
 - copy as Markdown;
 - invoke the platform share action where available;
-- export only selected messages, sources, or answer sections;
-- choose a durable transcript or a concise pi.dev handoff;
+- export one researched answer or a whole topic as a Dorothy Ann report;
+- export a whole topic as a durable transcript;
 - preview and edit the artifact before it leaves the application.
 
 The initial pi.dev integration should be file/protocol-level rather than a deep API integration: produce predictable Markdown that can be pasted, downloaded, shared, or placed into the working context of a pi session. Avoid coupling the web app to pi internals until the artifact contract proves useful.
 
-A pi.dev handoff should optimize for actionability rather than transcript completeness. It should preserve:
+A **Dorothy Ann report** is the branded, source-aware artifact intended for sharing or pi.dev handoff. It should optimize for actionability rather than transcript completeness and preserve:
 
 - the user's objective and relevant constraints;
 - conclusions and claims, separated from evidence;
@@ -128,10 +128,12 @@ A pi.dev handoff should optimize for actionability rather than transcript comple
 - concrete next actions or an implementation prompt;
 - an explicit note that the content is research context, not executed or verified work.
 
-Two useful export forms:
+The two MVP export forms are:
 
-1. **Transcript** — complete conversation with sources and metadata.
-2. **Handoff** — concise context, conclusions, decisions, unresolved questions, sources, and suggested next actions.
+1. **Dorothy Ann report** — concise context, conclusions, decisions, unresolved questions, sources, and suggested next actions. An answer-scoped report deterministically renders that researched turn; a topic-scoped report may use one model-assisted condensation pass.
+2. **Transcript** — deterministic complete conversation with sources and metadata, available at whole-topic scope.
+
+Arbitrary message/source selection and a special pi.dev API or import protocol are deferred. The report remains ordinary Markdown that can be copied, downloaded, shared, pasted into pi.dev, or placed in a repository.
 
 Example transcript shape:
 
@@ -270,13 +272,24 @@ Evidence uses one information model across layouts:
 
 Export stays close to the content:
 
-- each researched answer offers `Export this`;
-- the topic header offers `Export topic`;
+- each researched answer offers `Export report`;
+- the topic header offers `Export topic`, then `Dorothy Ann report` or `Transcript`;
 - export opens an editable Markdown preview rather than downloading immediately;
-- formats are `Dorothy Ann handoff` and `Transcript`;
-- completion actions are copy, `.md` download, and native share where available.
+- completion actions are copy, `.md` download, and native share where available;
+- there is no arbitrary message/source selection mode in the MVP.
 
-A lookup-only result does not need a full transcript export. Promoting it to research or selecting `Export links` can create a small deterministic Markdown artifact without invoking a model.
+The export contract is explicit:
+
+```ts
+type ExportRequest =
+  | { format: "dorothy_ann_report"; scope: "answer"; turnId: TurnId }
+  | { format: "dorothy_ann_report"; scope: "topic"; threadId: ThreadId }
+  | { format: "transcript"; scope: "topic"; threadId: ThreadId };
+```
+
+An answer-scoped Dorothy Ann report deterministically renders the question, researched answer, caveats, and message-local numbered sources; it requires no additional model call. A topic-scoped report may use one model call to condense the thread into objective, findings, evidence, decisions, open questions, and next actions. A transcript is always deterministic. Every artifact becomes editable preview state before copy/download/share, and edits affect only that artifact—not the stored topic.
+
+A lookup-only result does not produce a Dorothy Ann report because Dorothy Ann has not researched it. `Export links` may create a small deterministic Markdown link list without invoking a model, or the user may promote the lookup to research first.
 
 ### Required Turn Event Contract
 
@@ -348,7 +361,7 @@ interface ThreadStore {
 }
 
 interface Exporter {
-  export(thread: Thread, format: ExportFormat): Promise<ExportArtifact>;
+  export(request: ExportRequest, thread: Thread): Promise<ExportArtifact>;
 }
 ```
 
@@ -513,14 +526,16 @@ load normalized thread and attached sources
         ↓
 transcript export?
         ├── yes → deterministic Markdown rendering
-        └── no  → model-assisted handoff synthesis
+        └── no  → Dorothy Ann report
+                    ├── answer scope → deterministic rendering
+                    └── topic scope  → one model-assisted condensation
         ↓
 preview artifact
         ↓
 copy / download / share
 ```
 
-Transcript export should not require a model call. Handoff export may use one, but the generated artifact must be editable before leaving the application.
+Transcript and answer-scoped Dorothy Ann report export must not require a model call. Topic-scoped Dorothy Ann report export may use one, but the generated artifact must be editable before leaving the application.
 
 ## Storage Strategy
 
@@ -828,17 +843,16 @@ The application may later become installable as a PWA, but offline support shoul
 ## Proposed Build Sequence
 
 - [ ] **Phase 1 — validate the browser loop:** mobile/desktop query entry, one chat adapter, one search adapter, explicit research, visible result/source evidence, streamed synthesis, and deterministic Markdown export. Target: roughly 1–3 focused implementation days with fixture or proxied providers.
-- [ ] **Phase 1 — validate the pi artifact loop:** selected research → editable handoff preview → copy/download/shareable Markdown with sources, decisions, and next actions. Target: included in the same 1–3 day proof if the artifact format stays narrow.
+- [ ] **Phase 1 — validate the pi artifact loop:** researched answer or whole topic → editable Dorothy Ann report preview → copy/download/shareable Markdown with sources, decisions, and next actions. Target: included in the same 1–3 day proof.
 - [ ] **Phase 2 — add lightweight persistence:** topic list, rename/archive/delete, normalized messages and sources. Target: part of the static proof locally, then moved behind the store boundary.
 - [ ] **Phase 3 — add cross-device continuity:** authenticated server-side `ThreadStore`, server-side provider calls, and synchronized desktop/mobile access so the tool can plausibly become the default search surface across devices. Target: roughly 3–7 additional focused implementation days, or 1–2 weeks total if this is required from the start.
-- [ ] **Improve handoff:** handoff export, context compaction, source selection, and usage visibility.
+- [ ] **Improve reports:** arbitrary source/message selection, context compaction, optional report customization, and usage visibility.
 - [ ] **Test the abstractions:** add a second implementation behind the chat and search boundaries without changing domain storage, artifact format, or UI behavior.
 
 ## Open Questions for the Next Session
 
 1. **Explicit macro syntax:** is the visible route chip plus terminal `?` sufficient, or should power-user prefixes such as `/research` and `/lookup` also be supported?
-2. **Pi artifact contract:** is downloadable/copyable Markdown sufficient initially, or should the MVP target a specific pi.dev import/paste convention?
-3. **Artifact scope:** after answer-level and whole-topic export, is arbitrary message/source selection necessary for the MVP?
+
 ## Next
 
 Define exact HTTP/SSE contracts around lookup, promotion, extraction, retry, and follow-up interactions, then align normalized domain types, implementation steps, and the Plan Ledger before selecting concrete providers.
