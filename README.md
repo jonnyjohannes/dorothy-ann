@@ -1,12 +1,10 @@
-# dorothy-ann 🚌✨
+# Dorothy Ann
 
-> **a research desk with receipts — fast lookups, cited answers, and Markdown reports.**
-
-Dorothy Ann is a browser-based lookup and research chat app inspired by the Magic School Bus kid who always had the answer because she had **done the research**.
+Dorothy Ann, the browser-based lookup and research chat app inspired by the Magic School Bus kid who always had the answer because she had **done the research**.
 
 Ask a quick question. Open the evidence. Go deeper when it matters. Keep the sources. Export the answer as Markdown.
 
-No field trip required (though curiosity is strongly encouraged).
+> Step inside, it's a wilder ride!
 
 ## what it does
 
@@ -37,8 +35,8 @@ The visual tour will land here once the first browser build has something photog
 
 > “According to my research…”
 
-Dorothy Ann is the energy: curious, prepared, a little intense about sources, and ready to explain how she knows.
+Dorothy Ann is the energy: curious, prepared, a little intense, and ready to share what she has learned.
 
 ---
 
-made with curiosity, citations, and a tiny yellow bus. <|°_°|>
+made with curiosity, citations, and Miss Frizzle's timeless wisdom. <|°_°|>
