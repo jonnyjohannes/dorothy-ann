@@ -4,13 +4,13 @@
 
 - Status: planning
 - Last updated: 2026-09-05
-- Current focus: reviewing the remaining happy-path evidence/export details before multiplying the agreed drawer-based shell into exhaustive variants and errors
+- Current focus: expanding the agreed happy-path shell into an exhaustive transition matrix and responsive state/error variants
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: confirm evidence and export overlays, then expand the transition matrix and wireframes to every listed state
+- Next action: enumerate alternate/error transitions by area, then draw the corresponding desktop/mobile variants
 
 ## Handoff
 
-The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. The MVP adds no slash commands or bang aliases. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB through the small `idb` promise/schema wrapper from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. `idb` remains private to the infrastructure adapter. The hosted app is personal/single-owner and uses a portable passphrase auth adapter: a dedicated `/unlock` screen exchanges the entered passphrase for a signed secure session cookie with a seven-day idle and 30-day absolute expiry, while protected application routes depend only on normalized `AuthContext`. MVP export scope is also settled: export one researched answer or a whole topic as an editable **Dorothy Ann report**, and export a whole topic as a deterministic transcript; arbitrary message/source selection and direct pi integration are deferred. Before transport work continues, complete and agree on the browser state matrix and paired desktop/mobile layouts described in `Browser Interaction Design`. A happy-path matrix and wireframe set are now drafted. Topic navigation is settled as a closed-by-default drawer on desktop and mobile, leaving only main content plus optional evidence visible. On desktop, the evidence panel opens automatically when research sources arrive, remains user-collapsible, and reopens/focuses when a citation is activated; mobile evidence remains an on-demand bottom sheet. Review the export overlay details, then multiply the shell into exhaustive loading, empty, partial, error, and recovery variants. After that, finish lookup, research, retry, and SSE contracts and align normalized domain types and the Plan Ledger.
+The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. The MVP adds no slash commands or bang aliases. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. `LocalThreadStore` uses IndexedDB through the small `idb` promise/schema wrapper from the start so extracted source content, transactional writes, and schema migration do not depend on localStorage's synchronous size-constrained model. `idb` remains private to the infrastructure adapter. The hosted app is personal/single-owner and uses a portable passphrase auth adapter: a dedicated `/unlock` screen exchanges the entered passphrase for a signed secure session cookie with a seven-day idle and 30-day absolute expiry, while protected application routes depend only on normalized `AuthContext`. MVP export scope is also settled: export one researched answer or a whole topic as an editable **Dorothy Ann report**, and export a whole topic as a deterministic transcript; arbitrary message/source selection and direct pi integration are deferred. Before transport work continues, complete and agree on the browser state matrix and paired desktop/mobile layouts described in `Browser Interaction Design`. A happy-path matrix and wireframe set are now drafted. Topic navigation is settled as a closed-by-default drawer on desktop and mobile, leaving only main content plus optional evidence visible. On desktop, the evidence panel opens automatically when research sources arrive, remains user-collapsible, and reopens/focuses when a citation is activated; mobile evidence remains an on-demand bottom sheet. Export uses a compact format-choice modal followed by a dedicated full-screen artifact workbench route on desktop and mobile. The happy-path shell is now agreed; multiply it into exhaustive loading, empty, partial, error, and recovery variants. After that, finish lookup, research, retry, and SSE contracts and align normalized domain types and the Plan Ledger.
 
 ## Goal
 
@@ -212,8 +212,8 @@ A second provider should be added after the first end-to-end workflow works, pri
 
 ### TODO: Complete the Browser State Layouts
 
-- [~] Draft and agree on the happy-path state transition matrix and paired desktop/mobile shell.
-- [ ] Expand the matrix into an exhaustive transition table covering every product-significant loading, empty, partial, error, and recovery state.
+- [x] Draft and agree on the happy-path state transition matrix and paired desktop/mobile shell.
+- [~] Expand the matrix into an exhaustive transition table covering every product-significant loading, empty, partial, error, and recovery state.
 - [ ] Draw the corresponding desktop/mobile variants and verify actions, focus, persistence, events, and accessibility before finalizing transport contracts.
 
 The design pass must cover this state matrix:
@@ -470,23 +470,38 @@ DESKTOP — topic export modal
 │ [Cancel]                                                   [Create preview]  │
 └──────────────────────────────────────────────────────────────────────────────┘
 
-DESKTOP — editable preview                 MOBILE — full-screen preview
-┌────────────────────────────────────────┐ ┌──────────────────────────────┐
-│ Dorothy Ann report              [×]   │ │ [←] Dorothy Ann report      │
-│ ┌────────────────────────────────────┐ │ ├──────────────────────────────┤
-│ │ # Composition over inheritance    │ │ │ # Composition over…         │
-│ │                                   │ │ │                              │
-│ │ According to my research…         │ │ │ According to my research…   │
-│ │                                   │ │ │                              │
-│ │ ## Sources                        │ │ │ ## Sources                   │
-│ │ 1. …                              │ │ │ 1. …                         │
-│ └────────────────────────────────────┘ │ │                              │
-│ [Copy] [Download .md] [Share]          │ ├──────────────────────────────┤
-└────────────────────────────────────────┘ │ [Copy] [Download] [Share]    │
-                                           └──────────────────────────────┘
+DESKTOP — full-screen artifact workbench
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ [← Back to topic]   Dorothy Ann report                    [Copy] [Download] │
+│──────────────────────────────────────────────────────────────────────────────│
+│ ┌──────────────────────────────────────────────────────────────────────────┐ │
+│ │ # Composition over inheritance                                          │ │
+│ │                                                                          │ │
+│ │ According to my research…                                               │ │
+│ │                                                                          │ │
+│ │ ## Sources                                                              │ │
+│ │ 1. …                                                                    │ │
+│ └──────────────────────────────────────────────────────────────────────────┘ │
+│                                                        [Share if available] │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+MOBILE — full-screen artifact workbench
+┌──────────────────────────────┐
+│ [←] Dorothy Ann report       │
+├──────────────────────────────┤
+│ # Composition over…         │
+│                              │
+│ According to my research…   │
+│                              │
+│ ## Sources                   │
+│ 1. …                         │
+│                              │
+├──────────────────────────────┤
+│ [Copy] [Download] [Share]    │
+└──────────────────────────────┘
 ```
 
-Answer-level `Export report` skips format/scope choice and opens its deterministic preview directly. Topic-level export asks for report versus transcript; report generation shows progress in the preview shell before editable Markdown appears.
+Answer-level `Export report` skips format/scope choice and opens its deterministic workbench route directly. Topic-level export asks for report versus transcript; report generation shows progress in the workbench before editable Markdown appears. Browser Back returns to the topic and restores its scroll position.
 
 ### New Query
 
@@ -552,7 +567,8 @@ Export stays close to the content:
 
 - each researched answer offers `Export report`;
 - the topic header offers `Export topic`, then `Dorothy Ann report` or `Transcript`;
-- export opens an editable Markdown preview rather than downloading immediately;
+- topic export opens a compact report/transcript chooser, then navigates to a dedicated full-screen artifact workbench route;
+- answer report export skips the chooser and navigates directly to the workbench;
 - completion actions are copy, `.md` download, and native share where available;
 - there is no arbitrary message/source selection mode in the MVP.
 
@@ -565,7 +581,7 @@ type ExportRequest =
   | { format: "transcript"; scope: "topic"; threadId: ThreadId };
 ```
 
-An answer-scoped Dorothy Ann report deterministically renders the question, researched answer, caveats, and message-local numbered sources; it requires no additional model call. A topic-scoped report may use one model call to condense the thread into objective, findings, evidence, decisions, open questions, and next actions. A transcript is always deterministic. Every artifact becomes editable preview state before copy/download/share, and edits affect only that artifact—not the stored topic.
+An answer-scoped Dorothy Ann report deterministically renders the question, researched answer, caveats, and message-local numbered sources; it requires no additional model call. A topic-scoped report may use one model call to condense the thread into objective, findings, evidence, decisions, open questions, and next actions. A transcript is always deterministic. Every artifact becomes editable workbench state before copy/download/share, and edits affect only that artifact—not the stored topic. The workbench has its own route beneath the topic so browser Back returns to the preserved conversation position. Refresh reconstructs deterministic exports; handling refresh during a generated or edited draft belongs to the exhaustive storage/error-state pass.
 
 A lookup-only result does not produce a Dorothy Ann report because Dorothy Ann has not researched it. `Export links` may create a small deterministic Markdown link list without invoking a model, or the user may promote the lookup to research first.
 
@@ -1133,4 +1149,4 @@ The browser interaction decisions are settled. Remaining implementation-level ch
 
 ## Next
 
-Complete and agree on the browser state matrix and desktop/mobile ASCII wireframes. Then define exact HTTP/SSE contracts around lookup, promotion, extraction, retry, and follow-up interactions, and align normalized domain types, implementation steps, and the Plan Ledger before selecting concrete providers.
+Complete the exhaustive browser transition matrix and desktop/mobile loading/error/recovery wireframes using the agreed happy-path shell. Then define exact HTTP/SSE contracts around lookup, promotion, extraction, retry, and follow-up interactions, and align normalized domain types, implementation steps, and the Plan Ledger before selecting concrete providers.
