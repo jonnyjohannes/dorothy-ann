@@ -4,13 +4,13 @@
 
 - Status: planning
 - Last updated: 2026-09-05
-- Current focus: defining normalized domain types and exact HTTP/SSE contracts for the settled browser flow
+- Current focus: defining turn failure semantics and exact HTTP/SSE request/response contracts for the settled browser flow
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: specify source/citation identity, turn failure semantics, and request/response contracts
+- Next action: decide how partial research failures persist and retry, then complete the transport contracts
 
 ## Handoff
 
-The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Continue by defining source/citation identity, turn failure semantics, and exact HTTP/SSE contracts.
+The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Continue by defining turn failure semantics and exact HTTP/SSE contracts.
 
 ## Goal
 
@@ -292,7 +292,7 @@ type TurnEvent =
       runId: ResearchRunId;
       phase: "searching" | "extracting" | "synthesizing";
     }
-  | { type: "answer.delta"; turnId: TurnId; markdown: string }
+  | { type: "answer.delta"; turnId: TurnId; part: AssistantContentPart }
   | { type: "turn.completed"; message: Message; researchRun?: ResearchRun }
   | {
       type: "turn.failed";
@@ -380,6 +380,33 @@ SearchResult
 ```
 
 Sources should be stored separately from generated prose rather than embedded only inside provider response JSON. This keeps citation rendering, retries, exports, and provider changes tractable.
+
+### Citation Contract
+
+Visible citation numbers are presentation, not identity. Each normalized source receives an opaque stable `SourceId`; canonical-URL deduplication reuses that ID within a topic, and export/import preserves it. Assistant content references those IDs structurally:
+
+```ts
+type AssistantContentPart =
+  | { type: "text"; markdown: string }
+  | { type: "citation"; sourceId: SourceId };
+
+interface AssistantContent {
+  parts: AssistantContentPart[];
+}
+```
+
+The renderer assigns `[1]`, `[2]`, and so on by first citation appearance within each assistant message. Repeated references to the same `SourceId` in one answer reuse the same number. The next assistant answer starts again at `[1]`, even if it cites a source already used elsewhere in the topic.
+
+Citation rules:
+
+- a citation may reference only a source attached to the message's `ResearchRun` or preserved research context;
+- provider annotations or textual markers must be normalized to `AssistantContentPart[]` at the adapter/application boundary;
+- unknown, malformed, or dangling source references are not rendered as valid citations;
+- uncited search results remain visible as discovered evidence but receive no answer citation number;
+- activating `[n]` resolves through the message-local number map to the stable source and focuses it in the evidence drawer/sheet;
+- answer-level and transcript exports derive the same message-local numbering deterministically and place that answer's numbered source list immediately after its prose, so numbering scope remains unambiguous.
+
+Stored content must not use visible citation numbers as foreign keys. This permits source deduplication, retries, provider changes, and deterministic re-rendering without rewriting generated prose.
 
 ## Proposed System Flow
 
@@ -679,10 +706,9 @@ The application may later become installable as a PWA, but offline support shoul
 1. **Explicit macro syntax:** is the visible route chip plus terminal `?` sufficient, or should power-user prefixes such as `/research` and `/lookup` also be supported?
 2. **Pi artifact contract:** is downloadable/copyable Markdown sufficient initially, or should the MVP target a specific pi.dev import/paste convention?
 3. **Artifact scope:** after answer-level and whole-topic export, is arbitrary message/source selection necessary for the MVP?
-4. **Citation contract:** what is the smallest source-ID/citation format that remains reliable across chat implementations and exports?
-5. **Failure behavior:** how should partial sources and streamed prose appear and persist when search, extraction, synthesis, or the client connection fails?
-6. **Persistence milestone:** is local browser continuity enough to evaluate the product, or is cross-device continuity required for the first useful deployment?
-7. **Deployment boundary:** is the initial deployment strictly personal, or should the architecture preserve a future multi-user boundary?
+4. **Failure behavior:** how should partial sources and streamed prose appear and persist when search, extraction, synthesis, or the client connection fails?
+5. **Persistence milestone:** is local browser continuity enough to evaluate the product, or is cross-device continuity required for the first useful deployment?
+6. **Deployment boundary:** is the initial deployment strictly personal, or should the architecture preserve a future multi-user boundary?
 
 ## Next
 
