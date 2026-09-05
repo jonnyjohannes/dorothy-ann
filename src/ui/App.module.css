@@ -187,6 +187,15 @@
 .newTopic {
   display: none;
 }
+.backupControls {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.backupControls h3 { margin: 0; font-size: 0.9rem; }
+.backupControls p { margin: 0; font-size: 0.8rem; color: var(--muted); }
 .drawerNote {
   position: absolute;
   right: 1.5rem;

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   Link,
   Route,
@@ -7,7 +7,7 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { LocalThreadStore } from "../adapters/browser/local-stores";
+import { LocalArtifactDraftStore, LocalThreadStore } from "../adapters/browser/local-stores";
 import type { SearchResult, Thread, ThreadSummary } from "../domain/types";
 import { canPromoteToResearch } from "../domain/policies";
 import styles from "./App.module.css";
@@ -20,8 +20,41 @@ type StreamState = {
   error?: string;
 };
 const store = new LocalThreadStore();
+const draftStore = new LocalArtifactDraftStore();
 const now = () => new Date().toISOString() as Thread["createdAt"];
 const id = () => crypto.randomUUID();
+
+function BackupControls() {
+  const [message, setMessage] = useState("");
+  const input = useRef<HTMLInputElement>(null);
+  const download = async () => {
+    const backup = await store.exportData();
+    const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "dorothy-ann-backup.json";
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setMessage("Backup downloaded.");
+  };
+  const importBackup = async (file: File) => {
+    try {
+      const backup = JSON.parse(await file.text());
+      const preview = await store.inspectImport(backup);
+      if (preview.issues.length) { setMessage(`${preview.issues.length} invalid record(s) skipped.`); return; }
+      const replace = window.confirm(`${preview.add} new topic(s), ${preview.conflicts} conflict(s). Replace conflicts?`);
+      const report = await store.importData(backup, { onConflict: replace ? "replace" : "skip" });
+      setMessage(`Imported ${report.added.length + report.replaced.length} topic(s).`);
+    } catch { setMessage("That backup could not be imported."); }
+  };
+  return <section className={styles.backupControls} aria-label="Data backup">
+    <h3>Data</h3>
+    <button onClick={() => void download()}>Export backup</button>
+    <button onClick={() => input.current?.click()}>Import backup</button>
+    <input ref={input} type="file" accept="application/json" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void importBackup(file); event.target.value = ""; }} />
+    {message && <p role="status">{message}</p>}
+  </section>;
+}
 
 function Drawer({ onClose }: { onClose: () => void }) {
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
@@ -98,6 +131,7 @@ function Drawer({ onClose }: { onClose: () => void }) {
       ) : (
         <p className={styles.muted}>No saved topics yet.</p>
       )}
+      <BackupControls />
       <p className={styles.drawerNote}>
         Saved topics and sources stay in this browser.
       </p>
@@ -435,9 +469,45 @@ function ExportWorkbench() {
     `# Dorothy Ann report: ${params.get("title") ?? "Untitled topic"}\n\n## Conclusion\n\n${params.get("answer") ?? ""}\n\n> This is research context, not executed or independently verified work.\n`,
   );
   const [preview, setPreview] = useState(false);
-  useEffect(() => { if (route.draftId !== "transcript" || !route.threadId) return; void store.load(route.threadId).then((thread) => { if (thread) setMarkdown(transcriptMarkdown(thread)); }); }, [route.draftId, route.threadId]);
+  const [artifactId] = useState(() => id());
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const [message, setMessage] = useState("");
+  const sourceKey = `${route.threadId ?? "new"}:${route.draftId ?? "report"}`;
+  const initialMarkdown = `# Dorothy Ann report: ${params.get("title") ?? "Untitled topic"}\n\n## Conclusion\n\n${params.get("answer") ?? ""}\n\n> This is research context, not executed or independently verified work.\n`;
+  useEffect(() => {
+    let cancelled = false;
+    setDraftLoaded(false);
+    void (async () => {
+      const draft = await draftStore.loadBySourceKey(sourceKey);
+      if (draft) { if (!cancelled) setMarkdown(draft.markdown); }
+      else if (route.draftId === "transcript" && route.threadId) {
+        const thread = await store.load(route.threadId);
+        if (thread && !cancelled) setMarkdown(transcriptMarkdown(thread));
+      }
+      if (!cancelled) setDraftLoaded(true);
+    })();
+    return () => { cancelled = true; };
+  }, [route.draftId, route.threadId, sourceKey]);
+  useEffect(() => {
+    if (!draftLoaded) return;
+    const timer = window.setTimeout(() => {
+      void draftStore.save({ schemaVersion: 1, id: artifactId as never, threadId: (route.threadId ?? "new") as never, sourceKey, format: route.draftId === "transcript" ? "transcript" : "dorothy_ann_report", scope: route.draftId === "transcript" ? "topic" : "answer", markdown, sourceUpdatedAt: now(), dirty: true, createdAt: now(), updatedAt: now() });
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [draftLoaded, markdown, route.draftId, route.threadId, sourceKey]);
   const copy = async () => {
-    await navigator.clipboard?.writeText(markdown);
+    if (navigator.clipboard) { await navigator.clipboard.writeText(markdown); setMessage("Markdown copied."); }
+    else setMessage("Clipboard is unavailable; select the Markdown manually.");
+  };
+  const share = async () => {
+    if (navigator.share) await navigator.share({ title: params.get("title") ?? "Dorothy Ann report", text: markdown });
+    else setMessage("Native sharing is unavailable; use Copy Markdown or Download .md.");
+  };
+  const startOver = async () => {
+    const draft = await draftStore.loadBySourceKey(sourceKey);
+    if (draft) await draftStore.remove(draft.id);
+    setMarkdown(initialMarkdown);
+    setMessage("Draft cleared.");
   };
   const download = () => {
     const url = URL.createObjectURL(
@@ -467,7 +537,10 @@ function ExportWorkbench() {
           </button>
           <button onClick={() => void copy()}>Copy Markdown</button>
           <button onClick={download}>Download .md</button>
+          <button onClick={() => void share()}>Share</button>
+          <button onClick={() => void startOver()}>Start over</button>
         </div>
+        {message && <p role="status">{message}</p>}
         {preview ? (
           <article className={styles.preview}>
             <pre>{markdown}</pre>
