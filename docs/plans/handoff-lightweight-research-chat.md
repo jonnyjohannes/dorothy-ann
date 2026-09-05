@@ -10,7 +10,7 @@
 
 ## Handoff
 
-The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The default extraction target is five viable pages; deployments can configure the target within a server-enforced safety bound. Continue by defining source/citation identity, turn failure semantics, and exact HTTP/SSE contracts.
+The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Continue by defining source/citation identity, turn failure semantics, and exact HTTP/SSE contracts.
 
 ## Goal
 
@@ -62,7 +62,7 @@ The core value is not generic LLM chat. It is the combination of:
 A new query must take one of two visibly different paths:
 
 - **lookup** — call the search provider and render ranked results without extraction or model synthesis. This is the low-cost, low-latency path for navigational and utility queries such as `weather` or `life alive`.
-- **research** — search, extract up to the configured number of viable pages (five by default), and stream a Dorothy Ann synthesis with citations. The resulting page is already a chat thread, so the user can ask follow-up questions without entering another mode or moving elsewhere.
+- **research** — search, extract up to the deployment-configured number of viable pages (three by default), and stream a Dorothy Ann synthesis with citations. The resulting page is already a chat thread, so the user can ask follow-up questions without entering another mode or moving elsewhere.
 
 Routing should be predictable and reversible. The current recommendation is a deterministic browser-side router with a visible mode chip:
 
@@ -254,7 +254,7 @@ Source cards should appear as soon as search completes rather than waiting for s
 - **chat** — answer from the existing conversation and attached research context without a new search;
 - **research** — perform another bounded search and attach a new `ResearchRun` to that turn.
 
-The default follow-up route should be `chat`; the user can explicitly request fresh research when recency or new evidence matters.
+The default follow-up route should be `chat`; the user can explicitly request fresh research when recency or new evidence matters. Requests such as “research further” or “look more broadly” start another bounded research run using the same deployment-configured three-page target rather than silently increasing one run's scope.
 
 ### Responsive Evidence
 
@@ -309,16 +309,14 @@ Extraction count is explicit application configuration rather than a provider-sp
 
 ```ts
 interface ResearchPolicy {
-  /** Target count of successfully extracted, viable pages. Default: 5. */
+  /** Target count of successfully extracted, viable pages. Default: 3. */
   targetViablePages: number;
-  /** Server-enforced ceiling for targetViablePages. */
-  maxViablePages: number;
   maxCharactersPerPage: number;
   maxTotalExtractedCharacters: number;
 }
 ```
 
-The backend clamps request-level values to deployment policy. The initial UI may use the deployment default without exposing a settings screen; keeping the value in the request/domain contract allows a lightweight control later without changing orchestration.
+The runtime adapter loads and validates this server-side deployment configuration. Research requests do not carry an extraction-count override, and the MVP UI exposes no corresponding control. A later user setting may be added if repeated requests for broader research show that it is useful.
 
 ## System Abstractions
 
@@ -414,7 +412,7 @@ SearchProvider returns ranked results
         ↓
 show result cards immediately
         ↓
-extract ranked candidates until targetViablePages (default 5)
+extract ranked candidates until targetViablePages (default 3)
 or the result set is exhausted
         ↓
 construct research context with stable source IDs
@@ -437,7 +435,7 @@ create ResearchRun from the existing query and SearchResult[]
         ↓
 walk results in rank order, skipping non-viable pages
         ↓
-stop at targetViablePages (default 5) or exhaustion
+stop at targetViablePages (default 3) or exhaustion
         ↓
 stream one cited synthesis through ChatProvider
 ```
