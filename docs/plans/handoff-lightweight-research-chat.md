@@ -667,6 +667,265 @@ MOBILE — full-screen artifact workbench
 
 Answer-level `Export report` skips format/scope choice and opens its deterministic workbench route directly. Topic-level export asks for report versus transcript; report generation shows progress in the workbench before editable Markdown appears. Browser Back returns to the topic and restores its scroll position.
 
+### Draft Loading, Error, and Recovery Wireframes
+
+These variants reuse the agreed shells. Desktop places recoverable status near the affected content; mobile uses the full content width above the sticky primary action. Neither layout relies on toast-only errors.
+
+#### Access Variants
+
+```text
+DESKTOP — invalid / limited                 MOBILE — expired during action
+┌────────────────────────────────────────┐  ┌──────────────────────────────┐
+│              dorothy-ann               │  │       Session expired        │
+│                                        │  │                              │
+│ Passphrase                             │  │ Your question and completed  │
+│ ┌────────────────────────────────────┐ │  │ research steps are safe on   │
+│ │                                    │ │  │ this device. Unlock to retry │
+│ └────────────────────────────────────┘ │  │ the interrupted step.        │
+│ ! That passphrase didn't work.         │  │                              │
+│                         [Try again]    │  │ [Unlock] [Cancel turn]       │
+│                                        │  └──────────────────────────────┘
+│ — rate-limited variant —               │
+│ Too many attempts. Try again in 0:42.  │  MOBILE — auth service unavailable
+│ [Unlock — disabled]                    │  ┌──────────────────────────────┐
+└────────────────────────────────────────┘  │ Dorothy Ann can't check your │
+                                            │ session right now.           │
+                                            │ [Retry]                      │
+                                            └──────────────────────────────┘
+```
+
+Invalid input returns focus to the emptied passphrase field. Rate-limit countdown text is announced no more than once per meaningful interval. Auth-service failure does not invite another passphrase submission.
+
+#### Initial Query and Lookup Variants
+
+```text
+DESKTOP — lookup loading / no results / failure
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ [☰] dorothy-ann   [life alive                         ] [lookup ▾] [×]  [+] │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ ◌ Searching the web…                                                        │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ No results for “life alive xyz”.                                             │
+│ [Edit query]  [Research this question instead]                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ! Search didn't finish. Your query is still here.                            │
+│ [Retry lookup]  [Edit query]                                                 │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+MOBILE — route preview / loading / failure
+┌──────────────────────────────┐  ┌──────────────────────────────┐
+│ [what is composition?     ] │  │ ! Search didn't finish.     │
+│ [research ▾]                │  │ Your query is still here.    │
+│ Enter will ask Dorothy Ann. │  │                              │
+│             [Ask Dorothy Ann]│  │ [Retry] [Edit]              │
+└──────────────────────────────┘  └──────────────────────────────┘
+```
+
+Empty input disables submission without showing an error. Lookup cancellation restores the exact query and route chip. No-results research starts a fresh search; only a non-empty result set can use promotion without searching again.
+
+#### Research Partial, Failure, Stop, and Retry Variants
+
+```text
+DESKTOP — fewer than 3 viable pages
+┌──────────────────────────────────────────────────────┬────────────────────────┐
+│ [☰] composition over inheritance               [+] │ evidence           [×] │
+├──────────────────────────────────────────────────────┤ ✓ 2 viable pages       │
+│ Dorothy Ann                                         │ ! 6 couldn't be read    │
+│ According to my research…                           │                        │
+│                                                     │ [inspect failures]     │
+│ Note: I could use only 2 of the planned 3 pages.    │ [1] source…           │
+│ [answer continues with citations]                   │ [2] source…           │
+└──────────────────────────────────────────────────────┴────────────────────────┘
+
+DESKTOP — extraction stopped with partial evidence
+┌──────────────────────────────────────────────────────┬────────────────────────┐
+│ Research paused after 1 viable page.                 │ evidence           [×] │
+│ Two remaining pages could not be processed.          │ ✓ 1 viable            │
+│                                                      │ ! 2 failed             │
+│ [Answer with this evidence]  [Retry extraction]      │                        │
+│ [Edit and research again]                            │                        │
+└──────────────────────────────────────────────────────┴────────────────────────┘
+
+DESKTOP — zero viable pages
+┌──────────────────────────────────────────────────────┬────────────────────────┐
+│ Dorothy Ann couldn't verify enough evidence.         │ 8 search results       │
+│ No pages produced readable source content, so no     │ ! 8 unavailable        │
+│ research answer was generated.                       │                        │
+│                                                      │ [inspect result]       │
+│ [Retry extraction]  [Edit and research again]       │                        │
+└──────────────────────────────────────────────────────┴────────────────────────┘
+
+MOBILE — failed/interrupted synthesis
+┌────────────────────────────────┐
+│ Research answer interrupted    │
+│                                │
+│ Sources are saved. The faded   │
+│ draft below is incomplete and  │
+│ won't be exported or reused.   │
+│                                │
+│ ░ According to my research… ░  │
+│ ░ incomplete text…          ░  │
+│                                │
+│ [Retry answer] [Dismiss draft] │
+│ [3 sources]                    │
+└────────────────────────────────┘
+
+MOBILE — search failed / user stopped
+┌────────────────────────────────┐
+│ ! Web search didn't finish.    │
+│ [Retry search] [Edit question] │
+├────────────────────────────────┤
+│ Research stopped.              │
+│ 8 results and 1 viable page    │
+│ remain attached to this turn.  │
+│ [Continue] [Start a new turn]  │
+└────────────────────────────────┘
+```
+
+The explicit `Answer with this evidence` choice appears only after an extraction infrastructure failure with one or two viable pages. Normal candidate exhaustion with one or two pages proceeds automatically with the caveat. Zero viable pages never show a synthesis action unless extraction later succeeds.
+
+#### Chat Edit, Retry, and Interruption Variants
+
+```text
+DESKTOP — interrupted chat
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ You: Can you explain that more simply?                                      │
+│                                                                              │
+│ ░ Dorothy Ann: Composition lets one object… [incomplete]                  ░  │
+│ ! This reply was interrupted and is not part of the saved conversation.      │
+│ [Retry answer]  [Dismiss draft]                                             │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ [chat ▾] Ask a follow-up…                                               [↑] │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+MOBILE — edit-and-resend confirmation
+┌────────────────────────────────┐
+│ Edit your earlier question     │
+│ ┌────────────────────────────┐ │
+│ │ revised question…          │ │
+│ └────────────────────────────┘ │
+│ Later replies will be replaced │
+│ after the new reply succeeds.  │
+│                                │
+│ [Cancel] [Resend and replace]  │
+└────────────────────────────────┘
+```
+
+Retrying a completed answer leaves the prior answer visible until replacement completes. Edit-and-resend must not destroy downstream turns before the replacement is safely stored.
+
+#### Evidence Variants
+
+```text
+DESKTOP — unavailable source                 MOBILE — evidence bottom sheet
+┌──────────────────────────────┐             ┌──────────────────────────────┐
+│ Evidence                [×] │             │ Evidence                [×] │
+│ [2] example.com             │             │ [2] example.com             │
+│                              │             │                              │
+│ ! Page blocked extraction.  │             │ No excerpt is available.    │
+│ Search snippet: …           │             │ Reason: blocked by site.    │
+│                              │             │ Search snippet: …           │
+│ [Open original]             │             │                              │
+└──────────────────────────────┘             │ [Open original]             │
+                                             └──────────────────────────────┘
+```
+
+Failed sources retain title, URL, rank, snippet, and a safe reason category. They are visually labeled as unavailable and cannot be cited as extracted evidence.
+
+#### Topic Drawer Variants
+
+```text
+DESKTOP — rename / archive views             MOBILE — delete confirmation
+┌──────────────────────────┐                 ┌──────────────────────────────┐
+│ Topics               [×] │                 │ Delete “Composition…”?      │
+│ [+ New topic]            │                 │                              │
+│                          │                 │ This removes the local topic │
+│ [Composition over…    ]  │ ← inline rename │ and its sources permanently.│
+│ [Save] [Cancel]          │                 │                              │
+│                          │                 │ [Cancel] [Delete topic]      │
+│ Archived (2)             │                 └──────────────────────────────┘
+│ • old topic       [Restore]
+└──────────────────────────┘
+
+DESKTOP/MOBILE — empty drawer content
+┌──────────────────────────┐
+│ No recent topics yet.    │
+│ Questions you research   │
+│ with Dorothy Ann appear  │
+│ here on this device.     │
+│ [+ New topic]            │
+└──────────────────────────┘
+```
+
+Delete defaults focus to Cancel. Archive offers an announced undo action; permanent delete does not claim an undo capability.
+
+#### Artifact Workbench Variants
+
+```text
+DESKTOP — generating topic report
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ [← Back to topic]   Dorothy Ann report                                      │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ ✓ collecting completed turns                                                │
+│ ◌ drafting the report…                                                      │
+│                                                                              │
+│ [Cancel generation]                                                         │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+DESKTOP — dirty draft on Back
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Keep your report edits?                                                     │
+│                                                                              │
+│ [Stay here]  [Discard edits]  [Keep draft and return]                       │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+MOBILE — generation failed / share unavailable
+┌────────────────────────────────┐  ┌──────────────────────────────┐
+│ Report generation stopped.     │  │ Dorothy Ann report          │
+│ Your topic is unchanged.       │  │                              │
+│                                │  │ [Copy] [Download]            │
+│ [Retry] [Back to topic]        │  │ Share isn't available in    │
+└────────────────────────────────┘  │ this browser.                │
+                                    └──────────────────────────────┘
+```
+
+Copy/download/share results use an inline status region in the workbench header; success toasts may supplement but never replace it. Share cancellation is not rendered as an error.
+
+#### Storage, Import, and Migration Variants
+
+```text
+DESKTOP — quota/unavailable banner
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ! Changes aren't saved on this device. Current content remains exportable.  │
+│ [Download current report] [Export archive] [Storage help]                   │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ preserved in-memory topic / answer                                           │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+MOBILE — corrupt topic recovery             DESKTOP — import preview
+┌────────────────────────────────┐           ┌──────────────────────────────────┐
+│ This topic couldn't be loaded. │           │ Import Dorothy Ann archive       │
+│ Other topics are still safe.   │           │                                  │
+│                                │           │ Add 4 topics                      │
+│ [Download recovery data]       │           │ Replace 1 matching topic         │
+│ [Delete broken topic]          │           │ Skip 2 invalid records           │
+│ [Back to topics]               │           │                                  │
+└────────────────────────────────┘           │ [Cancel] [Import]                │
+                                             └──────────────────────────────────┘
+
+MOBILE/DESKTOP — migration failure
+┌────────────────────────────────────────────┐
+│ One topic needs recovery                   │
+│ Its original stored record was not changed.│
+│ [Download recovery data] [Delete record]  │
+└────────────────────────────────────────────┘
+```
+
+Storage warnings remain visible until saving succeeds or the user leaves the affected content. When IndexedDB is unavailable, the current session may continue in memory only after clearly stating that reload will lose unexported work.
+
 ### New Query
 
 The home screen is search-first rather than a blank chatbot. It contains one prominent query field, a visible route chip, and recent lightweight topics.
