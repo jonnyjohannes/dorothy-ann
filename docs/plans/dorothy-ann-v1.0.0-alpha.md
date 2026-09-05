@@ -5,7 +5,7 @@
 - Status: in progress
 - Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha.md`
 - Last updated: 2026-09-05
-- Current focus: applying the first hands-on UI feedback pass: full-width shell, simpler Helvetica Neue visual system, combined query mode/action control, rotating home copy, and light/dark/auto themes
+- Current focus: applying the second hands-on UI feedback pass: rotating home prompt, external mode/action controls, settings appearance page, corrected citation links, and consolidated evidence presentation
 - Handoff lives in: [`## Handoff`](#handoff)
 - Next action: approve implementation via `feature-builder`, beginning with Plan Ledger step 1
 
