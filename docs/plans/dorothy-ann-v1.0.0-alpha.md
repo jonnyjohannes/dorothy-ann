@@ -5,7 +5,7 @@
 - Status: in progress
 - Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha.md`
 - Last updated: 2026-09-05
-- Current focus: the alpha UI workbench, retry affordance, lookup promotion, and report export path are implemented; finish accessibility/E2E verification and extractor hardening before the next UI design cycle
+- Current focus: applying the first hands-on UI feedback pass: full-width shell, simpler Helvetica Neue visual system, combined query mode/action control, rotating home copy, and light/dark/auto themes
 - Handoff lives in: [`## Handoff`](#handoff)
 - Next action: approve implementation via `feature-builder`, beginning with Plan Ledger step 1
 
