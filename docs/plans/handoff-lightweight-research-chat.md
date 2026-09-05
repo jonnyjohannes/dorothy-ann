@@ -4,13 +4,13 @@
 
 - Status: planning
 - Last updated: 2026-09-05
-- Current focus: completing exact HTTP/SSE request/response contracts and deciding the first persistence milestone
+- Current focus: choosing the local browser store implementation and completing exact HTTP/SSE request/response contracts
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: decide whether the first useful deployment requires cross-device persistence, then finish transport contracts around the chosen store
+- Next action: choose IndexedDB versus localStorage for `LocalThreadStore`, then finish transport contracts
 
 ## Handoff
 
-The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. Continue by deciding the first persistence milestone and completing exact HTTP/SSE contracts.
+The product is now named **dorothy-ann**. It is a personal browser search surface whose defining agent flow is inspired by Dorothy Ann from *The Magic School Bus*: for substantive questions, Dorothy Ann researches the web and responds, “According to my research…” with inspectable evidence. Not every query deserves that flow. Navigational and utility lookups such as `weather` or `life alive` should return ordinary search results quickly and without model synthesis; full questions should enter a source-aware research thread with chat immediately available for follow-ups. The application remains platform-neutral, with Vercel only as the first convenient deployment target. New-query routing is settled: keyword-like and unpunctuated input takes the cheap lookup path; a terminal `?` chooses research; question-shaped lookup results may suggest `Research this with Dorothy Ann` without automatically incurring model cost; and a visible route chip can always override the route. Inside an existing thread, punctuation does not trigger fresh research: follow-ups default to chat and the user explicitly selects research when new evidence is needed. Lookup promotion is also settled: reuse the existing ranked result set without another search, walk it in rank order until the configured number of viable pages has been extracted, and synthesize from those pages. The initial extraction target is three viable pages. It is deployment configuration only—there is no user-facing or per-request control in the MVP. The user can ask Dorothy Ann to research further or more broadly in a later turn. Citation identity is settled: source identity is stable internally across the topic and exports, while visible citation numbers restart for each assistant answer in first-citation order. Failure handling is stage-aware: preserve every completed stage, synthesize with a caveat when at least one viable page exists, never produce the Dorothy Ann research claim with zero viable pages, and retry only the failed stage where possible. Partial streamed prose is not persisted as a completed answer. The MVP persistence milestone is settled: threads live only in the current browser profile, with deterministic export/import as the continuity and migration escape hatch; cross-device remote storage is deferred. Continue by choosing the local browser storage implementation and completing exact HTTP/SSE contracts.
 
 ## Goal
 
@@ -524,7 +524,7 @@ Transcript export should not require a model call. Handoff export may use one, b
 
 ## Storage Strategy
 
-The initial storage decision is local-first, not storage-hardcoded. `LocalThreadStore` is the MVP implementation; `ThreadStore` remains the application boundary.
+The initial storage decision is local-browser-only, not storage-hardcoded. `LocalThreadStore` is the MVP implementation; `ThreadStore` remains the application boundary. There is no synchronization or cross-device continuity in the first deployment. Deterministic archive export/import is required so browser-local data can be backed up, moved manually, and migrated into a future remote store.
 
 The storage contract should cover the operations the UI actually needs while leaving backend mechanics out of the domain:
 
@@ -741,9 +741,9 @@ The application may later become installable as a PWA, but offline support shoul
 1. **Explicit macro syntax:** is the visible route chip plus terminal `?` sufficient, or should power-user prefixes such as `/research` and `/lookup` also be supported?
 2. **Pi artifact contract:** is downloadable/copyable Markdown sufficient initially, or should the MVP target a specific pi.dev import/paste convention?
 3. **Artifact scope:** after answer-level and whole-topic export, is arbitrary message/source selection necessary for the MVP?
-4. **Persistence milestone:** is local browser continuity enough to evaluate the product, or is cross-device continuity required for the first useful deployment?
+4. **Local store implementation:** should `LocalThreadStore` begin on IndexedDB or accept localStorage's smaller/synchronous limits for the shortest proof?
 5. **Deployment boundary:** is the initial deployment strictly personal, or should the architecture preserve a future multi-user boundary?
 
 ## Next
 
-Define normalized TypeScript domain types and exact HTTP/SSE contracts around the settled lookup, promotion, extraction, and follow-up interactions before selecting concrete providers.
+Choose the concrete local browser store, then define exact HTTP/SSE contracts around the settled lookup, promotion, extraction, and follow-up interactions before selecting concrete providers.
