@@ -65,7 +65,8 @@ async function resolvePublicAddresses(url: URL): Promise<PublicAddress[]> {
   });
   const publicAddresses = addresses
     .filter(({ address }) => isPublicAddress(address))
-    .map(({ address, family }) => ({ address, family: family as 4 | 6 }));
+    .map(({ address, family }) => ({ address, family: family as 4 | 6 }))
+    .sort((left, right) => left.family - right.family);
   if (!publicAddresses.length || publicAddresses.length !== addresses.length) {
     throw new Error("unsafe_url");
   }
@@ -135,7 +136,10 @@ function pinnedAgent(addresses: PublicAddress[]): Agent {
   return new Agent({
     connect: {
       lookup: (_hostname, options, callback) => {
-        const address = addresses[index++ % addresses.length];
+        const requestedFamily = "family" in options && (options.family === 4 || options.family === 6) ? options.family : undefined;
+        const candidates = requestedFamily ? addresses.filter(({ family }) => family === requestedFamily) : addresses;
+        const available = candidates.length ? candidates : addresses;
+        const address = available[index++ % available.length];
         if ("all" in options && options.all) callback(null, [address]);
         else callback(null, address.address, address.family);
       },
