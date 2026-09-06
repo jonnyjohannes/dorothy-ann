@@ -59,6 +59,12 @@ describe("portable Hono API", () => {
       body: JSON.stringify({ query: "hello" }),
     });
     expect(crossOrigin.status).toBe(403);
+    const forwardedOrigin = await app.request("http://internal/api/lookup", {
+      method: "POST",
+      headers: { origin: "https://dorothy-ann.vercel.app", "x-forwarded-host": "dorothy-ann.vercel.app", "x-forwarded-proto": "https", "content-type": "application/json" },
+      body: JSON.stringify({ query: "hello" }),
+    });
+    expect(forwardedOrigin.status).toBe(200);
     const oversized = await app.request("http://localhost/api/lookup", {
       method: "POST",
       headers: { "content-length": "999999" },
