@@ -1,6 +1,6 @@
 import { lookup as resolveHost } from "node:dns/promises";
 import { isIP } from "node:net";
-import { Agent } from "undici";
+import { Agent, fetch as undiciFetch } from "undici";
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
 import type { ExtractionOutcome, SearchResult } from "../src/domain/types.js";
@@ -17,7 +17,10 @@ export interface ExtractorConfig {
 }
 
 type PublicAddress = { address: string; family: 4 | 6 };
-type FetchWithDispatcher = typeof fetch;
+type FetchWithDispatcher = (input: string | URL, init?: RequestInit & { dispatcher?: Agent }) => Promise<Response>;
+
+const fetchWithDispatcher: FetchWithDispatcher = async (input, init) =>
+  (await undiciFetch(input, init as Parameters<typeof undiciFetch>[1])) as unknown as Response;
 
 const privateIPv4 = (ip: string) => {
   const octets = ip.split(".").map(Number);
@@ -150,7 +153,7 @@ function pinnedAgent(addresses: PublicAddress[]): Agent {
 export class SafeContentExtractor implements ContentExtractor {
   constructor(
     private readonly config: ExtractorConfig,
-    private readonly fetcher: FetchWithDispatcher = fetch,
+    private readonly fetcher: FetchWithDispatcher = fetchWithDispatcher,
   ) {}
 
   async extract(
