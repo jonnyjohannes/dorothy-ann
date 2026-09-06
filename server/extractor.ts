@@ -252,6 +252,16 @@ export class SafeContentExtractor implements ContentExtractor {
           },
         };
       } catch (error) {
+        if (error instanceof Error && error.message !== "body_limit") {
+          const cause = error.cause instanceof Error ? error.cause : error.cause;
+          console.warn("content extraction fetch failed", {
+            sourceId: source.sourceId,
+            name: error.name,
+            message: error.message,
+            causeCode: typeof cause === "object" && cause !== null && "code" in cause ? cause.code : undefined,
+            causeMessage: cause instanceof Error ? cause.message : undefined,
+          });
+        }
         if (error instanceof Error && error.message === "body_limit") {
           return {
             sourceId: source.sourceId,
