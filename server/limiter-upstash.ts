@@ -9,5 +9,8 @@ export class UpstashLoginLimiter implements LoginAttemptLimiter {
     this.limiter.limit(`login:${key}`),
     new Promise<never>((_, reject) => setTimeout(() => reject(new Error("limiter_unavailable")), 5_000)),
   ]); return result.success ? { allowed: true } : { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((result.reset - Date.now()) / 1000)) }; }
-  async reset(key: string) { await this.limiter.resetUsedTokens(`login:${key}`); }
+  async reset(key: string) { await Promise.race([
+    this.limiter.resetUsedTokens(`login:${key}`),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("limiter_unavailable")), 5_000)),
+  ]); }
 }
