@@ -42,5 +42,5 @@ const passphrase = await hiddenQuestion("Passphrase: ");
 const confirm = await hiddenQuestion("Confirm passphrase: ");
 if (!passphrase || passphrase !== confirm) throw new Error("passphrases did not match");
 const salt = randomBytes(16).toString("base64url");
-const derived = await new Promise<Buffer>((resolve, reject) => scrypt(passphrase, salt, 32, (error, key) => error ? reject(error) : resolve(key as Buffer)));
+const derived = await new Promise<Buffer>((resolve, reject) => scrypt(passphrase, Buffer.from(salt, "base64url"), 32, (error, key) => error ? reject(error) : resolve(key as Buffer)));
 console.log(`scrypt$v1$N=16384,r=8,p=1$${salt}$${derived.toString("base64url")}`);

@@ -7,7 +7,7 @@
 - Last updated: 2026-09-05
 - Current focus: final completion pass — recovery and focus contracts are advancing; next is authenticated live acceptance and deployment hardening
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: run the full verification suite, then use the operator-only passphrase/CA setup for live acceptance and finish the Vercel checklist
+- Next action: regenerate `APP_PASSPHRASE_SCRYPT_HASH` with the corrected salt encoding, restart the live server, verify browser unlock, then continue the authenticated live acceptance and Vercel checklist
 
 ## Handoff
 
@@ -33,7 +33,7 @@ This section records the implementation reality where it differs from the origin
 - XState machines and React Aria Components remain deferred implementation details; the accepted alpha behavior is currently implemented with local React state and native controls. This is only a remaining item if the named library-level architecture is required rather than the observable state contract.
 - Playwright Chromium/WebKit and axe smoke coverage is implemented and passing. Broader MSW browser fixtures and recovery-path E2E coverage remain.
 - IndexedDB has versioned upgrade handling, validated thread saves/loads, atomic deletion cleanup, autosaved drafts, resume/start-over behavior, and backup import/export UI. Remaining recovery work is explicit quota/unavailable/corrupt-record UX and deterministic artifact/recovery tests.
-- Auth primitives, protected application routes, same-origin mutation checks, rolling refresh, request bounds, and Upstash selection are implemented. Remaining work is the live authenticated contract matrix, absolute-expiry edge coverage, and final browser expiry behavior.
+- Auth primitives, protected application routes, same-origin mutation checks, rolling refresh, request bounds, and Upstash selection are implemented. A salt-encoding mismatch in the hash-generation script was fixed and now has a format-verification test; existing hashes must be regenerated. Remaining work is the live authenticated contract matrix, absolute-expiry edge coverage, and final browser expiry behavior.
 - Brave and Anthropic adapters are live-wired locally. Remaining provider work is the full malformed/error matrix, prompt-injection/interruption fixtures, persistence-boundary assertions, and authenticated live research verification.
 - The extractor has pinned public DNS connection selection, streamed decoded-byte limits, redirect validation, content-type/timeout bounds, Readability, and operator-controlled TLS trust handling. Remaining work is the broader redirect/rebinding/oversized integration matrix and trusted-CA live smoke.
 - Research orchestration now bounds concurrent extraction, emits frozen evidence IDs, observes aborts, and sends heartbeats. Remaining work is persisted stage state, stage retries, explicit event sequencing/Stop/EOF contract tests, and atomic completion persistence.
@@ -2147,7 +2147,7 @@ Latest local verification on 2026-09-05:
 
 - `npm run lint` passed.
 - `npm run typecheck` passed.
-- `npm test` passed: 38 tests across 10 files.
+- `npm test` passed: 39 tests across 10 files.
 - `npm run build` passed.
 - `CI=1 NODE_TLS_REJECT_UNAUTHORIZED=1 npm run test:e2e` passed: 4 Chromium/WebKit fixture and axe smoke tests.
 - `git diff --check` passed and the working tree is clean.
