@@ -103,11 +103,18 @@ async function readBoundedBody(
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
+  let abortReader: (() => void) | undefined;
+  const aborted = new Promise<never>((_, reject) => {
+    abortReader = () => {
+      void reader.cancel();
+      reject(new DOMException("The operation was aborted", "AbortError"));
+    };
+    if (signal.aborted) abortReader();
+    else signal.addEventListener("abort", abortReader, { once: true });
+  });
   try {
     while (true) {
-      if (signal.aborted)
-        throw new DOMException("The operation was aborted", "AbortError");
-      const next = await reader.read();
+      const next = await Promise.race([reader.read(), aborted]);
       if (next.done) break;
       total += next.value.byteLength;
       if (total > maxBytes) {
@@ -117,6 +124,7 @@ async function readBoundedBody(
       chunks.push(next.value);
     }
   } finally {
+    if (abortReader) signal.removeEventListener("abort", abortReader);
     reader.releaseLock();
   }
   const result = new Uint8Array(total);
