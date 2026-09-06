@@ -2,18 +2,56 @@
 
 ## Current State
 
-- Status: ready
+- Status: in progress
 - Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha.md`
 - Last updated: 2026-09-05
-- Current focus: implementation-ready alpha with operator account, secret, and deployment handoff defined
+- Current focus: final completion pass — recovery and focus contracts are advancing; next is authenticated live acceptance and deployment hardening
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: approve implementation via `feature-builder`, beginning with Plan Ledger step 1
+- Next action: regenerate `APP_PASSPHRASE_SCRYPT_HASH` with the corrected salt encoding, restart the live server, verify browser unlock, then continue the authenticated live acceptance and Vercel checklist
 
 ## Handoff
 
-Read `Current State`, `Concrete Application Stack`, `Browser Interaction Design`, `Application HTTP and Streaming Contract`, `Explicit Non-Goals`, `Implementation Plan`, and `Operator Setup and Secret Handoff` first. Product, interfaces, browser states, transport contracts, dependencies, implementation steps, and verification are settled. The alpha is a Vercel-hosted React/Vite SPA with a portable Hono backend, browser-only IndexedDB threads, Brave search, application-owned extraction, Anthropic synthesis, passphrase auth, and Markdown reports.
+Read `Current State`, `Implementation Sync and Deviations`, `Concrete Application Stack`, `Browser Interaction Design`, `Application HTTP and Streaming Contract`, `Explicit Non-Goals`, `Implementation Plan`, and `Operator Setup and Secret Handoff` first. The original product contract remains the target; `Implementation Sync and Deviations` records what is implemented, what was added, and what must still be closed. Local live keys are available for acceptance testing, but deployment is deferred to the final Vercel step. The alpha is a Vercel-hosted React/Vite SPA with a portable Hono backend, browser-only IndexedDB threads, Brave search, application-owned extraction, Anthropic synthesis, passphrase auth, and Markdown reports.
 
-Begin with Plan Ledger step 1 and update `Current State`, this handoff, and ledger markers as work proceeds. Fixture mode allows implementation through step 11 without live credentials; step 12 needs the deployment inputs. Do not add remote thread storage, sync, autonomous research, context compaction, topic archiving, edit-history branching, rich editors, or second-provider work to the alpha.
+Ledger steps 1–5 have working verified baselines but remain open for the completion work recorded in `Implementation Sync and Deviations`. Milestone 1 hardened the extractor with pinned DNS connection selection, streamed body limits, and expanded reserved-address checks; TLS policy was documented separately and remains operator-controlled. Milestone 2 added protected application routes, same-origin mutation checks, request-size bounds, rolling session refresh, and Upstash limiter selection. Milestone 3 added bounded concurrent extraction, deterministic frozen evidence events, request-abort handling, and SSE heartbeats. Milestone 4 added IndexedDB schema upgrades/validation, autosaved report and transcript drafts, resume/start-over behavior, native share fallback, and topic backup controls. Milestone 5 added a live/fixture auth gate, streaming SSE consumption, research Stop/interruption behavior, UI contract tests, Playwright Chromium/WebKit configuration, and axe coverage. Milestone 6 added provider error normalization, protected live provider routes, security response headers, a built-asset secret scan, loopback dev-proxy origin handling, fixture-mode provider isolation, and a documented local TLS trust handoff. The application deliberately does not reject or set `NODE_TLS_REJECT_UNAUTHORIZED`; operator/deployment configuration remains responsible for keeping verification enabled. Local verification is green at 38 tests, lint, typecheck, build, provider readiness with TLS verification enabled, and four Playwright Chromium/WebKit fixture/axe tests. A direct extractor smoke reached the real TLS handshake with verification enabled and confirmed the local `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` trust-chain issue; no insecure fallback was added. Live chat/research acceptance remains pending an interactive authenticated session and operator-managed local CA trust; an earlier unauthenticated smoke was invalidated after the route protection milestone. Authentication now has scrypt hash verification, signed expiring cookies with previous-key verification, fixture-safe auth routes, cookie logout, in-memory rate limiting, and an Upstash limiter seam. Brave lookup now normalizes bounded ranked results, deduplicates canonical URLs, handles provider failures, and serves fixture/live provider paths without involving model or extraction code. Step 6 has a working Readability/content-type/URL-validation baseline, but remains active until production fetches use the validated DNS result and streamed byte bounds. A new fixture-only `/api/turn` SSE endpoint emits ordered chat/research lifecycle events with exactly one terminal completion event. Follow-up chat turns now append to the existing IndexedDB topic and the transcript workbench exports all saved turns. The provider-neutral Anthropic adapter now builds delimited evidence envelopes, streams normalized content, parses citation sentinels across chunk boundaries, rejects unknown source IDs as plain text, and captures usage. A deterministic `/api/report` endpoint returns an editable Markdown answer report. The new fixture `/api/research` endpoint now runs query → sources → extraction → synthesis → completion events. The Vite browser shell now calls `/api/lookup` and `/api/research`, renders ranked sources and answers, proxies `/api` to the local Node runtime, and persists completed lookup/research topics through the IndexedDB stores. The topic drawer loads saved summaries, saved topics can be reopened, renamed, and explicitly deleted with confirmation; New topic returns to the focused home composer. The desktop evidence column exposes attached source links and mobile collapses it below the answer. `GET /api/providers/status` exposes boolean readiness only, never credentials. Retry semantics, report workbench, and final extractor hardening remain active. Fixture mode allows implementation through step 11 without live credentials; step 12 needs the deployment inputs. Do not add remote thread storage, sync, autonomous research, context compaction, topic archiving, edit-history branching, rich editors, or second-provider work to the alpha.
+
+## Implementation Sync and Deviations
+
+This section records the implementation reality where it differs from the original settled plan. These are tracked completion items, not silent scope changes.
+
+### Implemented additions and product refinements
+
+- `GET /api/providers/status` was added as a secret-free local/deployment readiness probe.
+- `POST /api/report` was added for deterministic answer-scoped Markdown reports.
+- `POST /api/research` was added as the staged research SSE boundary: query → sources → extraction → synthesis → completion.
+- `POST /api/turn` supports fixture and live Anthropic follow-up chat streams.
+- The browser UI now persists lookup/research/chat turns in IndexedDB, exposes a topic drawer with rename/delete/new-topic actions, shows a desktop evidence column, offers a report workbench, exports full transcripts, supports lookup promotion, and provides `/settings` Appearance controls with light/dark/auto themes.
+- The visual design was intentionally simplified after hands-on review: full-width shell, Helvetica Neue/system sans, Magic School Bus yellow accent, rotating `make mistakes` / `get messy` home copy, and an external mode/Go control.
+
+### Deviations and incomplete original requirements
+
+- XState machines and React Aria Components remain deferred implementation details; the accepted alpha behavior is currently implemented with local React state and native controls. This is only a remaining item if the named library-level architecture is required rather than the observable state contract.
+- Playwright Chromium/WebKit and axe smoke coverage is implemented and passing. Broader MSW browser fixtures and recovery-path E2E coverage remain.
+- IndexedDB has versioned upgrade handling, validated thread saves/loads, atomic deletion cleanup, autosaved drafts, resume/start-over behavior, and backup import/export UI. Remaining recovery work is explicit quota/unavailable/corrupt-record UX and deterministic artifact/recovery tests.
+- Auth primitives, protected application routes, same-origin mutation checks, rolling refresh, request bounds, and Upstash selection are implemented. A salt-encoding mismatch in the hash-generation script was fixed and now has a format-verification test; existing hashes must be regenerated. Remaining work is the live authenticated contract matrix, absolute-expiry edge coverage, and final browser expiry behavior.
+- Brave and Anthropic adapters are live-wired locally. Remaining provider work is the full malformed/error matrix, prompt-injection/interruption fixtures, persistence-boundary assertions, and authenticated live research verification.
+- The extractor has pinned public DNS connection selection, streamed decoded-byte limits, redirect validation, content-type/timeout bounds, Readability, and operator-controlled TLS trust handling. Remaining work is the broader redirect/rebinding/oversized integration matrix and trusted-CA live smoke.
+- Research orchestration now bounds concurrent extraction, emits frozen evidence IDs, observes aborts, and sends heartbeats. Remaining work is persisted stage state, stage retries, explicit event sequencing/Stop/EOF contract tests, and atomic completion persistence.
+- The report/transcript workbench has autosaved drafts, resume/start-over, copy/download/share fallback, and backup controls. Remaining work is dirty Back confirmation, backup recovery polish, topic-report generation, and deterministic artifact tests.
+- Vercel deployment has not been executed. Deployment remains explicitly Vercel-only for this alpha; local authenticated acceptance comes first, followed by Vercel configuration and production smoke tests.
+
+### Remaining completion backlog
+
+1. Finish extractor security: pinned DNS/connection lookup, streamed decoded-byte bounds, redirect/private-address/rebinding/oversized fixtures, production-safe error taxonomy, and TLS trust handling. Document `NODE_EXTRA_CA_CERTS` for trusted local proxy CAs; keep application code from setting or requiring `NODE_TLS_REJECT_UNAUTHORIZED`; verify development acceptance and production use normal certificate validation and skip bad-cert sources without weakening TLS.
+2. Finish transport/application contracts: request auth/origin/size guards, concurrent bounded extraction, frozen evidence persistence, stage retries, stop/EOF/heartbeat behavior, event sequencing guards, and atomic completion persistence.
+3. Finish auth wiring: protected lookup/turn/research/report handlers, rolling and absolute expiry, same-origin checks, Upstash limiter selection, and auth contract tests.
+4. Finish storage recovery: migrations, corrupt-record isolation, quota/unavailable states, artifact draft autosave/resume/discard, backup import/export, and conflict/recovery tests/UI.
+5. Finish provider verification: complete Anthropic replay/security fixtures, usage normalization, live error mapping, and no-provider-payload persistence assertions.
+6. Finish UI workflow states: XState or an explicitly documented replacement for the named workflows, stop/retry/interrupted/partial/zero-evidence states, citation focus restoration, and authenticated deep-link restoration.
+7. Finish export UX: topic report generation, deterministic transcript/report snapshots, draft workbench persistence, native share/copy/download fallbacks, and backup controls.
+8. Add quality coverage: Playwright desktop Chromium/mobile WebKit paths, RTL/MSW interaction tests, axe checks, responsive keyboard/focus verification, and `npm run test:e2e`.
+9. Run full local acceptance with live keys: cheap lookup, research, follow-up chat, transcript/report export, auth expiry, retry/interruption, SSRF probes, and browser reload recovery.
+10. Deploy only after the local gate: configure Vercel Node function, SPA rewrites, production/preview environment variables, Upstash, security headers, secret scan, local/Vercel contract parity, and production smoke tests.
 
 ## Summary
 
@@ -2034,6 +2072,7 @@ The browser app shell must not read or display IndexedDB topic content until aut
 - Restrict redirect behavior during extraction.
 - Give retrieved content no executable tools or authority.
 - Avoid prompt and conversation telemetry by default.
+- Application code must never set or require disabled TLS verification. `NODE_TLS_REJECT_UNAUTHORIZED=0` is outside the supported acceptance and deployment procedure, while the application intentionally does not forbid an operator-level local override. Local custom trust should use an operator-managed CA bundle or narrowly scoped TLS configuration; fetched pages cannot influence trust configuration.
 
 ## Cost Controls
 
@@ -2089,20 +2128,34 @@ The application may later become installable as a PWA, but offline support shoul
 
 Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blocked.
 
-- [ ] 1. Portable scaffold — deliverable: single-package React/Vite/Hono app with Node and Vercel adapters plus fixture mode; verify: install/lint/typecheck/test/build and both runtime smoke checks.
-- [ ] 2. Domain and policies — deliverable: normalized schemas, routing, evidence, citations, context, deterministic exports; verify: table/replay/snapshot tests and provider-payload serialization guard.
-- [ ] 3. IndexedDB storage — deliverable: thread/summary/draft stores, migrations, backup import/export; verify: `fake-indexeddb` transaction, failure, migration, conflict, and round-trip tests.
-- [ ] 4. Owner auth — deliverable: scrypt passphrase, signed sessions, auth routes, in-memory/Upstash limiters; verify: auth/expiry/cookie/rotation/limiter contract tests.
-- [ ] 5. Brave lookup — deliverable: normalized `SearchProvider` and `/api/lookup`; verify: fixture/error/bounds tests and zero Anthropic/extraction calls.
-- [ ] 6. Safe extraction — deliverable: SSRF-safe bounded Node extractor with Readability; verify: content, redirect, IP, rebinding, timeout, oversized, and unsupported-type tests.
-- [ ] 7. Anthropic adapter — deliverable: chat/research/report streaming with validated citation sentinels; verify: replay, injection, chunk boundary, unknown citation, interruption, and persistence-boundary tests.
-- [ ] 8. Orchestration/SSE — deliverable: turn/report streams, bounded extraction, stage-aware retry; verify: Hono end-to-end contract matrix and terminal-event assertions.
-- [ ] 9. Shell and lookup UI — deliverable: auth shell, drawer, mode routing, lookup/promotion states; verify: RTL/MSW plus desktop/mobile Playwright paths.
-- [ ] 10. Research/chat/evidence UI — deliverable: accepted turn/evidence states and recovery interactions; verify: machine-state components plus full/partial/failure/reload E2E paths.
-- [ ] 11. Reports and recovery UI — deliverable: Markdown workbench, drafts, export/share, data backup; verify: deterministic export tests and workbench/backup E2E paths.
-- [ ] 12. Hardened Vercel alpha — deliverable: configured secure deployment; verify: full CI commands, axe, secret scan, live provider smoke, portability parity, and SSRF probes.
+- [~] 1. Portable scaffold — deliverable: single-package React/Vite/Hono app with Node and Vercel adapters plus fixture mode; current: scaffold and local runtime pass; remaining: Vercel build/deep-link smoke and final security configuration.
+- [~] 2. Domain and policies — deliverable: normalized schemas, routing, evidence, citations, context, deterministic exports; current: core types/policies/citation/export paths pass; remaining: complete boundary schema coverage, context projection, migration schemas, and property/snapshot verification.
+- [~] 3. IndexedDB storage — deliverable: thread/summary/draft stores, migrations, backup import/export; current: versioned upgrade path, validated thread saves/loads, atomic topic cleanup, conflict round trips, autosaved artifact drafts, drawer backup import/export UI, and malformed-backup recovery implemented; remaining: explicit quota/unavailable UX and corrupt-record recovery tests.
+- [~] 4. Owner auth — deliverable: scrypt passphrase, signed sessions, auth routes, in-memory/Upstash limiters; current: protected lookup/turn/research/report routes, same-origin mutation checks, request-size bounds, rolling refresh, and Upstash limiter selection implemented; remaining: live authenticated contract matrix, absolute-expiry edge tests, and full UI auth-shell integration.
+- [~] 5. Brave lookup — deliverable: normalized `SearchProvider` and `/api/lookup`; current: live/fixture normalization, protected route, same-origin/body guards, and browser lookup pass; remaining: full provider error matrix and explicit no-extraction/no-model contract assertions.
+- [~] 6. Safe extraction — deliverable: SSRF-safe bounded Node extractor with Readability; current: pinned public DNS addresses, pinned Undici connection lookup for both lookup callback modes, streamed decoded-byte bounds, expanded reserved/mapped-address checks, and documented TLS trust handoff; remaining: broader redirect/rebinding/oversized integration matrix and operator-provided CA certificate-chain smoke.
+- [~] 7. Anthropic adapter — deliverable: chat/research/report streaming with validated citation sentinels; current: adapter, evidence envelope, usage normalization, citation replay fixtures, provider error normalization, protected live chat route, and deterministic report endpoint implemented; remaining: interruption/injection/persistence-boundary coverage and live research synthesis verification.
+- [~] 8. Orchestration/SSE — deliverable: turn/report streams, bounded extraction, stage-aware retry; current: research now bounds to three sources, extracts with configurable concurrency, emits frozen evidence IDs, observes request aborts, and sends SSE heartbeats; remaining: persisted stage state, retries, explicit stop/EOF contract tests, duplicate/out-of-order guards, and live provider interruption mapping.
+- [~] 9. Shell and lookup UI — deliverable: auth shell, drawer, mode routing, lookup/promotion states; current: fixture/live auth gate, unlock redirect, browser mode routing, local API proxy, lookup/research results, topic drawer, source links, and passing fixture browser smoke wired; remaining: deeper focus restoration, full auth expiry UX, and recovery-path browser coverage.
+- [~] 10. Research/chat/evidence UI — deliverable: accepted turn/evidence states and recovery interactions; current: staged SSE rendering, evidence presentation, interrupted Stop behavior, retry affordance, chat retry state, citation focus restoration, fixture/live auth integration, and basic Chromium/WebKit coverage implemented; remaining: full partial/zero-evidence state matrix and recovery E2E paths.
+- [~] 11. Reports and recovery UI — deliverable: Markdown workbench, drafts, export/share, data backup; current: editable report/transcript workbench, IndexedDB autosave/resume, start-over, dirty Back confirmation, copy/download/share fallback, drawer backup import/export, and malformed-backup recovery implemented; remaining: backup recovery UX polish, topic-report generation, and deterministic artifact tests.
+- [~] 12. Hardened Vercel alpha — deliverable: configured secure deployment; current: security headers, request bounds, secret scan, provider readiness, documented TLS trust handoff, fixture browser smoke, and axe smoke pass locally; remaining: authenticated live lookup/research/chat/report smoke, SSRF probes, Vercel environment configuration, deployment, and production verification.
 
 ## Verification
+
+Latest local verification on 2026-09-05:
+
+- `npm run lint` passed.
+- `npm run typecheck` passed.
+- `npm test` passed: 39 tests across 10 files.
+- `npm run build` passed.
+- `CI=1 NODE_TLS_REJECT_UNAUTHORIZED=1 npm run test:e2e` passed: 4 Chromium/WebKit fixture and axe smoke tests.
+- `git diff --check` passed and the working tree is clean.
+- `GET /api/providers/status` passed with live search/chat/extraction readiness.
+- Application code does not set or require the local `NODE_TLS_REJECT_UNAUTHORIZED=0` hack; acceptance commands explicitly use certificate verification.
+- Direct TLS extraction reached the real certificate handshake and failed closed with `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`; no insecure fallback was used.
+
+Remaining acceptance requires the operator to remove `NODE_TLS_REJECT_UNAUTHORIZED=0`, provide a trusted local CA via the documented parent-process `NODE_EXTRA_CA_CERTS` path if needed, unlock the live app interactively, and verify paid-provider flows before Vercel deployment.
 
 Required local commands (scripts created in step 1):
 
@@ -2132,7 +2185,7 @@ Alpha acceptance assertions:
 
 ## Operator Setup and Secret Handoff
 
-Implementation works in fixture mode without accounts or secrets. The operator supplies live services incrementally; secrets never go in chat, git, issue text, screenshots, browser configuration, or a `VITE_*` variable. The repository will provide a committed `.env.example` containing names/defaults only and a gitignored `.env.local` for live local development.
+Implementation works in fixture mode without accounts or secrets. Jonny has supplied local Brave and Anthropic credentials out-of-band in `.env.local`; do not copy, print, commit, or paste those values. They are for the local acceptance gate only until the Vercel environment is configured. The operator supplies live services incrementally; secrets never go in chat, git, issue text, screenshots, browser configuration, or a `VITE_*` variable. The repository will provide a committed `.env.example` containing names/defaults only and a gitignored `.env.local` for live local development.
 
 ### What Jonny needs to obtain
 
@@ -2148,7 +2201,7 @@ Implementation works in fixture mode without accounts or secrets. The operator s
 | Session signing keys | Ledger step 4 | Run `npm run secrets:generate`; retain the generated active key. Future rotations add a new active key while temporarily retaining the old verification key. | `SESSION_SIGNING_KEYS` secret |
 | Limiter-key secret | Ledger step 4 | Generated by the same script; it must be independent from session signing. | `LIMITER_KEY_SECRET` secret |
 
-The generated scripts must print shell-safe values but never write live secrets into tracked files. `auth:hash` reads from an interactive no-echo prompt, confirms the passphrase, generates a random salt, and prints the versioned scrypt hash. `secrets:generate` uses cryptographically secure random bytes and prints distinct session/limiter values.
+The generated scripts must print shell-safe values but never write live secrets into tracked files. `auth:hash` reads from an interactive hidden/no-echo prompt, confirms the passphrase, generates a random salt, and prints the versioned scrypt hash. `secrets:generate` uses cryptographically secure random bytes and prints distinct session/limiter values.
 
 ### How to provide values locally
 
@@ -2180,6 +2233,10 @@ UPSTASH_REDIS_REST_TOKEN=
 ```
 
 Node 22 local scripts load `.env.local`; Vite receives no secret values. `.gitignore` must cover `.env`, `.env.*`, and permit only `.env.example`. Before every commit/deploy, `git status` and the built `dist/` secret scan must remain clean.
+
+### Local TLS trust handoff
+
+Do not put `NODE_TLS_REJECT_UNAUTHORIZED=0` in `.env.local`, shell startup files, npm scripts, Vercel variables, or deployment configuration; remove the current local hack before live acceptance. If the local network uses a TLS-inspecting proxy, obtain its specific trusted CA PEM through the operator-managed development process and export it before Node starts: `NODE_EXTRA_CA_CERTS=/absolute/path/to/dev-proxy-ca.pem NODE_TLS_REJECT_UNAUTHORIZED=1 npm run dev:server`. `NODE_EXTRA_CA_CERTS` must be present in the parent environment because loading it from `.env.local` inside the runtime is too late for Node's TLS initialization. Keep the PEM outside the repository and do not log its contents. If no proxy is involved, repair the local Node trust-store/certificate-chain issue instead. Verify with a normal Node HTTPS request and `GET /api/providers/status`, then run the live research smoke test with certificate verification enabled. Vercel production must use its normal CA bundle; a source with an invalid certificate is skipped rather than fetched insecurely.
 
 ### How to provide values to Vercel
 
@@ -2223,7 +2280,7 @@ Preview deployments default to `DOROTHY_FIXTURE_MODE=true`: provide preview auth
 - [ ] Session and limiter secrets generated independently.
 - [ ] Production secrets added to Vercel and deployment recreated.
 - [ ] Preview configured with fixture providers; production configured with live providers.
-- [ ] Local fixture flow passes before any live credentials are added.
+- [x] Local fixture flow passes before any live credentials are added.
 - [ ] Live smoke passes: unlock, cheap lookup, research, follow-up chat, report export.
 - [ ] Provider usage/billing dashboards checked after the first smoke test.
 
@@ -2231,4 +2288,4 @@ Missing live inputs block only the corresponding adapter smoke/deployment step, 
 
 ## Open Questions
 
-None for alpha implementation. Revisit deferred scope only after the browser lookup → research → chat → report loop is deployed and used.
+No product questions remain for alpha. The only open gates are operator-owned: trusted local CA/passphrase/live smoke inputs, Vercel project access, Upstash provisioning, and the final deployment decision after acceptance.

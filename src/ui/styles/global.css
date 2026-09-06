@@ -1,0 +1,54 @@
+:root {
+  --paper: #ffffff;
+  --ink: #111111;
+  --muted: #666666;
+  --accent: #f6c945;
+  --line: #d0d0d0;
+  --display: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --shadow: 0 1rem 3rem rgb(0 0 0 / 8%);
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  font-synthesis: none;
+}
+:root[data-theme="dark"] {
+  --paper: #000000;
+  --ink: #ffffff;
+  --muted: #b5b5b5;
+  --line: #333333;
+  --shadow: 0 1rem 3rem rgb(0 0 0 / 35%);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"] {
+    --paper: #000000;
+    --ink: #ffffff;
+    --muted: #b5b5b5;
+    --line: #333333;
+    --shadow: 0 1rem 3rem rgb(0 0 0 / 35%);
+  }
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}
