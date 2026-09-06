@@ -28,6 +28,9 @@ export function createApp({ config }: AppDependencies) {
       const originUrl = new URL(origin);
       const requestUrl = new URL(context.req.url);
       if (originUrl.origin === requestUrl.origin) return true;
+      const forwardedHost = context.req.header("x-forwarded-host") ?? context.req.header("host") ?? requestUrl.host;
+      const forwardedProto = context.req.header("x-forwarded-proto") ?? requestUrl.protocol.replace(":", "");
+      if (`${forwardedProto}://${forwardedHost}` === originUrl.origin) return true;
       const loopback = new Set(["localhost", "127.0.0.1", "::1"]);
       return loopback.has(originUrl.hostname) && loopback.has(requestUrl.hostname);
     } catch { return false; }
