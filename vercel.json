@@ -1,4 +1,9 @@
 {
-  "functions": { "api/index.ts": { "runtime": "nodejs22.x" } },
-  "rewrites": [{ "source": "/api/(.*)", "destination": "/api" }, { "source": "/((?!api/).*)", "destination": "/index.html" }]
+  "functions": {
+    "api/index.ts": {}
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
 }
