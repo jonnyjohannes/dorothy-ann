@@ -5,9 +5,9 @@
 - Status: in progress
 - Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha.md`
 - Last updated: 2026-09-05
-- Current focus: final completion pass — recovery and focus contracts are advancing; next is authenticated live acceptance and deployment hardening
+- Current focus: Vercel runtime fix — the production API was returning a Response from a Node-style handler; the adapter now writes through Vercel’s Node request/response interface
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: regenerate `APP_PASSPHRASE_SCRYPT_HASH` with the corrected salt encoding, restart the live server, verify browser unlock, then continue the authenticated live acceptance and Vercel checklist
+- Next action: redeploy commit `d1803c5`, verify `/api/health` and `/api/providers/status` return JSON 200 responses, then resume authenticated live acceptance
 
 ## Handoff
 
@@ -2139,7 +2139,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [~] 9. Shell and lookup UI — deliverable: auth shell, drawer, mode routing, lookup/promotion states; current: fixture/live auth gate, unlock redirect, browser mode routing, local API proxy, lookup/research results, topic drawer, source links, and passing fixture browser smoke wired; remaining: deeper focus restoration, full auth expiry UX, and recovery-path browser coverage.
 - [~] 10. Research/chat/evidence UI — deliverable: accepted turn/evidence states and recovery interactions; current: staged SSE rendering, evidence presentation, interrupted Stop behavior, retry affordance, chat retry state, citation focus restoration, fixture/live auth integration, and basic Chromium/WebKit coverage implemented; remaining: full partial/zero-evidence state matrix and recovery E2E paths.
 - [~] 11. Reports and recovery UI — deliverable: Markdown workbench, drafts, export/share, data backup; current: editable report/transcript workbench, IndexedDB autosave/resume, start-over, dirty Back confirmation, copy/download/share fallback, drawer backup import/export, and malformed-backup recovery implemented; remaining: backup recovery UX polish, topic-report generation, and deterministic artifact tests.
-- [~] 12. Hardened Vercel alpha — deliverable: configured secure deployment; current: security headers, request bounds, secret scan, provider readiness, documented TLS trust handoff, fixture browser smoke, and axe smoke pass locally; remaining: authenticated live lookup/research/chat/report smoke, SSRF probes, Vercel environment configuration, deployment, and production verification.
+- [~] 12. Hardened Vercel alpha — deliverable: configured secure deployment; current: security headers, request bounds, secret scan, provider readiness, documented TLS trust handoff, fixture browser smoke, axe smoke, and Vercel Node handler adaptation pass locally; remaining: redeployed API smoke, authenticated live lookup/research/chat/report smoke, SSRF probes, and production verification.
 
 ## Verification
 
