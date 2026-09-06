@@ -85,12 +85,6 @@ export async function* runResearch(
   const outcomes = await extractConcurrently(boundedSources, dependencies);
   const pages: ExtractedPage[] = [];
   for (const outcome of outcomes) {
-    console.warn("research extraction outcome", {
-      sourceId: outcome.sourceId,
-      status: outcome.status,
-      code: outcome.status === "failed" ? outcome.code : undefined,
-      reason: outcome.status === "skipped" ? outcome.reason : undefined,
-    });
     yield {
       type: "research.extraction",
       sourceId: outcome.sourceId,
