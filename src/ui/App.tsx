@@ -12,10 +12,9 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { LocalArtifactDraftStore, LocalThreadStore } from "../adapters/browser/local-stores";
-import { ThreadStateOwner } from "../application/thread-owner";
 import type { SearchResult, Thread, ThreadSummary } from "../domain/types";
 import { renderThreadScrollback } from "../domain/thread-state";
-import { canPromoteToResearch, parseSlashCommand, resolveQueryMode } from "../domain/policies";
+import { canPromoteToResearch } from "../domain/policies";
 import styles from "./App.module.css";
 
 type Result = SearchResult;
@@ -27,7 +26,6 @@ type StreamState = {
 };
 const store = new LocalThreadStore();
 const draftStore = new LocalArtifactDraftStore();
-const threadOwner = new ThreadStateOwner(store);
 const now = () => new Date().toISOString() as Thread["createdAt"];
 const id = () => crypto.randomUUID();
 
@@ -61,6 +59,92 @@ function BackupControls() {
     <input ref={input} type="file" accept="application/json" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void importBackup(file); event.target.value = ""; }} />
     {message && <p role="status">{message}</p>}
   </section>;
+}
+
+function Drawer({ onClose }: { onClose: () => void }) {
+  const [topics, setTopics] = useState<ThreadSummary[]>([]);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const refresh = () => {
+    void store.list().then(setTopics);
+  };
+  useEffect(refresh, []);
+  const rename = async (topic: ThreadSummary) => {
+    const thread = await store.load(topic.id);
+    if (thread && title.trim()) {
+      await store.commit({ thread: { ...thread, title: title.trim(), updatedAt: now() }, reason: "renamed", committedAt: now() });
+      refresh();
+    }
+    setEditing(null);
+  };
+  const remove = async (topic: ThreadSummary) => {
+    if (window.confirm(`Delete “${topic.title}”? This cannot be undone.`)) {
+      await store.remove(topic.id);
+      refresh();
+    }
+  };
+  return (
+    <aside className={styles.drawer} aria-label="Topics">
+      <div className={styles.drawerHeader}>
+        <h2>
+          Topics{" "}
+        </h2>
+        <button onClick={onClose} aria-label="Close topics">
+          ×
+        </button>
+      </div>
+      {topics.length ? (
+        <ul>
+          {topics.map((topic) => (
+            <li key={topic.id}>
+              {editing === topic.id ? (
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void rename(topic);
+                  }}
+                >
+                  <input
+                    aria-label={`Rename ${topic.title}`}
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    autoFocus
+                  />
+                  <button type="submit">Save</button>
+                </form>
+              ) : (
+                <>
+                  <Link to={`/topics/${topic.id}`} onClick={onClose}>
+                    {topic.title}
+                  </Link>
+                  <div className={styles.topicActions}>
+                    <button
+                      onClick={() => {
+                        setEditing(topic.id);
+                        setTitle(topic.title);
+                      }}
+                    >
+                      Rename
+                    </button>
+                    <button onClick={() => void remove(topic)}>Delete</button>
+                  </div>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className={styles.muted}>No saved topics yet.</p>
+      )}
+      <BackupControls />
+      <p className={styles.drawerNote}>
+        Saved topics and sources stay in this browser.
+      </p>
+      <Link className={styles.settingsLink} to="/settings" onClick={onClose}>
+        ⚙
+      </Link>
+    </aside>
+  );
 }
 
 function Unlock() {
@@ -148,79 +232,72 @@ function Settings() {
         <section className={styles.settingsSection}>
           <h2>Storage and retention</h2>
           <p>Saved topics stay in this browser for seven days after meaningful activity. Expired topics are removed automatically; backups preserve an unexpired topic’s original expiry.</p>
-          <BackupControls />
         </section>
       </section>
     </main>
   );
 }
 
-function ThreadPicker({ onClose }: { onClose: () => void }) {
-  const navigate = useNavigate();
-  const route = useParams();
-  const activeThreadId = route.threadId;
-  const [topics, setTopics] = useState<ThreadSummary[]>([]);
-  const [active, setActive] = useState(0);
-  const [deleteArmed, setDeleteArmed] = useState(false);
-  const focused = topics[active];
-  const refresh = () => void store.list().then((next) => { setTopics(next); setActive((value) => Math.min(value, Math.max(0, next.length - 1))); });
-  useEffect(refresh, []);
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); onClose(); }
-      if (event.key === "ArrowDown") { event.preventDefault(); setDeleteArmed(false); setActive((value) => Math.min(value + 1, Math.max(0, topics.length - 1))); }
-      if (event.key === "ArrowUp") { event.preventDefault(); setDeleteArmed(false); setActive((value) => Math.max(0, value - 1)); }
-      if (event.key === "Enter" && focused) { event.preventDefault(); navigate(`/topics/${focused.id}`, { replace: true }); }
-      if (event.ctrlKey && event.key.toLowerCase() === "x" && focused) {
-        event.preventDefault();
-        if (!deleteArmed) { setDeleteArmed(true); return; }
-        void store.remove(focused.id).then(() => { if (activeThreadId === focused.id) navigate("/", { replace: true }); refresh(); setDeleteArmed(false); });
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [active, deleteArmed, focused, navigate, onClose, topics.length]);
-  return <div className={styles.commandOverlay} role="dialog" aria-modal="true" aria-label="Saved threads">
-    <section className={styles.threadPicker}>
-      <p className={styles.kicker}>/threads</p>
-      <h2>Saved threads</h2>
-      {topics.length ? <ul>{topics.map((topic, index) => <li key={topic.id} className={index === active ? styles.threadActive : ""}><button autoFocus={index === active} aria-current={index === active} onClick={() => navigate(`/topics/${topic.id}`, { replace: true })}>{topic.title}<small>{topic.lastTurnPreview ?? ""}</small></button></li>)}</ul> : <p className={styles.muted}>No saved threads yet.</p>}
-      <p className={styles.muted}>{deleteArmed ? "ctrl-x again to confirm deletion" : "↑/↓ select · Enter open · ctrl-x delete · Escape close"}</p>
-    </section>
-  </div>;
-}
-
-function ThreadsRoute() {
-  const navigate = useNavigate();
-  return <main className={styles.shell}><ThreadPicker onClose={() => navigate("/", { replace: true })} /></main>;
-}
-
-function PromptBox({ value, onChange, onSubmit, onCommand, disabled = false }: { value: string; onChange: (value: string) => void; onSubmit: (value: string, mode: "lookup" | "research") => void; onCommand: (command: string) => void; disabled?: boolean }) {
-  const submit = (event: FormEvent) => { event.preventDefault(); const input = value.trim(); if (!input) return; if (input.startsWith("/")) { onCommand(input); return; } onSubmit(input, resolveQueryMode(input)); };
-  return <form className={styles.promptBox} onSubmit={submit}>
-    <input aria-label="Search query" value={value} onChange={(event) => onChange(event.target.value)} placeholder="...? for research" disabled={disabled} autoFocus />
-  </form>;
-}
-
 function Home() {
   const [query, setQuery] = useState("");
-  const [threads, setThreads] = useState(false);
-  const [message, setMessage] = useState("");
+  const [tagline, setTagline] = useState("make mistakes");
+  useEffect(() => {
+    const lines = ["take chances", "make mistakes", "get messy"];
+    let index = 0;
+    const timer = window.setInterval(() => {
+      index = (index + 1) % lines.length;
+      setTagline(lines[index]);
+    }, 2400);
+    return () => window.clearInterval(timer);
+  }, []);
+  const [drawer, setDrawer] = useState(false);
   const navigate = useNavigate();
-  const submit = (input: string, selectedMode: "lookup" | "research") => navigate(`/topics/new?mode=${selectedMode}&q=${encodeURIComponent(input)}`);
-  const command = (input: string) => { const command = parseSlashCommand(input); if (command === "/settings") navigate("/settings"); else if (command === "/new") { setQuery(""); navigate("/", { replace: true }); } else if (command === "/threads") navigate("/threads"); else setMessage(`Unknown command: ${input}`); };
+  const inferred = query.trimEnd().endsWith("?");
+  const activeMode = inferred ? "research" : "lookup";
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (query.trim()) navigate(`/topics/new?mode=${activeMode}&q=${encodeURIComponent(query.trim())}`);
+  };
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <Link to="/" className={styles.brand}>DA</Link>
+        <button
+          className={styles.iconButton}
+          onClick={() => setDrawer(true)}
+          aria-label="Open topics"
+        >
+          ☰
+        </button>
+        <Link to="/" className={styles.brand}>
+          dorothy-ann
+        </Link>
+        <Link
+          className={styles.iconButton}
+          to="/settings"
+          aria-label="Open settings"
+        >
+          ⚙
+        </Link>
       </header>
-      {threads && <ThreadPicker onClose={() => setThreads(false)} />}
+      {drawer && <Drawer onClose={() => setDrawer(false)} />}
       <section className={styles.hero}>
-        <h2 className={styles.kicker}>fullscreen research desk</h2>
-        <p className={styles.muted}>Ask a question, or use <code>/settings</code>, <code>/new</code>, and <code>/threads</code>.</p>
+        <h2 className={styles.kicker}>{tagline}</h2>
+        <form onSubmit={submit} className={styles.queryForm}>
+          <div className={styles.queryRow}>
+            <input
+              aria-label="Search query"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Add ? to ask Dorothy Ann to research"
+              autoFocus
+            />
+          </div>
+          <div className={styles.submitGroup}>
+            <span className={styles.routeHint} aria-live="polite">{activeMode}</span>
+            <button type="submit">Go</button>
+          </div>
+        </form>
       </section>
-      {message && <p role="status" className={styles.commandMessage}>{message}</p>}
-      <PromptBox value={query} onChange={setQuery} onSubmit={submit} onCommand={command} />
     </main>
   );
 }
@@ -486,8 +563,7 @@ function Topic() {
   const [threadId] = useState(() => route.threadId === "new" ? id() : route.threadId ?? id());
   const query = params.get("q") ??"";
   const mode = params.get("mode") ?? "lookup";
-  const navigate = useNavigate();
-  const [threads, setThreads] = useState(false);
+  const [drawer, setDrawer] = useState(false);
   const [state, setState] = useState<StreamState>({
     stage: "loading",
     answer: "",
@@ -498,13 +574,9 @@ function Topic() {
   const [chatStage, setChatStage] = useState("");
   const [thread, setThread] = useState<Thread | null>(null);
   const [exportMessage, setExportMessage] = useState("");
-  const [commandMessage, setCommandMessage] = useState("");
-  const hasResearchLayout = mode === "research" || state.sources.length > 0 || Boolean(thread?.turns.some((turn) => turn.researchRun?.sources.length));
   const researchController = useRef<AbortController | null>(null);
   useEffect(() => {
     let cancelled = false;
-    const requestId = id();
-    threadOwner.begin(`topic:${threadId}`, requestId);
     const run = async () => {
       try {
         if (!query) {
@@ -554,20 +626,15 @@ function Topic() {
           });
           if (!response.ok) throw new Error("research failed");
           await readResearchStream(response, (next) => {
-            if (!cancelled && threadOwner.isCurrent(`topic:${threadId}`, requestId)) {
-              setState(next);
-            }
+            if (!cancelled) setState(next);
           });
         }
       } catch (error) {
-        if (!cancelled && threadOwner.isCurrent(`topic:${threadId}`, requestId)) {
+        if (!cancelled) {
           const interrupted = error instanceof DOMException && error.name === "AbortError";
-          const failure = interrupted ? "Research stopped." : error instanceof Error ? error.message : "request failed";
-          const next = { ...state, stage: interrupted ? "interrupted" : "failed", error: failure };
-          setState(next);
-          void saveTopic(threadId, query, mode, next, interrupted ? "turn_interrupted" : "turn_failed");
+          setState((current) => ({ ...current, stage: interrupted ? "interrupted" : "failed", error: interrupted ? "Research stopped." : error instanceof Error ? error.message : "request failed" }));
         }
-      } finally { researchController.current = null; threadOwner.finish(`topic:${threadId}`, requestId); }
+      } finally { researchController.current = null; }
     };
     void run();
     return () => {
@@ -582,18 +649,32 @@ function Topic() {
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <Link to="/" className={styles.brand}>DA</Link>
-        {thread && thread.turns.some((turn) => turn.assistantMessage) && (
-          <div className={styles.headerActions}>
-            <button className={styles.textButton} onClick={async () => { const artifact = renderThreadScrollback(thread); try { await navigator.clipboard.writeText(artifact.markdown); setExportMessage("Copied."); } catch { setExportMessage("Copy is unavailable; use Export file."); } }}>Copy</button>
-            <button className={styles.textButton} onClick={() => { const artifact = renderThreadScrollback(thread); downloadMarkdown(artifact.markdown, artifact.filename); setExportMessage("Markdown exported."); }}>Export</button>
-            {exportMessage && <span role="status" className={styles.muted}>{exportMessage}</span>}
-          </div>
-        )}
+        <button
+          className={styles.iconButton}
+          onClick={() => setDrawer(true)}
+          aria-label="Open topics"
+        >
+          ☰
+        </button>
+        <Link to="/" className={styles.brand}>
+          dorothy-ann
+        </Link>
+        <span className={styles.kicker}>{mode}</span>
       </header>
-      {threads && <ThreadPicker onClose={() => setThreads(false)} />}
-      <div className={`${styles.topicLayout} ${hasResearchLayout ? styles.researchLayout : styles.lookupLayout}`}>
-        <section className={`${styles.topic} ${hasResearchLayout ? styles.researchBox : styles.sourcesBox}`}>
+      {drawer && <Drawer onClose={() => setDrawer(false)} />}
+      <div className={styles.topicLayout}>
+        <section className={styles.topic}>
+          <p className={styles.kicker} aria-live="polite">
+            {state.stage}
+          </p>
+          <h1>{query || "Saved topic"}</h1>
+          {thread && thread.turns.some((turn) => turn.assistantMessage) && (
+            <span className={styles.exportLinks}>
+              <button className={styles.textButton} onClick={async () => { const artifact = renderThreadScrollback(thread); try { await navigator.clipboard.writeText(artifact.markdown); setExportMessage("Copied."); } catch { setExportMessage("Copy is unavailable; use Export file."); } }}>Copy</button>
+              <button className={styles.textButton} onClick={() => { const artifact = renderThreadScrollback(thread); downloadMarkdown(artifact.markdown, artifact.filename); setExportMessage("Markdown exported."); }}>Export file</button>
+              {exportMessage && <span role="status" className={styles.muted}>{exportMessage}</span>}
+            </span>
+          )}
           {state.error && (
             <>
               <p role="alert">{state.error}</p>
@@ -605,7 +686,7 @@ function Topic() {
           )}
           {thread && (
             <article className={styles.scrollback} aria-label="Topic scrollback">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{renderThreadScrollback(thread, { includeSources: !hasResearchLayout }).markdown}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{renderThreadScrollback(thread).markdown}</ReactMarkdown>
             </article>
           )}
           {state.answer && !thread && (
@@ -613,18 +694,65 @@ function Topic() {
               <p>{renderCitations(state.answer, state.sources)}</p>
             </article>
           )}
-          <PromptBox value={chatInput} onChange={setChatInput} onCommand={(input) => { const command = parseSlashCommand(input); if (command === "/settings") navigate("/settings"); else if (command === "/new") navigate("/", { replace: true }); else if (command === "/threads") navigate("/threads"); else setCommandMessage(`Unknown command: ${input}`); }} onSubmit={async (prompt) => {
-            setChatInput(""); setChatAnswer(""); setChatStage("thinking");
-            const pending = await startChatTurn(threadId, prompt); if (pending) setThread(pending);
-            const response = await fetch("/api/turn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: prompt, mode: "chat", context: `${state.answer}\n\nSources:\n${state.sources.map((source) => `${source.title}: ${source.snippet ?? source.url}`).join("\n")}` }) });
-            if (!response.ok) { setChatStage("chat unavailable"); return; }
-            let finalAnswer = "";
-            await readResearchStream(response, (next) => { finalAnswer = next.answer; setChatAnswer(next.answer); setChatStage(next.stage); });
-            if (finalAnswer) { const committed = await appendChatTurn(threadId, prompt, finalAnswer); if (committed) setThread(committed); }
-          }} />
-          {commandMessage && <p className={styles.commandMessage} role="status">{commandMessage}</p>}
-          {chatStage && <p className={styles.muted} aria-live="polite">{chatStage}</p>}
-          {chatAnswer && <p className={styles.chatAnswer}>{renderCitations(chatAnswer, state.sources)}</p>}
+          {state.answer && (
+            <form
+              className={styles.chatForm}
+              onSubmit={async (event) => {
+                event.preventDefault();
+                if (!chatInput.trim()) return;
+                const prompt = chatInput.trim();
+                setChatInput("");
+                setChatAnswer("");
+                setChatStage("thinking");
+                const pending = await startChatTurn(threadId, prompt);
+                if (pending) setThread(pending);
+                const response = await fetch("/api/turn", {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({
+                    query: prompt,
+                    mode: "chat",
+                    context: `${state.answer}\n\nSources:\n${state.sources.map((source) => `${source.title}: ${source.snippet ?? source.url}`).join("\n")}`,
+                  }),
+                });
+                if (!response.ok) {
+                  setChatStage("chat unavailable");
+                  return;
+                }
+                let finalAnswer = "";
+                await readResearchStream(response, (next) => {
+                  finalAnswer = next.answer;
+                  setChatAnswer(next.answer);
+                  setChatStage(next.stage);
+                });
+                if (finalAnswer && threadId !== "new") {
+                  const committed = await appendChatTurn(threadId, prompt, finalAnswer);
+                  if (committed) setThread(committed);
+                }
+              }}
+            >
+              <label htmlFor="follow-up">Ask a follow-up</label>
+              <div className={styles.chatRow}>
+                <input
+                  id="follow-up"
+                  value={chatInput}
+                  onChange={(event) => setChatInput(event.target.value)}
+                  placeholder="Ask about this research"
+                />
+                <button type="submit">Go</button>
+              </div>
+              {chatStage && (
+                <p className={styles.muted} aria-live="polite">
+                  {chatStage}
+                </p>
+              )}
+              {chatAnswer && (
+                <p className={styles.chatAnswer}>
+                  {renderCitations(chatAnswer, state.sources)}
+                </p>
+              )}
+            </form>
+          )}
           {mode === "lookup" && canPromoteToResearch(query) && (
             <Link
               className={styles.promotion}
@@ -635,7 +763,7 @@ function Topic() {
           )}
           {state.sources.length > 0 && (
             <section
-              className={`${styles.resultsSection} ${hasResearchLayout ? styles.inlineSources : ""}`}
+              className={styles.resultsSection}
               aria-labelledby="sources-title"
             >
               <h2 id="sources-title">
@@ -719,7 +847,6 @@ export function App() {
     <Routes>
       <Route path="/unlock" element={<Unlock />} />
       <Route path="/settings" element={<Settings />} />
-      <Route path="/threads" element={<ThreadsRoute />} />
       <Route
         path="/topics/:threadId/export/:draftId"
         element={<ExportWorkbench />}
