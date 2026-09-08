@@ -1,4 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeSanitize from "rehype-sanitize";
 import {
   Link,
   Route,
@@ -10,6 +13,7 @@ import {
 } from "react-router-dom";
 import { LocalArtifactDraftStore, LocalThreadStore } from "../adapters/browser/local-stores";
 import type { SearchResult, Thread, ThreadSummary } from "../domain/types";
+import { renderThreadScrollback } from "../domain/thread-state";
 import { canPromoteToResearch } from "../domain/policies";
 import styles from "./App.module.css";
 
@@ -68,7 +72,7 @@ function Drawer({ onClose }: { onClose: () => void }) {
   const rename = async (topic: ThreadSummary) => {
     const thread = await store.load(topic.id);
     if (thread && title.trim()) {
-      await store.save({ ...thread, title: title.trim(), updatedAt: now() });
+      await store.commit({ thread: { ...thread, title: title.trim(), updatedAt: now() }, reason: "renamed", committedAt: now() });
       refresh();
     }
     setEditing(null);
@@ -225,6 +229,10 @@ function Settings() {
           <p>Choose how dorothy-ann looks on this device.</p>
           <ThemeControl />
         </section>
+        <section className={styles.settingsSection}>
+          <h2>Storage and retention</h2>
+          <p>Saved topics stay in this browser for seven days after meaningful activity. Expired topics are removed automatically; backups preserve an unexpired topic’s original expiry.</p>
+        </section>
       </section>
     </main>
   );
@@ -242,17 +250,13 @@ function Home() {
     }, 2400);
     return () => window.clearInterval(timer);
   }, []);
-  const [mode, setMode] = useState<"lookup" | "research">("lookup");
   const [drawer, setDrawer] = useState(false);
   const navigate = useNavigate();
   const inferred = query.trimEnd().endsWith("?");
-  const activeMode = mode === "lookup" && inferred ? "research" : mode;
+  const activeMode = inferred ? "research" : "lookup";
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (query.trim())
-      navigate(
-        `/topics/new?mode=${activeMode}&q=${encodeURIComponent(query.trim())}`,
-      );
+    if (query.trim()) navigate(`/topics/new?mode=${activeMode}&q=${encodeURIComponent(query.trim())}`);
   };
   return (
     <main className={styles.shell}>
@@ -289,16 +293,7 @@ function Home() {
             />
           </div>
           <div className={styles.submitGroup}>
-            <select
-              aria-label="Query mode"
-              value={activeMode}
-              onChange={(event) =>
-                setMode(event.target.value as "lookup" | "research")
-              }
-            >
-              <option value="lookup">lookup</option>
-              <option value="research">research</option>
-            </select>
+            <span className={styles.routeHint} aria-live="polite">{activeMode}</span>
             <button type="submit">Go</button>
           </div>
         </form>
@@ -363,31 +358,24 @@ function renderCitations(answer: string, sources: Result[]) {
   });
 }
 
-async function appendChatTurn(threadId: string, prompt: string, answer: string) {
+async function startChatTurn(threadId: string, prompt: string): Promise<Thread | null> {
   const thread = await store.load(threadId);
-  if (!thread) return;
+  if (!thread) return null;
   const timestamp = now();
-  await store.save({
-    ...thread,
-    updatedAt: timestamp,
-    turns: [
-      ...thread.turns,
-      {
-        id: id() as Thread["turns"][number]["id"],
-        mode: "chat",
-        status: "completed",
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        userMessage: { id: id() as never, role: "user", content: prompt, createdAt: timestamp },
-        assistantMessage: {
-          id: id() as never,
-          role: "assistant",
-          content: { parts: [{ type: "text", markdown: answer }] },
-          createdAt: timestamp,
-        },
-      },
-    ],
-  });
+  const next: Thread = { ...thread, updatedAt: timestamp, turns: [...thread.turns, { id: id() as Thread["turns"][number]["id"], mode: "chat", status: "running", createdAt: timestamp, updatedAt: timestamp, userMessage: { id: id() as never, role: "user", content: prompt, createdAt: timestamp } }] };
+  return store.commit({ thread: next, reason: "query_started", committedAt: timestamp });
+}
+
+async function appendChatTurn(threadId: string, prompt: string, answer: string): Promise<Thread | null> {
+  const thread = await store.load(threadId);
+  if (!thread) return null;
+  const timestamp = now();
+  const previous = thread.turns.at(-1);
+  const assistant = { id: id() as never, role: "assistant" as const, content: { parts: [{ type: "text" as const, markdown: answer }] }, createdAt: timestamp };
+  const completed = previous?.mode === "chat" && previous.userMessage.content === prompt
+    ? { ...previous, status: "completed" as const, updatedAt: timestamp, assistantMessage: assistant }
+    : { id: id() as Thread["turns"][number]["id"], mode: "chat" as const, status: "completed" as const, createdAt: timestamp, updatedAt: timestamp, userMessage: { id: id() as never, role: "user" as const, content: prompt, createdAt: timestamp }, assistantMessage: assistant };
+  return store.commit({ thread: { ...thread, updatedAt: timestamp, turns: previous?.mode === "chat" && previous.userMessage.content === prompt ? [...thread.turns.slice(0, -1), completed] : [...thread.turns, completed] }, reason: "turn_completed", committedAt: timestamp });
 }
 
 async function saveTopic(
@@ -395,7 +383,8 @@ async function saveTopic(
   query: string,
   mode: string,
   state: StreamState,
-) {
+  reason: "created" | "query_started" | "lookup_completed" | "research_stage" | "turn_completed" | "turn_failed" | "turn_interrupted" | "renamed" = "lookup_completed",
+): Promise<Thread> {
   const timestamp = now();
   const sources = state.sources.map((source, index) => ({
     ...source,
@@ -449,16 +438,27 @@ async function saveTopic(
       },
     ],
   };
-  await store.save(thread);
+  const existing = await store.load(threadId);
+  if (existing) {
+    const previous = existing.turns.at(-1);
+    const nextTurn = thread.turns[0];
+    const merged: Thread = { ...existing, updatedAt: timestamp, turns: previous ? [...existing.turns.slice(0, -1), { ...previous, ...nextTurn, id: previous.id, userMessage: previous.userMessage }] : thread.turns };
+    return store.commit({ thread: merged, reason, committedAt: timestamp });
+  }
+  return store.commit({ thread, reason, committedAt: timestamp });
 }
 
 function transcriptMarkdown(thread: Thread): string {
-  const lines = [`---`, `title: "${thread.title.replaceAll('"', '\\"')}"`, `created: ${thread.createdAt}`, `updated: ${thread.updatedAt}`, `model: ${thread.modelRef}`, `search_provider: ${thread.searchRef}`, `---`, "", `# ${thread.title}`];
-  for (const turn of thread.turns) {
-    lines.push("", "## User", "", turn.userMessage.content);
-    if (turn.assistantMessage) lines.push("", "## Assistant", "", turn.assistantMessage.content.parts.map((part) => part.type === "text" ? part.markdown : `[[cite:${part.sourceId}]]`).join(""));
-  }
-  return `${lines.join("\\n")}\\n`;
+  return renderThreadScrollback(thread).markdown;
+}
+
+function downloadMarkdown(markdown: string, filename: string) {
+  const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 function ExportWorkbench() {
@@ -572,6 +572,8 @@ function Topic() {
   const [chatInput, setChatInput] = useState("");
   const [chatAnswer, setChatAnswer] = useState("");
   const [chatStage, setChatStage] = useState("");
+  const [thread, setThread] = useState<Thread | null>(null);
+  const [exportMessage, setExportMessage] = useState("");
   const researchController = useRef<AbortController | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -583,6 +585,7 @@ function Topic() {
               ? await store.load(threadId)
               : null;
           const turn = saved?.turns.at(-1);
+          if (saved && !cancelled) setThread(saved);
           if (turn && !cancelled)
             setState({
               stage: "saved",
@@ -594,6 +597,7 @@ function Topic() {
             });
           return;
         }
+        await saveTopic(threadId, query, mode, { stage: "starting", answer: "", sources: [] }, "query_started").then((committed) => { if (!cancelled) setThread(committed); });
         if (mode === "lookup") {
           const response = await fetch("/api/lookup", {
             method: "POST",
@@ -609,12 +613,7 @@ function Topic() {
               sources: data.results,
             };
             setState(next);
-            await saveTopic(
-              threadId,
-              query,
-              mode,
-              next,
-            );
+            setThread(await saveTopic(threadId, query, mode, next));
           }
         } else {
           const controller = new AbortController();
@@ -645,12 +644,7 @@ function Topic() {
   }, [mode, query, threadId]);
   useEffect(() => {
     if (query && mode === "research" && state.stage === "complete")
-      void saveTopic(
-        threadId,
-        query,
-        mode,
-        state,
-      );
+      void saveTopic(threadId, query, mode, state, state.error ? "turn_failed" : "turn_completed").then(setThread);
   }, [mode, query, threadId, state]);
   return (
     <main className={styles.shell}>
@@ -674,20 +668,11 @@ function Topic() {
             {state.stage}
           </p>
           <h1>{query || "Saved topic"}</h1>
-          {state.answer && (
+          {thread && thread.turns.some((turn) => turn.assistantMessage) && (
             <span className={styles.exportLinks}>
-              <Link
-                className={styles.textLink}
-                to={`/topics/${threadId}/export/report?title=${encodeURIComponent(query)}&answer=${encodeURIComponent(state.answer)}`}
-              >
-                Export report →
-              </Link>
-              <Link
-                className={styles.textLink}
-                to={`/topics/${threadId}/export/transcript`}
-              >
-                Export transcript →
-              </Link>
+              <button className={styles.textButton} onClick={async () => { const artifact = renderThreadScrollback(thread); try { await navigator.clipboard.writeText(artifact.markdown); setExportMessage("Copied."); } catch { setExportMessage("Copy is unavailable; use Export file."); } }}>Copy</button>
+              <button className={styles.textButton} onClick={() => { const artifact = renderThreadScrollback(thread); downloadMarkdown(artifact.markdown, artifact.filename); setExportMessage("Markdown exported."); }}>Export file</button>
+              {exportMessage && <span role="status" className={styles.muted}>{exportMessage}</span>}
             </span>
           )}
           {state.error && (
@@ -699,7 +684,12 @@ function Topic() {
           {mode === "research" && ["loading", "starting", "sources found", "extracting evidence", "synthesizing"].includes(state.stage) && (
             <button onClick={() => researchController.current?.abort()}>Stop</button>
           )}
-          {state.answer && (
+          {thread && (
+            <article className={styles.scrollback} aria-label="Topic scrollback">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{renderThreadScrollback(thread).markdown}</ReactMarkdown>
+            </article>
+          )}
+          {state.answer && !thread && (
             <article className={styles.answer}>
               <p>{renderCitations(state.answer, state.sources)}</p>
             </article>
@@ -714,6 +704,8 @@ function Topic() {
                 setChatInput("");
                 setChatAnswer("");
                 setChatStage("thinking");
+                const pending = await startChatTurn(threadId, prompt);
+                if (pending) setThread(pending);
                 const response = await fetch("/api/turn", {
                   method: "POST",
                   headers: { "content-type": "application/json" },
@@ -734,7 +726,8 @@ function Topic() {
                   setChatStage(next.stage);
                 });
                 if (finalAnswer && threadId !== "new") {
-                  await appendChatTurn(threadId, prompt, finalAnswer);
+                  const committed = await appendChatTurn(threadId, prompt, finalAnswer);
+                  if (committed) setThread(committed);
                 }
               }}
             >

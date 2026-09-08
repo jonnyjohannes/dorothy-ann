@@ -16,7 +16,10 @@ export type ResearchRunStatus = "searching" | "extracting" | "ready" | "partial"
 export interface ResearchRun { id: ResearchRunId; origin: "search" | "promoted_lookup"; status: ResearchRunStatus; queries: string[]; lookupId?: string; targetViablePages: number; sources: SearchResult[]; extractions: ExtractionOutcome[]; evidenceSourceIds: SourceId[]; startedAt: IsoTimestamp; updatedAt: IsoTimestamp; completedAt?: IsoTimestamp; failure?: TurnFailure }
 export interface TurnFailure { stage: "search" | "extraction" | "synthesis" | "chat" | "report"; code: string; message: string; retryable: boolean; occurredAt: IsoTimestamp }
 export interface Turn { id: TurnId; mode: TurnMode; status: TurnStatus; createdAt: IsoTimestamp; updatedAt: IsoTimestamp; userMessage: UserMessage; assistantMessage?: AssistantMessage; researchRun?: ResearchRun; failure?: TurnFailure }
-export interface Thread { schemaVersion: 1; id: ThreadId; title: string; createdAt: IsoTimestamp; updatedAt: IsoTimestamp; modelRef: string; searchRef: string; turns: Turn[] }
+export interface Thread { schemaVersion: 1 | 2; id: ThreadId; title: string; createdAt: IsoTimestamp; updatedAt: IsoTimestamp; modelRef: string; searchRef: string; turns: Turn[] }
+export type ThreadSaveReason = "created" | "query_started" | "lookup_completed" | "research_stage" | "turn_completed" | "turn_failed" | "turn_interrupted" | "renamed";
+export interface ThreadCommit { thread: Thread; reason: ThreadSaveReason; requestId?: string; committedAt: IsoTimestamp }
+export interface StoredThreadEnvelopeV2 { schemaVersion: 2; thread: Thread; lastMeaningfulActivityAt: IsoTimestamp; expiresAt: IsoTimestamp }
 export interface ThreadSummary { id: ThreadId; title: string; createdAt: IsoTimestamp; updatedAt: IsoTimestamp; lastTurnPreview?: string }
 export interface ArtifactDraft { schemaVersion: 1; id: ArtifactDraftId; threadId: ThreadId; sourceKey: string; format: "dorothy_ann_report" | "transcript"; scope: "answer" | "topic"; turnId?: TurnId; markdown: string; sourceUpdatedAt: IsoTimestamp; dirty: boolean; createdAt: IsoTimestamp; updatedAt: IsoTimestamp }
 export interface ExportArtifact { format: "dorothy_ann_report" | "transcript"; scope: "answer" | "topic"; filename: string; mimeType: "text/markdown"; markdown: string; generatedAt: IsoTimestamp; sourceUpdatedAt: IsoTimestamp }

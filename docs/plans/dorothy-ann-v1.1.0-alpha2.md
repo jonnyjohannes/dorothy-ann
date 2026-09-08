@@ -2,15 +2,15 @@
 
 ## Current State
 
-- Status: ready
+- Status: in progress
 - Last updated: 2026-09-06
-- Current focus: alpha2 contract finalized; implementation can begin on branch `alpha2`
+- Current focus: alpha2 persisted envelope and first scrollback/export pass are implemented; orchestration and recovery hardening remain
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: implement ledger item 2, the persisted thread state contract, before refactoring the UI
+- Next action: unify stage-by-stage topic orchestration and add deterministic recovery/race tests before finalizing the UI acceptance pass
 
 ## Handoff
 
-Start with this document, then read the alpha plan's `Current State`, `Implementation Sync and Deviations`, `Browser Interaction Design`, `Storage Strategy`, `Export` sections, and the existing `src/ui/App.tsx` / `src/adapters/browser/local-stores.ts` persistence paths. The post-alpha scope is intentionally narrower than the alpha surface: a simple scrollback-first web UI, reliable seven-day saved threads containing the complete recoverable state, and a minimal direct-export flow. No implementation work has started for alpha2. The product decisions are finalized: one continuous scrollback surface, seven-day TTL from meaningful activity, and one direct transcript-style export of the active topic. Begin with ledger item 2: define and test the persisted v2 envelope and single commit boundary before changing UI behavior.
+Start with this document, then read the alpha plan's `Current State`, `Implementation Sync and Deviations`, `Browser Interaction Design`, `Storage Strategy`, `Export` sections, and the existing `src/ui/App.tsx` / `src/adapters/browser/local-stores.ts` persistence paths. The post-alpha scope is intentionally narrower than the alpha surface: a simple scrollback-first web UI, reliable seven-day saved threads containing the complete recoverable state, and a minimal direct-export flow. The v2 envelope, nested validation, migration, expiry cleanup, commit boundary, canonical renderer, and first UI integration are now implemented and verified. Remaining work is stage-complete orchestration, corruption/quota recovery, on-demand evidence disclosure, and full alpha2 browser acceptance.
 
 ## Summary
 
@@ -218,11 +218,11 @@ There is no separate report format, export workbench, or alternate serialization
 Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blocked.
 
 - [x] 1. Product contract — deliverable: final scrollback UI, TTL, restore, and export decisions in this plan; verify: decision review plus transition matrix.
-- [ ] 2. Persisted state contract — deliverable: versioned envelope, nested validation, migration rules, and commit boundary; verify: domain/port contract tests and migration fixtures.
-- [ ] 3. Reliable thread orchestration — deliverable: one owner for lookup/research/chat state and atomic committed transitions; verify: reload/follow-up/race/interruption tests.
-- [ ] 4. Seven-day retention/recovery — deliverable: expiry cleanup, corrupt/quota/unavailable behavior, and backup semantics; verify: fake IndexedDB tests with clock control.
-- [ ] 5. Scrollback UI — deliverable: simplified desktop/mobile topic shell with bottom composer and accessible source disclosure; verify: RTL/Playwright mobile and desktop interaction tests.
-- [ ] 6. Minimal export — deliverable: one topic export entry point using the canonical scrollback Markdown renderer with Copy and direct download; verify: byte-identical copy/download snapshots and export-failure tests.
+- [x] 2. Persisted state contract — deliverable: versioned envelope, nested validation, migration rules, and commit boundary; verify: domain/port contract tests and migration fixtures.
+- [~] 3. Reliable thread orchestration — deliverable: one owner for lookup/research/chat state and atomic committed transitions; verify: reload/follow-up/race/interruption tests.
+- [~] 4. Seven-day retention/recovery — deliverable: expiry cleanup, corrupt/quota/unavailable behavior, and backup semantics; verify: fake IndexedDB tests with clock control.
+- [~] 5. Scrollback UI — deliverable: simplified desktop/mobile topic shell with bottom composer and accessible source disclosure; verify: RTL/Playwright mobile and desktop interaction tests.
+- [~] 6. Minimal export — deliverable: one topic export entry point using the canonical scrollback Markdown renderer with Copy and direct download; verify: byte-identical copy/download snapshots and export-failure tests.
 - [ ] 7. Alpha2 acceptance — deliverable: updated docs, verification record, and clean branch milestone; verify: lint, typecheck, unit, build, E2E, `git diff --check`.
 
 ## Verification

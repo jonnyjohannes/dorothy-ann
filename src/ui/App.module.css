@@ -80,7 +80,8 @@
   overflow: hidden;
 }
 .submitGroup select,
-.submitGroup button {
+.submitGroup button,
+.submitGroup .routeHint {
   border: 0;
   background: transparent;
   color: inherit;
@@ -249,16 +250,15 @@
   color: var(--ink);
 }
 .topicLayout {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(18rem, 1fr);
-  gap: 3rem;
-  width: 100%;
+  display: block;
+  width: min(100%, 72rem);
   margin: 0 auto;
 }
 .topicLayout .topic {
   max-width: none;
 }
 .evidence {
+  display: none;
   position: sticky;
   top: 1rem;
   align-self: start;
@@ -319,7 +319,8 @@
   font-size: 0.8rem;
 }
 .resultsSection {
-  display: none;
+  display: block;
+  margin-top: 2rem;
 }
 .resultList {
   padding-left: 1.2rem;
@@ -341,11 +342,32 @@
 .exportLinks {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 1rem;
 }
+.textButton {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  cursor: pointer;
+}
+.routeHint { opacity: 0.7; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.08em; }
+.scrollback { max-width: 54rem; margin: 2rem auto 8rem; font-size: 1.05rem; line-height: 1.65; }
+.scrollback h1 { font-size: clamp(1.8rem, 4vw, 3rem); }
+.scrollback a { color: inherit; text-decoration-color: var(--accent); }
+.scrollback blockquote { border-left: 3px solid var(--accent); padding-left: 1rem; color: var(--muted); }
 .chatForm {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   margin-top: 3rem;
-  padding-top: 1.5rem;
+  padding: 1rem 0 calc(1rem + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  backdrop-filter: blur(8px);
   border-top: 1px solid var(--line);
 }
 .chatForm label {
