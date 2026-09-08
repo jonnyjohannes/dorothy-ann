@@ -3,14 +3,14 @@
 ## Current State
 
 - Status: in progress
-- Last updated: 2026-09-06
-- Current focus: alpha2 persisted envelope and first scrollback/export pass are implemented; orchestration and recovery hardening remain
+- Last updated: 2026-09-07
+- Current focus: implementing the fullscreen prompt/sources/research shell and slash-command navigation
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: unify stage-by-stage topic orchestration and add deterministic recovery/race tests before finalizing the UI acceptance pass
+- Next action: add focused slash-command/layout interaction coverage, then finish stage recovery and alpha2 browser acceptance
 
 ## Handoff
 
-Start with this document, then read the alpha plan's `Current State`, `Implementation Sync and Deviations`, `Browser Interaction Design`, `Storage Strategy`, `Export` sections, and the existing `src/ui/App.tsx` / `src/adapters/browser/local-stores.ts` persistence paths. The post-alpha scope is intentionally narrower than the alpha surface: a simple scrollback-first web UI, reliable seven-day saved threads containing the complete recoverable state, and a minimal direct-export flow. The v2 envelope, nested validation, migration, expiry cleanup, commit boundary, canonical renderer, and first UI integration are now implemented and verified. Remaining work is stage-complete orchestration, corruption/quota recovery, on-demand evidence disclosure, and full alpha2 browser acceptance.
+Start with this document, then read the alpha plan's `Current State`, `Implementation Sync and Deviations`, `Browser Interaction Design`, `Storage Strategy`, `Export` sections, and the existing `src/ui/App.tsx` / `src/adapters/browser/local-stores.ts` persistence paths. The post-alpha scope is intentionally narrower than the alpha surface: a simple scrollback-first web UI, reliable seven-day saved threads containing the complete recoverable state, and a minimal direct-export flow. The v2 envelope, nested validation, migration, expiry cleanup, commit boundary, canonical renderer, and fullscreen UI pivot are implemented and verified. The topic shell now uses a persistent bottom prompt, separate sources/research regions, no mounted sidebar, and `/settings`, `/new`, and `/threads` navigation. Remaining work is stage-complete orchestration, corruption/quota recovery, richer source disclosure, and full alpha2 browser acceptance.
 
 ## Summary
 
@@ -221,7 +221,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [x] 2. Persisted state contract — deliverable: versioned envelope, nested validation, migration rules, and commit boundary; verify: domain/port contract tests and migration fixtures.
 - [~] 3. Reliable thread orchestration — deliverable: one owner for lookup/research/chat state and atomic committed transitions; verify: reload/follow-up/race/interruption tests.
 - [~] 4. Seven-day retention/recovery — deliverable: expiry cleanup, corrupt/quota/unavailable behavior, and backup semantics; verify: fake IndexedDB tests with clock control.
-- [~] 5. Scrollback UI — deliverable: simplified desktop/mobile topic shell with bottom composer and accessible source disclosure; verify: RTL/Playwright mobile and desktop interaction tests.
+- [x] 5. Scrollback UI — deliverable: fullscreen shell with persistent bottom prompt, sourcesBox/researchBox layout, no sidebar, and slash-command navigation; verify: focused UI tests, lint, typecheck, and production build passed; broader RTL/Playwright interaction coverage remains in ledger item 7.
 - [~] 6. Minimal export — deliverable: one topic export entry point using the canonical scrollback Markdown renderer with Copy and direct download; verify: byte-identical copy/download snapshots and export-failure tests.
 - [ ] 7. Alpha2 acceptance — deliverable: updated docs, verification record, and clean branch milestone; verify: lint, typecheck, unit, build, E2E, `git diff --check`.
 
@@ -239,9 +239,25 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - Settings contains backup/storage/retention controls without crowding the primary topic flow.
 - Existing provider-neutral and security invariants from the alpha plan remain intact.
 
+## UI Pivot: Fullscreen Scrollback Shell
+
+The implementation direction is refined as follows:
+
+- The prompt box is permanently anchored at the bottom of the viewport, in the spirit of pi.dev fullscreen mode.
+- The prompt box includes the lookup/research action control. The existing persistent mode chip/control is replaced by this action affordance.
+- The primary topic surface has two named regions: `sourcesBox` for Brave ranked results and `researchBox` for the growing canonical Markdown transcript.
+- After lookup, `sourcesBox` occupies the full content width. Research is reached through the continued conversation in the persistent prompt box.
+- After research begins or completes, `researchBox` occupies roughly three quarters of the desktop content width and `sourcesBox` occupies the remaining quarter. Citations point to indexed source entries in `sourcesBox`.
+- The topic drawer/sidebar is removed from the primary UI entirely.
+- Slash commands are the secondary navigation mechanism. `/settings` routes to Settings, `/new` starts a fresh topic, and `/threads` opens a selectable saved-thread list.
+- `/threads` should feel like the tmux session launcher: keyboard-first, compact, reverse-ordered recent items, clear selection/focus, and an explicit empty state. It remains browser UI, not a shell/fzf integration.
+- Backup controls remain in Settings rather than the topic shell.
+
+These are a UI/UX refinement of alpha2, not new persistence or provider scope. The implementation should preserve the existing canonical Markdown, thread TTL, and committed-state contracts.
+
 ## Open Questions
 
-None. The alpha2 product contract is ready for implementation.
+None. The alpha2 product contract and fullscreen-shell refinement are ready for implementation.
 
 Final decisions carried into implementation:
 
