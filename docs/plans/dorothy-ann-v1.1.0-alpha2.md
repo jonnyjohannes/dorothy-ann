@@ -2,25 +2,15 @@
 
 ## Current State
 
-- Status: implementation in progress
-- Last updated: 2026-09-08
-- Current focus: alpha2 shell refinement is complete for this milestone; preparing the implementation PR while tracking orchestration/recovery follow-up work
+- Status: ready
+- Last updated: 2026-09-06
+- Current focus: alpha2 contract finalized; implementation can begin on branch `alpha2`
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: review the alpha2 milestone PR, then continue storage recovery and atomic orchestration hardening
+- Next action: implement ledger item 2, the persisted thread state contract, before refactoring the UI
 
 ## Handoff
 
-The alpha2 shell refinement is implemented and verified through the current milestone: `/threads` is a full-screen keyboard launcher, deletion uses two-step `ctrl-x`, prompt submission infers research from terminal `?`, the home header is minimal, thread Copy/Export actions sit top-right, saved research threads use a 3/4 conversation + 1/4 evidence layout, and the visible query is an unindented Markdown quote with a guide rule. Sources are omitted from the left research stream to avoid duplication while remaining in evidence and export output. A request-owner seam exists and rejects superseded commits. Remaining work is completing atomic stage orchestration, corruption/quota recovery, deterministic export failure coverage, legacy workbench removal, and full alpha2 browser acceptance.
-
-## Retroactive Implementation Record
-
-The following work occurred before this plan was fully used as the continuity record and is now captured here:
-
-- `dcc27ed` — implemented the v2 persisted thread envelope, nested validation, migration, seven-day expiry cleanup, commit boundary, canonical scrollback renderer, and initial Copy/export integration. Verification at the time: lint, typecheck, 41 unit tests, build, and `git diff --check`.
-- `a014403` — implemented the first fullscreen-shell pass: persistent bottom prompt, source/research layout, removed mounted sidebar/drawer, and `/settings`, `/new`, `/threads` navigation. Verification at the time: lint, typecheck, 41 unit tests, build, and `git diff --check`.
-- `bf6e077` — recorded the launcher/transcript refinement decisions from the subsequent design feedback. No source implementation was included in that commit.
-
-These records are historical continuity, not claims that the remaining orchestration, recovery, or acceptance work is complete.
+Start with this document, then read the alpha plan's `Current State`, `Implementation Sync and Deviations`, `Browser Interaction Design`, `Storage Strategy`, `Export` sections, and the existing `src/ui/App.tsx` / `src/adapters/browser/local-stores.ts` persistence paths. The post-alpha scope is intentionally narrower than the alpha surface: a simple scrollback-first web UI, reliable seven-day saved threads containing the complete recoverable state, and a minimal direct-export flow. No implementation work has started for alpha2. The product decisions are finalized: one continuous scrollback surface, seven-day TTL from meaningful activity, and one direct transcript-style export of the active topic. Begin with ledger item 2: define and test the persisted v2 envelope and single commit boundary before changing UI behavior.
 
 ## Summary
 
@@ -185,20 +175,6 @@ function renderThreadScrollback(thread: Thread): ScrollbackArtifact;
 
 The stored envelope is version 2 and carries retention metadata. The design must preserve provider-neutral serialization and validate the full nested object at the persistence boundary, not merely `turns: Array`.
 
-#### Request identity and stale commits
-
-`requestId` is a transient client/application identity, not persisted thread content. Each active network operation gets a unique request ID tied to its stable thread/turn/run IDs. The active topic owner records the latest request ID per operation; stream events are accepted only when their request ID still matches. A commit from an aborted, superseded, or stale request is ignored or returns a typed `StaleCommitError` and must not overwrite the newer committed thread. Reload does not resume an in-flight request; it restores the last committed state and requires an explicit retry.
-
-For implementation, the writer contract is:
-
-```ts
-interface ThreadStateWriter {
-  commit(input: ThreadCommit): Promise<Thread>;
-}
-```
-
-The writer validates and atomically persists accepted commits. Stale-event comparison belongs to the application/topic owner immediately before calling `commit`; the persistence adapter remains provider-neutral and does not persist request IDs.
-
 ### Seven-day retention
 
 Saved thread records use this retention envelope:
@@ -231,10 +207,10 @@ There is no separate report format, export workbench, or alternate serialization
 
 1. **Agree the alpha2 product contract.** Finalized in this document: one scrollback shell, inference-first routing, seven-day activity TTL, committed-stage restore, and direct Markdown export.
 2. **Define a single persisted thread state model.** Specify schema/version changes, nested validation, retention metadata, commit reasons, request identity, and migration behavior. Add focused domain/port tests before changing the UI.
-3. **Unify topic orchestration and persistence.** Route lookup, research stages, follow-up chat, interruption, retry, and reload through one thread state owner. Ensure every committed transition updates the full thread and summary atomically, and stale request IDs cannot commit over newer state.
+3. **Unify topic orchestration and persistence.** Route lookup, research stages, follow-up chat, interruption, retry, and reload through one thread state owner. Ensure every committed transition updates the full thread and summary atomically.
 4. **Implement seven-day cleanup and recovery.** Add lazy/eager expiry cleanup, unavailable/quota/corrupt-record handling, import/export retention rules, and deterministic tests for all storage boundaries.
-5. **Implement the keyboard-first fullscreen shell.** Build the full-height `/threads` launcher with exact slash-command parsing, ctrl-x delete/confirm, focus restoration, active-thread route replacement, `DA` home navigation, no top-right mode/title metadata, Enter-driven `?` prompt routing, square prompt emphasis, canonical visible transcript, quiet `you` / `DA` attribution, and horizontal turn separators.
-6. **Reduce export to one topic-level flow.** Reuse the same deterministic scrollback renderer for the growing Markdown view, Copy, and direct `.md` download; do not add an editor, chooser, or report workbench.
+5. **Refactor the topic UI into scrollback + bottom composer.** Remove normal-flow dashboard duplication, preserve responsive keyboard/focus behavior, and move secondary controls to drawer/settings/explicit overlays.
+6. **Reduce export to one topic-level flow.** Reuse one deterministic scrollback renderer for the growing Markdown view, Copy, and direct `.md` download; do not add an editor, chooser, or report workbench.
 7. **Run alpha2 acceptance and update the alpha2 ledger.** Verify reload at every meaningful stage, follow-up continuity, expiry, mobile layout, export recovery, and no loss of committed state.
 
 ## Plan Ledger
@@ -242,12 +218,11 @@ There is no separate report format, export workbench, or alternate serialization
 Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blocked.
 
 - [x] 1. Product contract — deliverable: final scrollback UI, TTL, restore, and export decisions in this plan; verify: decision review plus transition matrix.
-- [x] 2. Persisted state contract — deliverable: versioned envelope, nested validation, migration rules, and commit boundary; verify: domain/port contract tests and migration fixtures.
-- [~] 3. Reliable thread orchestration — deliverable: one owner for lookup/research/chat state and atomic committed transitions; current: request identity owner added and stale event callbacks ignored; remaining: route every transition through the owner and persist committed intermediate stages; verify: reload/follow-up/race/interruption tests.
+- [ ] 2. Persisted state contract — deliverable: versioned envelope, nested validation, migration rules, and commit boundary; verify: domain/port contract tests and migration fixtures.
+- [ ] 3. Reliable thread orchestration — deliverable: one owner for lookup/research/chat state and atomic committed transitions; verify: reload/follow-up/race/interruption tests.
 - [ ] 4. Seven-day retention/recovery — deliverable: expiry cleanup, corrupt/quota/unavailable behavior, and backup semantics; verify: fake IndexedDB tests with clock control.
-- [x] 5a. Initial scrollback UI — deliverable: fullscreen shell with persistent bottom prompt, sourcesBox/researchBox layout, no sidebar, and slash-command navigation; verify: focused UI tests, lint, typecheck, and production build passed.
-- [~] 5b. Launcher/transcript refinement — deliverable: full-height `/threads` launcher with deletion, Enter-driven `?` macro, square emphasized prompt, compact metadata, and quoted query treatment; current: launcher, two-step keyboard deletion, route replacement, prompt macro, minimal headers, top-right topic actions, 3/4 conversation + 1/4 evidence layout, and left-aligned quoted queries implemented; remaining: focused responsive/browser acceptance coverage.
-- [~] 6. Minimal export — deliverable: one topic export entry point using the canonical scrollback Markdown renderer with Copy and direct download; current: visible/copy/download paths share `renderThreadScrollback`; remaining: byte-identical and failure-path tests plus removal of legacy workbench from the primary flow.
+- [ ] 5. Scrollback UI — deliverable: simplified desktop/mobile topic shell with bottom composer and accessible source disclosure; verify: RTL/Playwright mobile and desktop interaction tests.
+- [ ] 6. Minimal export — deliverable: one topic export entry point using the canonical scrollback Markdown renderer with Copy and direct download; verify: byte-identical copy/download snapshots and export-failure tests.
 - [ ] 7. Alpha2 acceptance — deliverable: updated docs, verification record, and clean branch milestone; verify: lint, typecheck, unit, build, E2E, `git diff --check`.
 
 ## Verification
@@ -256,8 +231,6 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - Refresh during lookup, source collection, extraction, synthesis, follow-up streaming, and after completion restores the last committed complete state.
 - A completed follow-up appears in the same restored thread and receives the full intended prior context.
 - Aborted, stale, duplicate, or out-of-order events cannot overwrite a newer thread state.
-- `/threads` selection replaces the active route/thread and restores the selected thread rather than leaving the previously open thread mounted.
-- `ctrl-x` requires a second `ctrl-x` confirmation, deletes the focused row and related records, and restores focus predictably.
 - An expired thread and all related records are absent after cleanup; an unexpired thread remains restorable.
 - Corrupt records are isolated without preventing other topics from loading.
 - Mobile users can read upward through the stream and compose at the bottom without horizontal overflow or inaccessible hidden controls.
@@ -266,41 +239,9 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - Settings contains backup/storage/retention controls without crowding the primary topic flow.
 - Existing provider-neutral and security invariants from the alpha plan remain intact.
 
-## UI Pivot: Fullscreen Scrollback Shell
-
-The implementation direction is refined as follows:
-
-- The prompt box is permanently anchored at the bottom of the viewport, in the spirit of pi.dev fullscreen mode.
-- The prompt box has no lookup/research buttons or selector. Enter submits the prompt; ordinary input performs lookup and a terminal `?` selects research.
-- The primary topic surface has two named regions: `sourcesBox` for Brave ranked results and `researchBox` for the growing canonical Markdown transcript.
-- After lookup, `sourcesBox` occupies the full content width. Research is reached through the continued conversation in the persistent prompt box.
-- After research begins or completes, `researchBox` occupies roughly three quarters of the desktop content width and `sourcesBox` occupies the remaining quarter. Citations point to indexed source entries in `sourcesBox`.
-- The topic drawer/sidebar is removed from the primary UI entirely.
-- Slash commands are the secondary navigation mechanism. Recognize only exact `/settings`, `/new`, and `/threads` commands after trimming the submitted input. `/settings` routes to Settings, `/new` starts a fresh topic, and `/threads` opens a selectable saved-thread list. Unknown slash input becomes a normal visible error/status message and does not trigger navigation.
-- `/threads` should feel like the tmux session launcher: a nearly full-width and full-height launcher with heavy centered padding, keyboard-first reverse-ordered recent items, clear selection/focus, a legend, and an explicit empty state. It remains browser UI, not a shell/fzf integration. Selecting a row must replace the current route/thread state, not merely open correctly from the homepage.
-- Backup controls remain in Settings rather than the topic shell.
-
-These are a UI/UX refinement of alpha2, not new persistence or provider scope. The implementation should preserve the existing canonical Markdown, thread TTL, and committed-state contracts.
-
-### Launcher and transcript refinement
-
-- `/threads` is a full-viewport launcher overlay: nearly full width and height, generous outer padding, centered content/list, keyboard-first selection, and a visually calm tmux/fzf-inspired presentation.
-- Thread selection and deletion are keyboard-first. Thread rows are selectable but have no clickable delete control. `ctrl-x` arms deletion for the focused row; a second `ctrl-x` confirms and removes it. The launcher legend must show `ctrl-x delete · ctrl-x confirm`; no mouse-only confirmation affordance is added. After deletion, focus moves to the nearest remaining row; deleting the active thread routes to a fresh home state.
-- The prompt bar has no visible lookup/research buttons or selector. Submission is Enter-driven: ordinary input performs lookup; a terminal `?` selects research. The prompt bar keeps a short hint explaining the `?` macro and should receive stronger visual emphasis without rounded borders.
-- Remove the `Saved` kicker and `Saved topic` placeholder/title treatment from restored topics. The topic query/title should be the primary identity. The visible stream and the copied/downloaded artifact use the same canonical Markdown serialization, including its deterministic frontmatter; do not create a separate metadata omission/projection rule for this pass.
-- In research mode, the transcript/researchBox is the left three-quarter column and sources/evidence is the right one-quarter column. This relationship must hold for the active stream, not only for an export rendering.
-- Replace literal `User` / `Assistant` headings with quiet `you` / `DA` labels and a simple alignment/rule treatment. The visible labels are paired with explicit accessible labels such as `message from you` and `message from Dorothy Ann`; no clickable attribution controls are introduced.
-- Remove the top-right `{mode} · {title}` header metadata. The top-left `DA` brand links back to the home screen.
-
-### Message attribution decision
-
-Use quiet labels: small ordinary-weight `you` and `DA` labels with distinct alignment/rule treatment. The UI shorthand is `you` / `DA`, with accessible full labels available to assistive technology. Conversation marks and edge-only treatment are deferred.
-
-Insert a horizontal `---` separator between committed turns in the visible scrollback and in the canonical Markdown serialization, so separate exchanges remain easy to scan and copied/exported output preserves the same rhythm.
-
 ## Open Questions
 
-None. The alpha2 product contract and fullscreen-shell refinement are ready for implementation.
+None. The alpha2 product contract is ready for implementation.
 
 Final decisions carried into implementation:
 
