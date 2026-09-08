@@ -61,92 +61,6 @@ function BackupControls() {
   </section>;
 }
 
-function Drawer({ onClose }: { onClose: () => void }) {
-  const [topics, setTopics] = useState<ThreadSummary[]>([]);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const refresh = () => {
-    void store.list().then(setTopics);
-  };
-  useEffect(refresh, []);
-  const rename = async (topic: ThreadSummary) => {
-    const thread = await store.load(topic.id);
-    if (thread && title.trim()) {
-      await store.commit({ thread: { ...thread, title: title.trim(), updatedAt: now() }, reason: "renamed", committedAt: now() });
-      refresh();
-    }
-    setEditing(null);
-  };
-  const remove = async (topic: ThreadSummary) => {
-    if (window.confirm(`Delete “${topic.title}”? This cannot be undone.`)) {
-      await store.remove(topic.id);
-      refresh();
-    }
-  };
-  return (
-    <aside className={styles.drawer} aria-label="Topics">
-      <div className={styles.drawerHeader}>
-        <h2>
-          Topics{" "}
-        </h2>
-        <button onClick={onClose} aria-label="Close topics">
-          ×
-        </button>
-      </div>
-      {topics.length ? (
-        <ul>
-          {topics.map((topic) => (
-            <li key={topic.id}>
-              {editing === topic.id ? (
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void rename(topic);
-                  }}
-                >
-                  <input
-                    aria-label={`Rename ${topic.title}`}
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                    autoFocus
-                  />
-                  <button type="submit">Save</button>
-                </form>
-              ) : (
-                <>
-                  <Link to={`/topics/${topic.id}`} onClick={onClose}>
-                    {topic.title}
-                  </Link>
-                  <div className={styles.topicActions}>
-                    <button
-                      onClick={() => {
-                        setEditing(topic.id);
-                        setTitle(topic.title);
-                      }}
-                    >
-                      Rename
-                    </button>
-                    <button onClick={() => void remove(topic)}>Delete</button>
-                  </div>
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className={styles.muted}>No saved topics yet.</p>
-      )}
-      <BackupControls />
-      <p className={styles.drawerNote}>
-        Saved topics and sources stay in this browser.
-      </p>
-      <Link className={styles.settingsLink} to="/settings" onClick={onClose}>
-        ⚙
-      </Link>
-    </aside>
-  );
-}
-
 function Unlock() {
   const navigate = useNavigate();
   const [passphrase, setPassphrase] = useState("");
@@ -232,72 +146,68 @@ function Settings() {
         <section className={styles.settingsSection}>
           <h2>Storage and retention</h2>
           <p>Saved topics stay in this browser for seven days after meaningful activity. Expired topics are removed automatically; backups preserve an unexpired topic’s original expiry.</p>
+          <BackupControls />
         </section>
       </section>
     </main>
   );
 }
 
+function ThreadPicker({ onClose }: { onClose: () => void }) {
+  const navigate = useNavigate();
+  const [topics, setTopics] = useState<ThreadSummary[]>([]);
+  const [active, setActive] = useState(0);
+  useEffect(() => { void store.list().then(setTopics); }, []);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+      if (event.key === "ArrowDown") { event.preventDefault(); setActive((value) => Math.min(value + 1, Math.max(0, topics.length - 1))); }
+      if (event.key === "ArrowUp") { event.preventDefault(); setActive((value) => Math.max(0, value - 1)); }
+      if (event.key === "Enter" && topics[active]) navigate(`/topics/${topics[active].id}`);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, navigate, onClose, topics]);
+  return <div className={styles.commandOverlay} role="dialog" aria-label="Saved threads">
+    <section className={styles.threadPicker}>
+      <p className={styles.kicker}>/threads</p>
+      <h2>Saved threads</h2>
+      {topics.length ? <ul>{topics.map((topic, index) => <li key={topic.id} className={index === active ? styles.threadActive : ""}><button autoFocus={index === active} onClick={() => navigate(`/topics/${topic.id}`)}>{topic.title}<small>{topic.lastTurnPreview ?? ""}</small></button></li>)}</ul> : <p className={styles.muted}>No saved threads yet.</p>}
+      <p className={styles.muted}>↑/↓ select · Enter open · Escape close</p>
+    </section>
+  </div>;
+}
+
+function PromptBox({ value, onChange, onSubmit, onCommand, placeholder, disabled = false }: { value: string; onChange: (value: string) => void; onSubmit: (value: string, mode: "lookup" | "research") => void; onCommand: (command: string) => void; placeholder: string; disabled?: boolean }) {
+  const [mode, setMode] = useState<"lookup" | "research">("lookup");
+  const submit = (event: FormEvent) => { event.preventDefault(); const input = value.trim(); if (!input) return; if (input.startsWith("/")) onCommand(input.split(/\\s+/)[0].toLowerCase()); else onSubmit(input, mode); };
+  return <form className={styles.promptBox} onSubmit={submit}>
+    <input aria-label="Search query" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} disabled={disabled} autoFocus />
+    <div className={styles.promptActions}>
+      <select aria-label="Lookup or research" value={mode} onChange={(event) => setMode(event.target.value as "lookup" | "research")} disabled={disabled}><option value="lookup">lookup</option><option value="research">research</option></select>
+      <button type="submit" disabled={disabled}>Go</button>
+    </div>
+  </form>;
+}
+
 function Home() {
   const [query, setQuery] = useState("");
-  const [tagline, setTagline] = useState("make mistakes");
-  useEffect(() => {
-    const lines = ["take chances", "make mistakes", "get messy"];
-    let index = 0;
-    const timer = window.setInterval(() => {
-      index = (index + 1) % lines.length;
-      setTagline(lines[index]);
-    }, 2400);
-    return () => window.clearInterval(timer);
-  }, []);
-  const [drawer, setDrawer] = useState(false);
+  const [threads, setThreads] = useState(false);
   const navigate = useNavigate();
-  const inferred = query.trimEnd().endsWith("?");
-  const activeMode = inferred ? "research" : "lookup";
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    if (query.trim()) navigate(`/topics/new?mode=${activeMode}&q=${encodeURIComponent(query.trim())}`);
-  };
+  const submit = (input: string, selectedMode: "lookup" | "research") => navigate(`/topics/new?mode=${selectedMode}&q=${encodeURIComponent(input)}`);
+  const command = (input: string) => { if (input === "/settings") navigate("/settings"); else if (input === "/new") { setQuery(""); navigate("/"); } else if (input === "/threads") setThreads(true); };
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <button
-          className={styles.iconButton}
-          onClick={() => setDrawer(true)}
-          aria-label="Open topics"
-        >
-          ☰
-        </button>
-        <Link to="/" className={styles.brand}>
-          dorothy-ann
-        </Link>
-        <Link
-          className={styles.iconButton}
-          to="/settings"
-          aria-label="Open settings"
-        >
-          ⚙
-        </Link>
+        <Link to="/" className={styles.brand}>dorothy-ann</Link>
+        <span className={styles.kicker}>/settings · /threads</span>
       </header>
-      {drawer && <Drawer onClose={() => setDrawer(false)} />}
+      {threads && <ThreadPicker onClose={() => setThreads(false)} />}
       <section className={styles.hero}>
-        <h2 className={styles.kicker}>{tagline}</h2>
-        <form onSubmit={submit} className={styles.queryForm}>
-          <div className={styles.queryRow}>
-            <input
-              aria-label="Search query"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Add ? to ask Dorothy Ann to research"
-              autoFocus
-            />
-          </div>
-          <div className={styles.submitGroup}>
-            <span className={styles.routeHint} aria-live="polite">{activeMode}</span>
-            <button type="submit">Go</button>
-          </div>
-        </form>
+        <h2 className={styles.kicker}>fullscreen research desk</h2>
+        <p className={styles.muted}>Ask a question, or use <code>/settings</code>, <code>/new</code>, and <code>/threads</code>.</p>
       </section>
+      <PromptBox value={query} onChange={setQuery} onSubmit={submit} onCommand={command} placeholder="Search or type a slash command…" />
     </main>
   );
 }
@@ -563,7 +473,8 @@ function Topic() {
   const [threadId] = useState(() => route.threadId === "new" ? id() : route.threadId ?? id());
   const query = params.get("q") ??"";
   const mode = params.get("mode") ?? "lookup";
-  const [drawer, setDrawer] = useState(false);
+  const navigate = useNavigate();
+  const [threads, setThreads] = useState(false);
   const [state, setState] = useState<StreamState>({
     stage: "loading",
     answer: "",
@@ -649,21 +560,12 @@ function Topic() {
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <button
-          className={styles.iconButton}
-          onClick={() => setDrawer(true)}
-          aria-label="Open topics"
-        >
-          ☰
-        </button>
-        <Link to="/" className={styles.brand}>
-          dorothy-ann
-        </Link>
-        <span className={styles.kicker}>{mode}</span>
+        <Link to="/" className={styles.brand}>dorothy-ann</Link>
+        <span className={styles.kicker}>{mode} · {thread?.title ?? "new thread"}</span>
       </header>
-      {drawer && <Drawer onClose={() => setDrawer(false)} />}
-      <div className={styles.topicLayout}>
-        <section className={styles.topic}>
+      {threads && <ThreadPicker onClose={() => setThreads(false)} />}
+      <div className={`${styles.topicLayout} ${mode === "research" ? styles.researchLayout : styles.lookupLayout}`}>
+        <section className={`${styles.topic} ${mode === "research" ? styles.researchBox : styles.sourcesBox}`}>
           <p className={styles.kicker} aria-live="polite">
             {state.stage}
           </p>
@@ -694,65 +596,17 @@ function Topic() {
               <p>{renderCitations(state.answer, state.sources)}</p>
             </article>
           )}
-          {state.answer && (
-            <form
-              className={styles.chatForm}
-              onSubmit={async (event) => {
-                event.preventDefault();
-                if (!chatInput.trim()) return;
-                const prompt = chatInput.trim();
-                setChatInput("");
-                setChatAnswer("");
-                setChatStage("thinking");
-                const pending = await startChatTurn(threadId, prompt);
-                if (pending) setThread(pending);
-                const response = await fetch("/api/turn", {
-                  method: "POST",
-                  headers: { "content-type": "application/json" },
-                  body: JSON.stringify({
-                    query: prompt,
-                    mode: "chat",
-                    context: `${state.answer}\n\nSources:\n${state.sources.map((source) => `${source.title}: ${source.snippet ?? source.url}`).join("\n")}`,
-                  }),
-                });
-                if (!response.ok) {
-                  setChatStage("chat unavailable");
-                  return;
-                }
-                let finalAnswer = "";
-                await readResearchStream(response, (next) => {
-                  finalAnswer = next.answer;
-                  setChatAnswer(next.answer);
-                  setChatStage(next.stage);
-                });
-                if (finalAnswer && threadId !== "new") {
-                  const committed = await appendChatTurn(threadId, prompt, finalAnswer);
-                  if (committed) setThread(committed);
-                }
-              }}
-            >
-              <label htmlFor="follow-up">Ask a follow-up</label>
-              <div className={styles.chatRow}>
-                <input
-                  id="follow-up"
-                  value={chatInput}
-                  onChange={(event) => setChatInput(event.target.value)}
-                  placeholder="Ask about this research"
-                />
-                <button type="submit">Go</button>
-              </div>
-              {chatStage && (
-                <p className={styles.muted} aria-live="polite">
-                  {chatStage}
-                </p>
-              )}
-              {chatAnswer && (
-                <p className={styles.chatAnswer}>
-                  {renderCitations(chatAnswer, state.sources)}
-                </p>
-              )}
-            </form>
-          )}
+          <PromptBox value={chatInput} onChange={setChatInput} onCommand={(command) => { if (command === "/settings") navigate("/settings"); else if (command === "/new") navigate("/"); else if (command === "/threads") setThreads(true); }} onSubmit={async (prompt) => {
+            setChatInput(""); setChatAnswer(""); setChatStage("thinking");
+            const pending = await startChatTurn(threadId, prompt); if (pending) setThread(pending);
+            const response = await fetch("/api/turn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: prompt, mode: "chat", context: `${state.answer}\n\nSources:\n${state.sources.map((source) => `${source.title}: ${source.snippet ?? source.url}`).join("\n")}` }) });
+            if (!response.ok) { setChatStage("chat unavailable"); return; }
+            let finalAnswer = "";
+            await readResearchStream(response, (next) => { finalAnswer = next.answer; setChatAnswer(next.answer); setChatStage(next.stage); });
+            if (finalAnswer) { const committed = await appendChatTurn(threadId, prompt, finalAnswer); if (committed) setThread(committed); }
+          }} placeholder="Continue the conversation, or type /threads…" />
+          {chatStage && <p className={styles.muted} aria-live="polite">{chatStage}</p>}
+          {chatAnswer && <p className={styles.chatAnswer}>{renderCitations(chatAnswer, state.sources)}</p>}
           {mode === "lookup" && canPromoteToResearch(query) && (
             <Link
               className={styles.promotion}
