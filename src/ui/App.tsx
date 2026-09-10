@@ -26,7 +26,7 @@ type StreamState = {
 };
 const store = new LocalThreadStore();
 const draftStore = new LocalArtifactDraftStore();
-const rotatingTaglines = ["take chances", "make mistakes", "get messy"] as const;
+const rotatingTaglines = ["dorothy ann", "take chances", "make mistakes", "get messy"] as const;
 const threadOwner = new ThreadStateOwner(store);
 const now = () => new Date().toISOString() as Thread["createdAt"];
 const id = () => crypto.randomUUID();
