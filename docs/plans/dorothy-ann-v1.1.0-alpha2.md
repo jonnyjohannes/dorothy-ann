@@ -4,9 +4,9 @@
 
 - Status: planning
 - Last updated: 2026-09-08
-- Current focus: implementing the selected `you` / `DA` transcript refinement, launcher deletion, prompt macro, and metadata cleanup
+- Current focus: finalizing the keyboard-first launcher/prompt contract and thread-switching behavior before implementation
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: implement the selected `you` / `DA` attribution, turn separators, launcher, prompt macro, and metadata cleanup
+- Next action: implement the aligned full-screen launcher, `?` prompt macro, transcript attribution/separators, and reliable thread switching
 
 ## Handoff
 
@@ -185,6 +185,20 @@ function renderThreadScrollback(thread: Thread): ScrollbackArtifact;
 
 The stored envelope is version 2 and carries retention metadata. The design must preserve provider-neutral serialization and validate the full nested object at the persistence boundary, not merely `turns: Array`.
 
+#### Request identity and stale commits
+
+`requestId` is a transient client/application identity, not persisted thread content. Each active network operation gets a unique request ID tied to its stable thread/turn/run IDs. The active topic owner records the latest request ID per operation; stream events are accepted only when their request ID still matches. A commit from an aborted, superseded, or stale request is ignored or returns a typed `StaleCommitError` and must not overwrite the newer committed thread. Reload does not resume an in-flight request; it restores the last committed state and requires an explicit retry.
+
+For implementation, the writer contract is:
+
+```ts
+interface ThreadStateWriter {
+  commit(input: ThreadCommit): Promise<Thread>;
+}
+```
+
+The writer validates and atomically persists accepted commits. Stale-event comparison belongs to the application/topic owner immediately before calling `commit`; the persistence adapter remains provider-neutral and does not persist request IDs.
+
 ### Seven-day retention
 
 Saved thread records use this retention envelope:
@@ -217,10 +231,10 @@ There is no separate report format, export workbench, or alternate serialization
 
 1. **Agree the alpha2 product contract.** Finalized in this document: one scrollback shell, inference-first routing, seven-day activity TTL, committed-stage restore, and direct Markdown export.
 2. **Define a single persisted thread state model.** Specify schema/version changes, nested validation, retention metadata, commit reasons, request identity, and migration behavior. Add focused domain/port tests before changing the UI.
-3. **Unify topic orchestration and persistence.** Route lookup, research stages, follow-up chat, interruption, retry, and reload through one thread state owner. Ensure every committed transition updates the full thread and summary atomically.
+3. **Unify topic orchestration and persistence.** Route lookup, research stages, follow-up chat, interruption, retry, and reload through one thread state owner. Ensure every committed transition updates the full thread and summary atomically, and stale request IDs cannot commit over newer state.
 4. **Implement seven-day cleanup and recovery.** Add lazy/eager expiry cleanup, unavailable/quota/corrupt-record handling, import/export retention rules, and deterministic tests for all storage boundaries.
-5. **Refactor the topic UI into scrollback + bottom composer.** Remove normal-flow dashboard duplication, preserve responsive keyboard/focus behavior, and move secondary controls to drawer/settings/explicit overlays.
-6. **Reduce export to one topic-level flow.** Reuse one deterministic scrollback renderer for the growing Markdown view, Copy, and direct `.md` download; do not add an editor, chooser, or report workbench.
+5. **Implement the keyboard-first fullscreen shell.** Build the full-height `/threads` launcher with exact slash-command parsing, ctrl-x delete/confirm, focus restoration, active-thread route replacement, `DA` home navigation, no top-right mode/title metadata, Enter-driven `?` prompt routing, square prompt emphasis, canonical visible transcript, quiet `you` / `DA` attribution, and horizontal turn separators.
+6. **Reduce export to one topic-level flow.** Reuse the same deterministic scrollback renderer for the growing Markdown view, Copy, and direct `.md` download; do not add an editor, chooser, or report workbench.
 7. **Run alpha2 acceptance and update the alpha2 ledger.** Verify reload at every meaningful stage, follow-up continuity, expiry, mobile layout, export recovery, and no loss of committed state.
 
 ## Plan Ledger
@@ -242,6 +256,8 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - Refresh during lookup, source collection, extraction, synthesis, follow-up streaming, and after completion restores the last committed complete state.
 - A completed follow-up appears in the same restored thread and receives the full intended prior context.
 - Aborted, stale, duplicate, or out-of-order events cannot overwrite a newer thread state.
+- `/threads` selection replaces the active route/thread and restores the selected thread rather than leaving the previously open thread mounted.
+- `ctrl-x` requires a second `ctrl-x` confirmation, deletes the focused row and related records, and restores focus predictably.
 - An expired thread and all related records are absent after cleanup; an unexpired thread remains restorable.
 - Corrupt records are isolated without preventing other topics from loading.
 - Mobile users can read upward through the stream and compose at the bottom without horizontal overflow or inaccessible hidden controls.
@@ -255,13 +271,13 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 The implementation direction is refined as follows:
 
 - The prompt box is permanently anchored at the bottom of the viewport, in the spirit of pi.dev fullscreen mode.
-- The prompt box includes the lookup/research action control. The existing persistent mode chip/control is replaced by this action affordance.
+- The prompt box has no lookup/research buttons or selector. Enter submits the prompt; ordinary input performs lookup and a terminal `?` selects research.
 - The primary topic surface has two named regions: `sourcesBox` for Brave ranked results and `researchBox` for the growing canonical Markdown transcript.
 - After lookup, `sourcesBox` occupies the full content width. Research is reached through the continued conversation in the persistent prompt box.
 - After research begins or completes, `researchBox` occupies roughly three quarters of the desktop content width and `sourcesBox` occupies the remaining quarter. Citations point to indexed source entries in `sourcesBox`.
 - The topic drawer/sidebar is removed from the primary UI entirely.
-- Slash commands are the secondary navigation mechanism. `/settings` routes to Settings, `/new` starts a fresh topic, and `/threads` opens a selectable saved-thread list.
-- `/threads` should feel like the tmux session launcher: keyboard-first, compact, reverse-ordered recent items, clear selection/focus, and an explicit empty state. It remains browser UI, not a shell/fzf integration.
+- Slash commands are the secondary navigation mechanism. Recognize only exact `/settings`, `/new`, and `/threads` commands after trimming the submitted input. `/settings` routes to Settings, `/new` starts a fresh topic, and `/threads` opens a selectable saved-thread list. Unknown slash input becomes a normal visible error/status message and does not trigger navigation.
+- `/threads` should feel like the tmux session launcher: a nearly full-width and full-height launcher with heavy centered padding, keyboard-first reverse-ordered recent items, clear selection/focus, a legend, and an explicit empty state. It remains browser UI, not a shell/fzf integration. Selecting a row must replace the current route/thread state, not merely open correctly from the homepage.
 - Backup controls remain in Settings rather than the topic shell.
 
 These are a UI/UX refinement of alpha2, not new persistence or provider scope. The implementation should preserve the existing canonical Markdown, thread TTL, and committed-state contracts.
@@ -269,11 +285,12 @@ These are a UI/UX refinement of alpha2, not new persistence or provider scope. T
 ### Launcher and transcript refinement
 
 - `/threads` is a full-viewport launcher overlay: nearly full width and height, generous outer padding, centered content/list, keyboard-first selection, and a visually calm tmux/fzf-inspired presentation.
-- Each thread row has a dedicated `x` delete control. Deletion must not activate the row; require an explicit confirmation or equivalent inline confirmation before removing the thread and its related records.
+- Thread selection and deletion are keyboard-first. Thread rows are selectable but have no clickable delete control. `ctrl-x` arms deletion for the focused row; a second `ctrl-x` confirms and removes it. The launcher legend must show `ctrl-x delete · ctrl-x confirm`; no mouse-only confirmation affordance is added. After deletion, focus moves to the nearest remaining row; deleting the active thread routes to a fresh home state.
 - The prompt bar has no visible lookup/research buttons or selector. Submission is Enter-driven: ordinary input performs lookup; a terminal `?` selects research. The prompt bar keeps a short hint explaining the `?` macro and should receive stronger visual emphasis without rounded borders.
-- Remove the `Saved` kicker and `Saved topic` placeholder/title treatment from restored topics. The topic query/title should be the primary identity. The visible researchBox should not render the export frontmatter block as giant Markdown content; either omit it from the visible projection or render it as compact ordinary metadata. The downloadable/copyable canonical artifact may retain deterministic frontmatter.
+- Remove the `Saved` kicker and `Saved topic` placeholder/title treatment from restored topics. The topic query/title should be the primary identity. The visible stream and the copied/downloaded artifact use the same canonical Markdown serialization, including its deterministic frontmatter; do not create a separate metadata omission/projection rule for this pass.
 - In research mode, the transcript/researchBox is the left three-quarter column and sources/evidence is the right one-quarter column. This relationship must hold for the active stream, not only for an export rendering.
-- Replace literal `User` / `Assistant` headings with a simpler visual attribution system. The exact treatment remains a design decision below; it must clearly distinguish the person from Dorothy Ann without adding dashboard chrome.
+- Replace literal `User` / `Assistant` headings with quiet `you` / `DA` labels and a simple alignment/rule treatment. The visible labels are paired with explicit accessible labels such as `message from you` and `message from Dorothy Ann`; no clickable attribution controls are introduced.
+- Remove the top-right `{mode} · {title}` header metadata. The top-left `DA` brand links back to the home screen.
 
 ### Message attribution decision
 
