@@ -4,13 +4,13 @@
 
 - Status: implementation in progress
 - Last updated: 2026-09-08
-- Current focus: alpha2 shell refinement is implemented in the working tree; orchestration/recovery and acceptance coverage remain open
+- Current focus: alpha2 shell refinement is complete for this milestone; preparing the implementation PR while tracking orchestration/recovery follow-up work
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: implement the aligned full-screen launcher, `?` prompt macro, transcript attribution/separators, and reliable thread switching
+- Next action: review the alpha2 milestone PR, then continue storage recovery and atomic orchestration hardening
 
 ## Handoff
 
-The alpha2 shell refinement is now implemented in the working tree: `/threads` is a full-screen keyboard launcher, deletion uses two-step `ctrl-x`, prompt submission infers research from terminal `?`, the brand is `DA`, and scrollback uses quiet `you` / `DA` labels with separators. A request-owner seam now rejects superseded commits, but the existing Topic persistence helpers still need to be fully routed through it. Remaining work is completing atomic stage orchestration, corruption/quota recovery, deterministic export coverage, and full alpha2 browser acceptance.
+The alpha2 shell refinement is implemented and verified through the current milestone: `/threads` is a full-screen keyboard launcher, deletion uses two-step `ctrl-x`, prompt submission infers research from terminal `?`, the home header is minimal, thread Copy/Export actions sit top-right, saved research threads use a 3/4 conversation + 1/4 evidence layout, and the visible query is an unindented Markdown quote with a guide rule. Sources are omitted from the left research stream to avoid duplication while remaining in evidence and export output. A request-owner seam exists and rejects superseded commits. Remaining work is completing atomic stage orchestration, corruption/quota recovery, deterministic export failure coverage, legacy workbench removal, and full alpha2 browser acceptance.
 
 ## Retroactive Implementation Record
 
@@ -246,7 +246,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [~] 3. Reliable thread orchestration — deliverable: one owner for lookup/research/chat state and atomic committed transitions; current: request identity owner added and stale event callbacks ignored; remaining: route every transition through the owner and persist committed intermediate stages; verify: reload/follow-up/race/interruption tests.
 - [ ] 4. Seven-day retention/recovery — deliverable: expiry cleanup, corrupt/quota/unavailable behavior, and backup semantics; verify: fake IndexedDB tests with clock control.
 - [x] 5a. Initial scrollback UI — deliverable: fullscreen shell with persistent bottom prompt, sourcesBox/researchBox layout, no sidebar, and slash-command navigation; verify: focused UI tests, lint, typecheck, and production build passed.
-- [~] 5b. Launcher/transcript refinement — deliverable: full-height `/threads` launcher with deletion, Enter-driven `?` macro, square emphasized prompt, compact metadata, and `you` / `DA` turn treatment with separators; current: launcher, two-step keyboard deletion, route replacement, prompt macro, brand/header, and canonical attribution/separators implemented; remaining: focused responsive/browser acceptance coverage.
+- [~] 5b. Launcher/transcript refinement — deliverable: full-height `/threads` launcher with deletion, Enter-driven `?` macro, square emphasized prompt, compact metadata, and quoted query treatment; current: launcher, two-step keyboard deletion, route replacement, prompt macro, minimal headers, top-right topic actions, 3/4 conversation + 1/4 evidence layout, and left-aligned quoted queries implemented; remaining: focused responsive/browser acceptance coverage.
 - [~] 6. Minimal export — deliverable: one topic export entry point using the canonical scrollback Markdown renderer with Copy and direct download; current: visible/copy/download paths share `renderThreadScrollback`; remaining: byte-identical and failure-path tests plus removal of legacy workbench from the primary flow.
 - [ ] 7. Alpha2 acceptance — deliverable: updated docs, verification record, and clean branch milestone; verify: lint, typecheck, unit, build, E2E, `git diff --check`.
 
