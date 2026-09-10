@@ -132,9 +132,14 @@
   width: min(100%, 72rem);
   margin: 28vh auto 0;
 }
+.unlockCard > .kicker {
+  width: min(100%, 40rem);
+  margin-inline: auto;
+}
 .unlockForm {
   display: flex;
   width: min(100%, 40rem);
+  margin-inline: auto;
   border: 1px solid var(--line);
 }
 .unlockForm input {
@@ -147,6 +152,7 @@
   padding: 1rem;
 }
 .unlockForm button {
+  display: none;
   border: 0;
   border-left: 1px solid var(--line);
   border-radius: 0;
