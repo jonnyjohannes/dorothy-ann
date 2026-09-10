@@ -542,7 +542,7 @@ function Topic() {
     exportMessageTimer.current = window.setTimeout(() => setExportMessage(""), 3000);
   };
   useEffect(() => () => { if (exportMessageTimer.current) window.clearTimeout(exportMessageTimer.current); }, []);
-  const hasResearchLayout = mode === "research" || Boolean(thread?.turns.some((turn) => turn.mode === "research" && turn.researchRun?.sources.length));
+  const hasResearchLayout = mode === "research" || state.sources.length > 0 || Boolean(thread?.turns.some((turn) => (turn.researchRun?.sources.length ?? 0) > 0 || (turn.lookupResults?.length ?? 0) > 0));
   const researchController = useRef<AbortController | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -695,7 +695,7 @@ function Topic() {
               Research this with Dorothy Ann →
             </Link>
           )}
-          {state.sources.length > 0 && !thread && (
+          {state.sources.length > 0 && !thread && !hasResearchLayout && (
             <section
               className={`${styles.resultsSection} ${hasResearchLayout ? styles.inlineSources : ""}`}
               aria-labelledby="sources-title"

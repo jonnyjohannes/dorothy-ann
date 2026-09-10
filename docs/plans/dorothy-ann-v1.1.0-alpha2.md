@@ -10,7 +10,7 @@
 
 ## Handoff
 
-The alpha2 shell refinement is implemented and verified through the current milestone: `/threads` is a full-screen keyboard launcher, deletion uses an explicit row-level Delete button with confirmation, prompt submission infers research from terminal `?`, the home header is minimal, thread Copy/Export actions sit top-right, saved research threads use a 3/4 conversation + 1/4 evidence layout, and the visible query is an unindented Markdown quote with a guide rule. Sources are omitted from the left research stream to avoid duplication while remaining in evidence and export output. A request-owner seam exists and rejects superseded commits. Remaining work is completing atomic stage orchestration, corruption/quota recovery, deterministic export failure coverage, legacy workbench removal, and full alpha2 browser acceptance.
+The alpha2 shell refinement is implemented and verified through the current milestone: `/threads` is a full-screen keyboard launcher, deletion uses an explicit row-level Delete button with confirmation, prompt submission infers research from terminal `?`, the home header is minimal, thread Copy/Export actions sit top-right, saved research threads use a 3/4 conversation + 1/4 evidence layout, and the visible query is an unindented Markdown quote with a guide rule. Sources are omitted from the left topic stream in both lookup and research layouts to avoid duplication while remaining in the standardized evidence column and export output. A request-owner seam exists and rejects superseded commits. Remaining work is completing atomic stage orchestration, corruption/quota recovery, deterministic export failure coverage, legacy workbench removal, and full alpha2 browser acceptance.
 
 ## Retroactive Implementation Record
 

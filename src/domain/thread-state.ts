@@ -52,7 +52,7 @@ export function renderThreadScrollback(thread: Thread, options: { includeSources
       }).join(""));
     }
     if (turn.failure) lines.push("", `> ${turn.status}: ${turn.failure.message}`);
-    if (index === thread.turns.length - 1 && !turn.assistantMessage && !turn.failure) lines.push("", `> ${turn.status}`);
+    if (index === thread.turns.length - 1 && !turn.assistantMessage && !turn.failure && turn.status !== "completed") lines.push("", `> ${turn.status}`);
   });
   return { markdown: `${lines.join("\n")}\n`, filename: `${thread.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "dorothy-ann-topic"}.md`, sourceUpdatedAt: thread.updatedAt };
 }
