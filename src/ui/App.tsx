@@ -1,7 +1,4 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeSanitize from "rehype-sanitize";
 import {
   Link,
   Route,
@@ -17,6 +14,8 @@ import type { SearchResult, Thread, ThreadSummary } from "../domain/types";
 import { renderThreadScrollback } from "../domain/thread-state";
 import { canPromoteToResearch, parseSlashCommand, resolveQueryMode } from "../domain/policies";
 import styles from "./App.module.css";
+import { TurnTranscriptBox } from "./TurnTranscriptBox";
+import { EvidenceBox } from "./EvidenceBox";
 
 type Result = SearchResult;
 type StreamState = {
@@ -548,7 +547,7 @@ function Topic() {
     exportMessageTimer.current = window.setTimeout(() => setExportMessage(""), 3000);
   };
   useEffect(() => () => { if (exportMessageTimer.current) window.clearTimeout(exportMessageTimer.current); }, []);
-  const hasResearchLayout = effectiveMode === "research" || Boolean(thread?.turns.some((turn) => (turn.researchRun?.sources.length ?? 0) > 0));
+  const isResearchMode = effectiveMode === "research";
   const researchController = useRef<AbortController | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -646,15 +645,15 @@ function Topic() {
         )}
       </header>
       {threads && <ThreadPicker onClose={() => setThreads(false)} />}
-      <div className={`${styles.topicLayout} ${hasResearchLayout ? styles.researchLayout : styles.lookupLayout}`}>
-        <section className={`${styles.topic} ${hasResearchLayout ? styles.researchBox : styles.sourcesBox}`}>
+      <div className={`${styles.topicLayout} ${isResearchMode ? styles.researchLayout : styles.lookupLayout}`}>
+        <section className={styles.topic}>
           {state.error && (
             <>
               <p role="alert">{state.error}</p>
               <button onClick={() => window.location.reload()}>Retry</button>
             </>
           )}
-          {mode === "research" && ["loading", "starting", "sources found", "extracting evidence", "synthesizing"].includes(state.stage) && (
+          {isResearchMode && ["loading", "starting", "sources found", "extracting evidence", "synthesizing"].includes(state.stage) && (
             <>
               <div className={styles.researchLoader} role="status" aria-live="polite">
                 <span className={styles.loaderBars} aria-hidden="true"><i /><i /><i /></span>
@@ -663,23 +662,7 @@ function Topic() {
               <button onClick={() => researchController.current?.abort()}>Stop</button>
             </>
           )}
-          {thread && (
-            <article
-              className={styles.scrollback}
-              aria-label="Topic scrollback"
-              onClick={(event) => {
-                const link = (event.target as HTMLElement).closest("a");
-                const href = link?.getAttribute("href");
-                if (!href?.startsWith("#source-")) return;
-                event.preventDefault();
-                const sourceId = href.slice("#source-".length);
-                setSelectedSourceId(sourceId);
-                window.setTimeout(() => document.getElementById(`source-${sourceId}`)?.focus(), 0);
-              }}
-            >
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{renderThreadScrollback(thread, { includeSources: false, citationTarget: "evidence" }).markdown}</ReactMarkdown>
-            </article>
-          )}
+          {thread && <TurnTranscriptBox thread={thread} onEvidenceSelect={(sourceId) => { setSelectedSourceId(sourceId); window.setTimeout(() => document.getElementById(`source-${sourceId}`)?.focus(), 0); }} />}
           {state.answer && !thread && (
             <article className={styles.answer}>
               <p>{renderCitations(state.answer, state.sources)}</p>
@@ -710,63 +693,9 @@ function Topic() {
               Research this with Dorothy Ann →
             </Link>
           )}
-          {state.sources.length > 0 && !hasResearchLayout && (
-            <section
-              className={styles.resultsSection}
-              aria-labelledby="sources-title"
-            >
-              <h2 id="sources-title">
-                {mode === "research" ? "What I found" : "Results"}
-                <span className={styles.sourceCount}>
-                  {" "}
-                  {state.sources.length}
-                </span>
-              </h2>
-              <ul className={styles.resultList}>
-                {state.sources.map((source) => (
-                  <li className={styles.evidenceItem} key={source.sourceId}>
-                    <a href={source.url} target="_blank" rel="noreferrer">
-                      {source.title}
-                    </a>
-                    <small>{source.displayUrl}</small>
-                    {source.snippet && <p>{source.snippet}</p>}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+          {!isResearchMode && state.sources.length > 0 && <EvidenceBox sources={state.sources} selectedSourceId={selectedSourceId} onSelect={setSelectedSourceId} />}
         </section>
-        {hasResearchLayout && state.sources.length > 0 && (
-          <aside className={styles.evidence} aria-label="Evidence">
-            <h2>Evidence</h2>
-            <p>
-              {state.sources.length} source
-              {state.sources.length === 1 ? "" : "s"} attached to this turn.
-            </p>
-            {state.sources.map((source) => (
-              <article
-                id={`source-${source.sourceId}`}
-                tabIndex={-1}
-                className={`${styles.evidenceItem} ${selectedSourceId === source.sourceId ? styles.evidenceItemActive : ""}`}
-                aria-current={selectedSourceId === source.sourceId ? "true" : undefined}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter") return;
-                  event.preventDefault();
-                  window.open(source.url, "_blank", "noopener,noreferrer");
-                }}
-                key={source.sourceId}
-              >
-                <a href={source.url} target="_blank" rel="noreferrer">
-                  {source.title}
-                </a>
-                <small>{source.displayUrl}</small>
-                {source.snippet && (
-                  <p>{source.snippet.replace(/<[^>]+>/g, "")}</p>
-                )}
-              </article>
-            ))}
-          </aside>
-        )}
+        {isResearchMode && state.sources.length > 0 && <EvidenceBox sources={state.sources} selectedSourceId={selectedSourceId} onSelect={setSelectedSourceId} />}
       </div>
     </main>
   );

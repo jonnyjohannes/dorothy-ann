@@ -4,9 +4,9 @@
 
 - Status: implementation in progress
 - Last updated: 2026-09-08
-- Current focus: alpha2 shell refinement is complete for this milestone; preparing the implementation PR while tracking orchestration/recovery follow-up work
+- Current focus: explicit transcript/evidence components and persisted lookup/research mode semantics are implemented; validating the refactor
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: review the alpha2 milestone PR, then continue storage recovery and atomic orchestration hardening
+- Next action: review the component refactor, then continue remaining acceptance and recovery work
 
 ## Handoff
 
@@ -243,7 +243,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 
 - [x] 1. Product contract — deliverable: final scrollback UI, TTL, restore, and export decisions in this plan; verify: decision review plus transition matrix.
 - [x] 2. Persisted state contract — deliverable: versioned envelope, nested validation, migration rules, and commit boundary; verify: domain/port contract tests and migration fixtures.
-- [~] 3. Reliable thread orchestration — deliverable: one owner for lookup/research/chat state and atomic committed transitions; current: request identity owner added and stale event callbacks ignored; remaining: route every transition through the owner and persist committed intermediate stages; verify: reload/follow-up/race/interruption tests.
+- [~] 3. Reliable thread orchestration — deliverable: one owner for lookup/research/chat state and atomic committed transitions; current: request identity owner added, lookup results persist, lookup follow-ups append research turns, and Topic now derives restored mode from saved turns; remaining: route every transition through the owner and persist committed intermediate stages; verify: reload/follow-up/race/interruption tests.
 - [ ] 4. Seven-day retention/recovery — deliverable: expiry cleanup, corrupt/quota/unavailable behavior, and backup semantics; verify: fake IndexedDB tests with clock control.
 - [x] 5a. Initial scrollback UI — deliverable: fullscreen shell with persistent bottom prompt, sourcesBox/researchBox layout, no sidebar, and slash-command navigation; verify: focused UI tests, lint, typecheck, and production build passed.
 - [~] 5b. Launcher/transcript refinement — deliverable: full-height `/threads` launcher with deletion, Enter-driven `?` macro, square emphasized prompt, compact metadata, and quoted query treatment; current: launcher, explicit row-level Delete confirmation, route replacement, prompt macro, minimal headers, top-right topic actions, 3/4 conversation + 1/4 evidence layout, and left-aligned quoted queries implemented; remaining: focused responsive/browser acceptance coverage.

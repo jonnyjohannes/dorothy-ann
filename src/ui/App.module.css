@@ -342,6 +342,11 @@
   text-decoration-thickness: 0.18em;
   text-underline-offset: 0.12em;
 }
+.evidenceList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 .evidenceItem {
   border-bottom: 1px solid var(--line);
   padding: 0.75rem 0;
