@@ -26,6 +26,7 @@ type StreamState = {
 };
 const store = new LocalThreadStore();
 const draftStore = new LocalArtifactDraftStore();
+const rotatingTaglines = ["take chances", "make mistakes", "get messy"] as const;
 const threadOwner = new ThreadStateOwner(store);
 const now = () => new Date().toISOString() as Thread["createdAt"];
 const id = () => crypto.randomUUID();
@@ -62,23 +63,26 @@ function BackupControls() {
   </section>;
 }
 
+function RotatingBrand({ to, prefix = "" }: { to?: string; prefix?: string }) {
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => setIndex((value) => (value + 1) % rotatingTaglines.length), 3000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const content = `${prefix}${rotatingTaglines[index]}`;
+  return to ? <Link to={to} className={styles.brand}>{content}</Link> : <span className={styles.brand}>{content}</span>;
+}
+
 function Unlock() {
   const navigate = useNavigate();
   const [passphrase, setPassphrase] = useState("");
   const [message, setMessage] = useState("");
-  const [taglineIndex, setTaglineIndex] = useState(0);
-  const taglines = ["take chances", "make mistakes", "get messy"];
-  useEffect(() => {
-    const timer = window.setInterval(() => setTaglineIndex((value) => (value + 1) % 3), 3000);
-    return () => window.clearInterval(timer);
-  }, []);
   return (
     <main className={styles.unlockShell}>
       <header className={styles.header}>
-        <span className={styles.brand}>dorothy ann</span>
+        <RotatingBrand />
       </header>
-      <section className={styles.unlockCard} aria-labelledby="unlock-title">
-        <p id="unlock-title" className={styles.kicker}>{taglines[taglineIndex]}</p>
+      <section className={styles.unlockCard} aria-label="Unlock">
         <form
           className={styles.unlockForm}
           onSubmit={async (event) => {
@@ -159,9 +163,7 @@ function Settings() {
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <Link to="/" className={styles.brand}>
-          ← dorothy ann
-        </Link>
+        <RotatingBrand to="/" prefix="← " />
         <span className={styles.kicker}>settings</span>
       </header>
       <section className={styles.settings}>
@@ -230,23 +232,16 @@ function Home() {
   const [query, setQuery] = useState("");
   const [threads, setThreads] = useState(false);
   const [message, setMessage] = useState("");
-  const [taglineIndex, setTaglineIndex] = useState(0);
   const navigate = useNavigate();
-  useEffect(() => {
-    const timer = window.setInterval(() => setTaglineIndex((value) => (value + 1) % 3), 3000);
-    return () => window.clearInterval(timer);
-  }, []);
-  const taglines = ["take chances", "make mistakes", "get messy"];
   const submit = (input: string, selectedMode: "lookup" | "research") => navigate(`/topics/new?mode=${selectedMode}&q=${encodeURIComponent(input)}`);
   const command = (input: string) => { const command = parseSlashCommand(input); if (command === "/settings") navigate("/settings"); else if (command === "/new") { setQuery(""); navigate("/", { replace: true }); } else if (command === "/threads") navigate("/threads"); else setMessage(`Unknown command: ${input}`); };
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <Link to="/" className={styles.brand}>dorothy ann</Link>
+        <RotatingBrand to="/" />
       </header>
       {threads && <ThreadPicker onClose={() => setThreads(false)} />}
       <section className={styles.hero}>
-        <h2 className={styles.kicker}>{taglines[taglineIndex]}</h2>
         <p className={styles.muted}>Ask a question, or use <code>/settings</code>, <code>/new</code>, and <code>/threads</code>.</p>
       </section>
       {message && <p role="status" className={styles.commandMessage}>{message}</p>}
@@ -483,9 +478,7 @@ function ExportWorkbench() {
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <Link to="/" className={styles.brand} onClick={(event) => { if (draftLoaded && markdown !== savedMarkdown && !window.confirm("Leave without saving this edit?")) event.preventDefault(); }}>
-          ← dorothy ann
-        </Link>
+        <RotatingBrand to="/" prefix="← " />
         <span className={styles.kicker}>report workbench</span>
       </header>
       <section className={styles.workbench}>
@@ -635,7 +628,7 @@ function Topic() {
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <Link to="/" className={styles.brand}>dorothy ann</Link>
+        <RotatingBrand to="/" />
         {thread && thread.turns.some((turn) => turn.assistantMessage) && (
           <div className={styles.headerActions}>
             <button className={styles.textButton} onClick={async () => { const artifact = renderThreadScrollback(thread); try { await navigator.clipboard.writeText(artifact.markdown); showExportMessage("Copied."); } catch { showExportMessage("Copy is unavailable; use Export file."); } }}>Copy</button>
