@@ -213,7 +213,6 @@ function Home() {
     <main className={styles.shell}>
       <header className={styles.header}>
         <Link to="/" className={styles.brand}>DA</Link>
-        <span className={styles.kicker}>/settings · /threads</span>
       </header>
       {threads && <ThreadPicker onClose={() => setThreads(false)} />}
       <section className={styles.hero}>
@@ -500,6 +499,7 @@ function Topic() {
   const [thread, setThread] = useState<Thread | null>(null);
   const [exportMessage, setExportMessage] = useState("");
   const [commandMessage, setCommandMessage] = useState("");
+  const hasResearchLayout = mode === "research" || state.sources.length > 0 || Boolean(thread?.turns.some((turn) => turn.researchRun?.sources.length));
   const researchController = useRef<AbortController | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -583,17 +583,17 @@ function Topic() {
     <main className={styles.shell}>
       <header className={styles.header}>
         <Link to="/" className={styles.brand}>DA</Link>
+        {thread && thread.turns.some((turn) => turn.assistantMessage) && (
+          <div className={styles.headerActions}>
+            <button className={styles.textButton} onClick={async () => { const artifact = renderThreadScrollback(thread); try { await navigator.clipboard.writeText(artifact.markdown); setExportMessage("Copied."); } catch { setExportMessage("Copy is unavailable; use Export file."); } }}>Copy</button>
+            <button className={styles.textButton} onClick={() => { const artifact = renderThreadScrollback(thread); downloadMarkdown(artifact.markdown, artifact.filename); setExportMessage("Markdown exported."); }}>Export</button>
+            {exportMessage && <span role="status" className={styles.muted}>{exportMessage}</span>}
+          </div>
+        )}
       </header>
       {threads && <ThreadPicker onClose={() => setThreads(false)} />}
-      <div className={`${styles.topicLayout} ${mode === "research" ? styles.researchLayout : styles.lookupLayout}`}>
-        <section className={`${styles.topic} ${mode === "research" ? styles.researchBox : styles.sourcesBox}`}>
-          {thread && thread.turns.some((turn) => turn.assistantMessage) && (
-            <span className={styles.exportLinks}>
-              <button className={styles.textButton} onClick={async () => { const artifact = renderThreadScrollback(thread); try { await navigator.clipboard.writeText(artifact.markdown); setExportMessage("Copied."); } catch { setExportMessage("Copy is unavailable; use Export file."); } }}>Copy</button>
-              <button className={styles.textButton} onClick={() => { const artifact = renderThreadScrollback(thread); downloadMarkdown(artifact.markdown, artifact.filename); setExportMessage("Markdown exported."); }}>Export file</button>
-              {exportMessage && <span role="status" className={styles.muted}>{exportMessage}</span>}
-            </span>
-          )}
+      <div className={`${styles.topicLayout} ${hasResearchLayout ? styles.researchLayout : styles.lookupLayout}`}>
+        <section className={`${styles.topic} ${hasResearchLayout ? styles.researchBox : styles.sourcesBox}`}>
           {state.error && (
             <>
               <p role="alert">{state.error}</p>
@@ -635,7 +635,7 @@ function Topic() {
           )}
           {state.sources.length > 0 && (
             <section
-              className={styles.resultsSection}
+              className={`${styles.resultsSection} ${hasResearchLayout ? styles.inlineSources : ""}`}
               aria-labelledby="sources-title"
             >
               <h2 id="sources-title">

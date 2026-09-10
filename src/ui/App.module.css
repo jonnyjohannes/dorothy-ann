@@ -350,12 +350,12 @@
   line-height: 1.6;
   margin: 2rem 0;
 }
-.exportLinks {
+.headerActions {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 1rem;
 }
+.inlineSources { display: none; }
 .textButton {
   border: 0;
   padding: 0;
