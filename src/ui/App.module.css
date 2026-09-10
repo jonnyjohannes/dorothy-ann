@@ -197,6 +197,7 @@
 }
 .backupControls h3 { margin: 0; font-size: 0.9rem; }
 .backupControls p { margin: 0; font-size: 0.8rem; color: var(--muted); }
+.backupControls .textButton { justify-self: start; }
 .drawerNote {
   position: absolute;
   right: 1.5rem;
@@ -390,6 +391,12 @@
 .promptHint { align-self: center; color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
 .promptBox > button { border: 1px solid var(--ink); border-radius: 0; background: var(--ink); color: var(--paper); padding: 0.65rem 0.9rem; cursor: pointer; }
 .commandMessage { width: min(100%, 72rem); margin: 1rem auto; color: var(--muted); }
+.researchLoader { display: flex; align-items: center; gap: 0.75rem; margin: 3rem 0 1rem; color: var(--muted); }
+.loaderBars { display: inline-flex; align-items: end; gap: 0.18rem; height: 1.5rem; border-left: 3px solid var(--accent); padding-left: 0.6rem; }
+.loaderBars i { display: block; width: 0.22rem; height: 0.6rem; background: var(--accent); animation: loaderPulse 0.9s ease-in-out infinite alternate; }
+.loaderBars i:nth-child(2) { animation-delay: 0.18s; }
+.loaderBars i:nth-child(3) { animation-delay: 0.36s; }
+@keyframes loaderPulse { from { height: 0.35rem; opacity: 0.45; } to { height: 1.35rem; opacity: 1; } }
 .commandOverlay { position: fixed; z-index: 4; inset: 0; display: grid; place-items: center; padding: clamp(1rem, 7vw, 7rem); background: color-mix(in srgb, var(--paper) 96%, transparent); }
 .threadPicker { width: min(72rem, 100%); min-height: min(82vh, 52rem); padding: clamp(1.5rem, 5vw, 5rem); border: 1px solid var(--line); border-radius: 0; background: var(--paper); box-shadow: var(--shadow); }
 .threadPicker ul { max-height: 55vh; overflow: auto; margin: 1rem 0; padding: 0; list-style: none; }

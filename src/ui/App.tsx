@@ -56,8 +56,8 @@ function BackupControls() {
   };
   return <section className={styles.backupControls} aria-label="Data backup">
     <h3>Data</h3>
-    <button onClick={() => void download()}>Export backup</button>
-    <button onClick={() => input.current?.click()}>Import backup</button>
+    <button className={styles.textButton} onClick={() => void download()}>Export backup</button>
+    <button className={styles.textButton} onClick={() => input.current?.click()}>Import backup</button>
     <input ref={input} type="file" accept="application/json" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void importBackup(file); event.target.value = ""; }} />
     {message && <p role="status">{message}</p>}
   </section>;
@@ -101,6 +101,25 @@ function Unlock() {
   );
 }
 
+function applyTheme(theme: string) {
+  const prefersDark = typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const resolved = theme === "auto" && prefersDark ? "dark" : theme === "auto" ? "light" : theme;
+  document.documentElement.dataset.theme = resolved;
+}
+
+function ThemeBootstrap() {
+  useEffect(() => {
+    const theme = localStorage.getItem("dorothy-ann-theme") ?? "auto";
+    applyTheme(theme);
+    if (theme !== "auto" || typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const update = () => applyTheme("auto");
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return null;
+}
+
 function ThemeControl() {
   const [theme, setTheme] = useState(
     () => localStorage.getItem("dorothy-ann-theme") ?? "auto",
@@ -108,11 +127,9 @@ function ThemeControl() {
   const change = (value: string) => {
     setTheme(value);
     localStorage.setItem("dorothy-ann-theme", value);
-    document.documentElement.dataset.theme = value;
+    applyTheme(value);
   };
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
+  useEffect(() => { applyTheme(theme); }, [theme]);
   return (
     <label className={styles.themeControl}>
       Appearance
@@ -147,7 +164,7 @@ function Settings() {
         </section>
         <section className={styles.settingsSection}>
           <h2>Storage and retention</h2>
-          <p>Saved topics stay in this browser for seven days after meaningful activity. Expired topics are removed automatically; backups preserve an unexpired topic’s original expiry.</p>
+          <p>Saved topics stay in this browser for 7 days after meaningful activity. Expired topics are removed automatically; backups preserve an unexpired topic’s original expiry.</p>
           <BackupControls />
         </section>
       </section>
@@ -206,7 +223,13 @@ function Home() {
   const [query, setQuery] = useState("");
   const [threads, setThreads] = useState(false);
   const [message, setMessage] = useState("");
+  const [taglineIndex, setTaglineIndex] = useState(0);
   const navigate = useNavigate();
+  useEffect(() => {
+    const timer = window.setInterval(() => setTaglineIndex((value) => (value + 1) % 3), 3000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const taglines = ["take chances", "make mistakes", "get messy"];
   const submit = (input: string, selectedMode: "lookup" | "research") => navigate(`/topics/new?mode=${selectedMode}&q=${encodeURIComponent(input)}`);
   const command = (input: string) => { const command = parseSlashCommand(input); if (command === "/settings") navigate("/settings"); else if (command === "/new") { setQuery(""); navigate("/", { replace: true }); } else if (command === "/threads") navigate("/threads"); else setMessage(`Unknown command: ${input}`); };
   return (
@@ -216,7 +239,7 @@ function Home() {
       </header>
       {threads && <ThreadPicker onClose={() => setThreads(false)} />}
       <section className={styles.hero}>
-        <h2 className={styles.kicker}>fullscreen research desk</h2>
+        <h2 className={styles.kicker}>{taglines[taglineIndex]}</h2>
         <p className={styles.muted}>Ask a question, or use <code>/settings</code>, <code>/new</code>, and <code>/threads</code>.</p>
       </section>
       {message && <p role="status" className={styles.commandMessage}>{message}</p>}
@@ -499,7 +522,7 @@ function Topic() {
   const [thread, setThread] = useState<Thread | null>(null);
   const [exportMessage, setExportMessage] = useState("");
   const [commandMessage, setCommandMessage] = useState("");
-  const hasResearchLayout = mode === "research" || state.sources.length > 0 || Boolean(thread?.turns.some((turn) => turn.researchRun?.sources.length));
+  const hasResearchLayout = mode === "research" || Boolean(thread?.turns.some((turn) => turn.mode === "research" && turn.researchRun?.sources.length));
   const researchController = useRef<AbortController | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -601,7 +624,13 @@ function Topic() {
             </>
           )}
           {mode === "research" && ["loading", "starting", "sources found", "extracting evidence", "synthesizing"].includes(state.stage) && (
-            <button onClick={() => researchController.current?.abort()}>Stop</button>
+            <>
+              <div className={styles.researchLoader} role="status" aria-live="polite">
+                <span className={styles.loaderBars} aria-hidden="true"><i /><i /><i /></span>
+                <span>{state.stage === "loading" || state.stage === "starting" ? "researching" : state.stage}</span>
+              </div>
+              <button onClick={() => researchController.current?.abort()}>Stop</button>
+            </>
           )}
           {thread && (
             <article className={styles.scrollback} aria-label="Topic scrollback">
@@ -659,7 +688,7 @@ function Topic() {
             </section>
           )}
         </section>
-        {state.sources.length > 0 && (
+        {hasResearchLayout && state.sources.length > 0 && (
           <aside className={styles.evidence} aria-label="Evidence">
             <h2>Evidence</h2>
             <p>
@@ -715,7 +744,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
 export function App() {
   return (
-    <AuthGate>
+    <>
+      <ThemeBootstrap />
+      <AuthGate>
     <Routes>
       <Route path="/unlock" element={<Unlock />} />
       <Route path="/settings" element={<Settings />} />
@@ -728,5 +759,6 @@ export function App() {
       <Route path="*" element={<Home />} />
     </Routes>
     </AuthGate>
+    </>
   );
 }
