@@ -605,7 +605,7 @@ function Topic() {
           )}
           {thread && (
             <article className={styles.scrollback} aria-label="Topic scrollback">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{renderThreadScrollback(thread).markdown}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{renderThreadScrollback(thread, { includeSources: !hasResearchLayout }).markdown}</ReactMarkdown>
             </article>
           )}
           {state.answer && !thread && (
