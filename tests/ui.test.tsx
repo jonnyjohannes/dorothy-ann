@@ -11,7 +11,8 @@ describe("browser shell", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ fixtureMode: true }), { status: 200 })));
     render(<MemoryRouter initialEntries={["/"]}><App /></MemoryRouter>);
     expect(await screen.findByLabelText("Search query")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Go" })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("...? for research")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Send" })).not.toBeInTheDocument();
   });
 
   it("redirects live unauthenticated users to unlock", async () => {
