@@ -376,6 +376,7 @@ async function saveTopic(
               createdAt: timestamp,
             }
           : undefined,
+        lookupResults: mode === "lookup" ? sources : undefined,
         researchRun:
           mode === "research"
             ? {
@@ -406,6 +407,9 @@ async function saveTopic(
 
 function transcriptMarkdown(thread: Thread): string {
   return renderThreadScrollback(thread).markdown;
+}
+function sourcesForThread(thread: Thread): Result[] {
+  return Array.from(new Map(thread.turns.flatMap((turn) => turn.researchRun?.sources ?? turn.lookupResults ?? []).map((source) => [source.sourceId, source])).values());
 }
 
 function downloadMarkdown(markdown: string, filename: string) {
@@ -553,6 +557,7 @@ function Topic() {
               ? await store.load(threadId)
               : null;
           const turn = saved?.turns.at(-1);
+          const savedSources = saved ? sourcesForThread(saved) : [];
           if (saved && !cancelled) setThread(saved);
           if (turn && !cancelled)
             setState({
@@ -561,7 +566,7 @@ function Topic() {
                 turn.assistantMessage?.content.parts
                   .map((part) => (part.type === "text" ? part.markdown : ""))
                   .join("") ?? "",
-              sources: turn.researchRun?.sources ?? [],
+              sources: savedSources,
             });
           return;
         }
@@ -679,7 +684,7 @@ function Topic() {
               Research this with Dorothy Ann →
             </Link>
           )}
-          {state.sources.length > 0 && (
+          {state.sources.length > 0 && !thread && (
             <section
               className={`${styles.resultsSection} ${hasResearchLayout ? styles.inlineSources : ""}`}
               aria-labelledby="sources-title"

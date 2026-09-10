@@ -31,14 +31,21 @@ export function renderThreadScrollback(thread: Thread, options: { includeSources
   thread.turns.forEach((turn, index) => {
     if (index > 0) lines.push("", "---", "");
     lines.push(`> ${turn.userMessage.content}`);
-    if (includeSources && turn.researchRun?.sources.length) {
+    const sources = turn.researchRun?.sources ?? turn.lookupResults ?? [];
+    const sourceById = new Map<string, { number: number; url: string }>(sources.map((source, sourceIndex) => [source.sourceId, { number: sourceIndex + 1, url: source.url }]));
+    if (includeSources && sources.length) {
       lines.push("");
-      for (const source of turn.researchRun.sources) lines.push(`- [${source.title}](${source.url}) — ${source.snippet ?? source.displayUrl}`);
+      for (const source of sources) lines.push(`- [${source.title}](${source.url}) — ${source.snippet ?? source.displayUrl}`);
     }
     if (turn.assistantMessage) {
-      const sourceById = new Map(turn.researchRun?.sources.map((source, sourceIndex) => [source.sourceId, { number: sourceIndex + 1, url: source.url }]) ?? []);
       lines.push("", turn.assistantMessage.content.parts.map((part) => {
-        if (part.type === "text") return part.markdown;
+        if (part.type === "text") {
+          return part.markdown.replace(/\[\[cite:([A-Za-z0-9_-]+)\]\]/g, (marker, sourceId: string) => {
+            const source = sourceById.get(sourceId);
+            if (!source) return marker;
+            return citationTarget === "evidence" ? `[${source.number}](#source-${sourceId})` : `[${source.number}](${source.url})`;
+          });
+        }
         const source = sourceById.get(part.sourceId);
         if (!source) return "[?]";
         return citationTarget === "evidence" ? `[${source.number}](#source-${part.sourceId})` : `[${source.number}](${source.url})`;
