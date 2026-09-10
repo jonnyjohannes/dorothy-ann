@@ -24,12 +24,13 @@ export function migrateThread(value: unknown): Thread | null {
   return { ...value, schemaVersion: 2 };
 }
 
-export function renderThreadScrollback(thread: Thread): { markdown: string; filename: string; sourceUpdatedAt: IsoTimestamp } {
+export function renderThreadScrollback(thread: Thread, options: { includeSources?: boolean } = {}): { markdown: string; filename: string; sourceUpdatedAt: IsoTimestamp } {
   const lines: string[] = [];
+  const includeSources = options.includeSources ?? true;
   thread.turns.forEach((turn, index) => {
     if (index > 0) lines.push("", "---", "");
     lines.push(`> ${turn.userMessage.content}`);
-    if (turn.researchRun?.sources.length) {
+    if (includeSources && turn.researchRun?.sources.length) {
       lines.push("");
       for (const source of turn.researchRun.sources) lines.push(`- [${source.title}](${source.url}) — ${source.snippet ?? source.displayUrl}`);
     }
