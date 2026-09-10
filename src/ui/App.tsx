@@ -55,7 +55,7 @@ function BackupControls() {
     } catch { setMessage("That backup could not be imported."); }
   };
   return <section className={styles.backupControls} aria-label="Data backup">
-    <h3>Data</h3>
+    <h2>Data</h2>
     <button className={styles.textButton} onClick={() => void download()}>Export backup</button>
     <button className={styles.textButton} onClick={() => input.current?.click()}>Import backup</button>
     <input ref={input} type="file" accept="application/json" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void importBackup(file); event.target.value = ""; }} />
@@ -67,13 +67,21 @@ function Unlock() {
   const navigate = useNavigate();
   const [passphrase, setPassphrase] = useState("");
   const [message, setMessage] = useState("");
+  const [taglineIndex, setTaglineIndex] = useState(0);
+  const taglines = ["take chances", "make mistakes", "get messy"];
+  useEffect(() => {
+    const timer = window.setInterval(() => setTaglineIndex((value) => (value + 1) % 3), 3000);
+    return () => window.clearInterval(timer);
+  }, []);
   return (
-    <main className={styles.center}>
-      <section className={styles.card} aria-labelledby="unlock-title">
-        <p className={styles.kicker}>private research desk</p>
-        <h1 id="unlock-title">dorothy-ann</h1>
-        <p>This research desk is private.</p>
+    <main className={styles.unlockShell}>
+      <header className={styles.header}>
+        <span className={styles.brand}>DA</span>
+      </header>
+      <section className={styles.unlockCard} aria-labelledby="unlock-title">
+        <p id="unlock-title" className={styles.kicker}>{taglines[taglineIndex]}</p>
         <form
+          className={styles.unlockForm}
           onSubmit={async (event) => {
             event.preventDefault();
             const response = await fetch("/api/auth/passphrase", {
@@ -85,17 +93,19 @@ function Unlock() {
             else setMessage("That passphrase did not work.");
           }}
         >
-          <label htmlFor="passphrase">Passphrase</label>
+          <label className={styles.srOnly} htmlFor="passphrase">Passphrase</label>
           <input
             id="passphrase"
             type="password"
             value={passphrase}
             onChange={(event) => setPassphrase(event.target.value)}
             autoComplete="current-password"
+            placeholder="passphrase"
+            autoFocus
           />
           <button type="submit">Unlock</button>
         </form>
-        {message && <p role="status">{message}</p>}
+        {message && <p role="status" className={styles.muted}>{message}</p>}
       </section>
     </main>
   );
@@ -160,7 +170,7 @@ function Settings() {
         <section className={styles.settingsSection}>
           <h2>Appearance</h2>
           <p>Choose how dorothy-ann looks on this device.</p>
-          <ThemeControl />
+          <p><ThemeControl /></p>
         </section>
         <section className={styles.settingsSection}>
           <h2>Storage and retention</h2>

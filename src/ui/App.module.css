@@ -122,6 +122,50 @@
   background: var(--paper);
   color: var(--ink);
 }
+.unlockShell {
+  min-height: 100vh;
+  padding: 0 2rem;
+  background: var(--paper);
+  color: var(--ink);
+}
+.unlockCard {
+  width: min(100%, 72rem);
+  margin: 28vh auto 0;
+}
+.unlockForm {
+  display: flex;
+  width: min(100%, 40rem);
+  border: 1px solid var(--line);
+}
+.unlockForm input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  padding: 1rem;
+}
+.unlockForm button {
+  border: 0;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 0 1.25rem;
+  cursor: pointer;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .card button,
 .workbenchActions button {
   border: 1px solid var(--ink);
@@ -486,9 +530,12 @@
   color: var(--muted);
 }
 @media (max-width: 760px) {
-  .shell {
+  .shell,
+  .unlockShell {
     padding: 0 1rem;
   }
+  .unlockCard { margin-top: 22vh; }
+  .unlockForm button { padding-inline: 0.8rem; }
   .queryForm {
     display: block;
   }
