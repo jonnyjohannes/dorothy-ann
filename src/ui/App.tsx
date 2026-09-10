@@ -570,6 +570,8 @@ function Topic() {
             });
           return;
         }
+        const existing = await store.load(threadId);
+        if (existing && !cancelled) setThread(existing);
         setState({ stage: "starting", answer: "", sources: [] });
         await saveTopic(threadId, query, mode, { stage: "starting", answer: "", sources: [] }, "query_started").then((committed) => { if (!cancelled) setThread(committed); });
         if (mode === "lookup") {
@@ -595,7 +597,15 @@ function Topic() {
           const response = await fetch("/api/research", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ query }),
+            body: JSON.stringify({
+              query,
+              ...(existing && sourcesForThread(existing).length > 0 ? {
+                context: {
+                  originalQuery: existing.turns[0]?.userMessage.content ?? "",
+                  sources: sourcesForThread(existing),
+                },
+              } : {}),
+            }),
             signal: controller.signal,
           });
           if (!response.ok) throw new Error("research failed");
