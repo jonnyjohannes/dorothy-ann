@@ -25,14 +25,15 @@ export function migrateThread(value: unknown): Thread | null {
 }
 
 export function renderThreadScrollback(thread: Thread): { markdown: string; filename: string; sourceUpdatedAt: IsoTimestamp } {
-  const lines = [`# ${thread.title}`];
+  const lines: string[] = [];
   thread.turns.forEach((turn, index) => {
-    lines.push("", "---", "", "## you", "", turn.userMessage.content);
+    if (index > 0) lines.push("", "---", "");
+    lines.push(`> ${turn.userMessage.content}`);
     if (turn.researchRun?.sources.length) {
-      lines.push("", "### Sources");
+      lines.push("");
       for (const source of turn.researchRun.sources) lines.push(`- [${source.title}](${source.url}) — ${source.snippet ?? source.displayUrl}`);
     }
-    if (turn.assistantMessage) lines.push("", "## DA", "", turn.assistantMessage.content.parts.map((part) => part.type === "text" ? part.markdown : `[[cite:${part.sourceId}]]`).join(""));
+    if (turn.assistantMessage) lines.push("", turn.assistantMessage.content.parts.map((part) => part.type === "text" ? part.markdown : `[[cite:${part.sourceId}]]`).join(""));
     if (turn.failure) lines.push("", `> ${turn.status}: ${turn.failure.message}`);
     if (index === thread.turns.length - 1 && !turn.assistantMessage && !turn.failure) lines.push("", `> ${turn.status}`);
   });
