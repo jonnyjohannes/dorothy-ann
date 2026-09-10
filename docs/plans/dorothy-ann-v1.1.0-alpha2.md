@@ -2,15 +2,15 @@
 
 ## Current State
 
-- Status: in progress
-- Last updated: 2026-09-07
-- Current focus: implementing the fullscreen prompt/sources/research shell and slash-command navigation
+- Status: planning
+- Last updated: 2026-09-08
+- Current focus: refining the launcher, prompt macro, and transcript visual language from hands-on UI feedback
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: add focused slash-command/layout interaction coverage, then finish stage recovery and alpha2 browser acceptance
+- Next action: implement the selected `you` / `DA` attribution, turn separators, launcher, prompt macro, and metadata cleanup
 
 ## Handoff
 
-Start with this document, then read the alpha plan's `Current State`, `Implementation Sync and Deviations`, `Browser Interaction Design`, `Storage Strategy`, `Export` sections, and the existing `src/ui/App.tsx` / `src/adapters/browser/local-stores.ts` persistence paths. The post-alpha scope is intentionally narrower than the alpha surface: a simple scrollback-first web UI, reliable seven-day saved threads containing the complete recoverable state, and a minimal direct-export flow. The v2 envelope, nested validation, migration, expiry cleanup, commit boundary, canonical renderer, and fullscreen UI pivot are implemented and verified. The topic shell now uses a persistent bottom prompt, separate sources/research regions, no mounted sidebar, and `/settings`, `/new`, and `/threads` navigation. Remaining work is stage-complete orchestration, corruption/quota recovery, richer source disclosure, and full alpha2 browser acceptance.
+Start with this document, then read the alpha plan's `Current State`, `Implementation Sync and Deviations`, `Browser Interaction Design`, `Storage Strategy`, `Export` sections, and the existing `src/ui/App.tsx` / `src/adapters/browser/local-stores.ts` persistence paths. The post-alpha scope is intentionally narrower than the alpha surface: a simple scrollback-first web UI, reliable seven-day saved threads containing the complete recoverable state, and a minimal direct-export flow. The v2 envelope, nested validation, migration, expiry cleanup, commit boundary, canonical renderer, and fullscreen UI pivot are implemented and verified. The next refinement is specified: a nearly full-screen `/threads` launcher with deletion, an Enter-driven `?` prompt macro, compact metadata, and quiet `you` / `DA` attribution separated by horizontal rules. Remaining work is implementing that refinement, then stage-complete orchestration, corruption/quota recovery, richer source disclosure, and full alpha2 browser acceptance.
 
 ## Summary
 
@@ -254,6 +254,21 @@ The implementation direction is refined as follows:
 - Backup controls remain in Settings rather than the topic shell.
 
 These are a UI/UX refinement of alpha2, not new persistence or provider scope. The implementation should preserve the existing canonical Markdown, thread TTL, and committed-state contracts.
+
+### Launcher and transcript refinement
+
+- `/threads` is a full-viewport launcher overlay: nearly full width and height, generous outer padding, centered content/list, keyboard-first selection, and a visually calm tmux/fzf-inspired presentation.
+- Each thread row has a dedicated `x` delete control. Deletion must not activate the row; require an explicit confirmation or equivalent inline confirmation before removing the thread and its related records.
+- The prompt bar has no visible lookup/research buttons or selector. Submission is Enter-driven: ordinary input performs lookup; a terminal `?` selects research. The prompt bar keeps a short hint explaining the `?` macro and should receive stronger visual emphasis without rounded borders.
+- Remove the `Saved` kicker and `Saved topic` placeholder/title treatment from restored topics. The topic query/title should be the primary identity. The visible researchBox should not render the export frontmatter block as giant Markdown content; either omit it from the visible projection or render it as compact ordinary metadata. The downloadable/copyable canonical artifact may retain deterministic frontmatter.
+- In research mode, the transcript/researchBox is the left three-quarter column and sources/evidence is the right one-quarter column. This relationship must hold for the active stream, not only for an export rendering.
+- Replace literal `User` / `Assistant` headings with a simpler visual attribution system. The exact treatment remains a design decision below; it must clearly distinguish the person from Dorothy Ann without adding dashboard chrome.
+
+### Message attribution decision
+
+Use quiet labels: small ordinary-weight `you` and `DA` labels with distinct alignment/rule treatment. The UI shorthand is `you` / `DA`, with accessible full labels available to assistive technology. Conversation marks and edge-only treatment are deferred.
+
+Insert a horizontal `---` separator between committed turns in the visible scrollback and in the canonical Markdown serialization, so separate exchanges remain easy to scan and copied/exported output preserves the same rhythm.
 
 ## Open Questions
 
