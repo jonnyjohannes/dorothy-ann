@@ -536,6 +536,8 @@ function Topic() {
   const [chatAnswer, setChatAnswer] = useState("");
   const [chatStage, setChatStage] = useState("");
   const [thread, setThread] = useState<Thread | null>(null);
+  const hasResearchHistory = Boolean(thread?.turns.some((turn) => turn.mode === "research" || turn.researchRun));
+  const effectiveMode = mode === "research" || hasResearchHistory ? "research" : "lookup";
   const [exportMessage, setExportMessage] = useState("");
   const exportMessageTimer = useRef<number | null>(null);
   const [commandMessage, setCommandMessage] = useState("");
@@ -546,7 +548,7 @@ function Topic() {
     exportMessageTimer.current = window.setTimeout(() => setExportMessage(""), 3000);
   };
   useEffect(() => () => { if (exportMessageTimer.current) window.clearTimeout(exportMessageTimer.current); }, []);
-  const hasResearchLayout = mode === "research" || Boolean(thread?.turns.some((turn) => (turn.researchRun?.sources.length ?? 0) > 0));
+  const hasResearchLayout = effectiveMode === "research" || Boolean(thread?.turns.some((turn) => (turn.researchRun?.sources.length ?? 0) > 0));
   const researchController = useRef<AbortController | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -561,7 +563,10 @@ function Topic() {
               : null;
           const turn = saved?.turns.at(-1);
           const savedSources = saved ? sourcesForThread(saved) : [];
-          if (saved && !cancelled) setThread(saved);
+          if (saved && !cancelled) {
+            setThread(saved);
+            if (saved.turns.some((savedTurn) => savedTurn.mode === "research" || savedTurn.researchRun) && mode !== "research") navigate(`/topics/${threadId}?mode=research`, { replace: true });
+          }
           if (turn && !cancelled)
             setState({
               stage: "saved",
@@ -682,7 +687,7 @@ function Topic() {
           )}
           <PromptBox value={chatInput} onChange={setChatInput} onCommand={(input) => { const command = parseSlashCommand(input); if (command === "/settings") navigate("/settings"); else if (command === "/new") navigate("/", { replace: true }); else if (command === "/threads") navigate("/threads"); else setCommandMessage(`Unknown command: ${input}`); }} onSubmit={async (prompt) => {
             setChatInput("");
-            if (mode === "lookup") {
+            if (effectiveMode === "lookup") {
               navigate(`/topics/${threadId}?mode=research&q=${encodeURIComponent(prompt)}`);
               return;
             }
