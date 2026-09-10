@@ -4,8 +4,6 @@ import styles from "./App.module.css";
 export function EvidenceBox({ sources, selectedSourceId, onSelect }: { sources: SearchResult[]; selectedSourceId: string | null; onSelect: (sourceId: string) => void }) {
   return (
     <aside className={styles.evidence} aria-label="Evidence">
-      <h2>Evidence</h2>
-      <p>{sources.length} source{sources.length === 1 ? "" : "s"} attached to this turn.</p>
       <ul className={styles.evidenceList}>
         {sources.map((source) => (
           <li

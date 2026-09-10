@@ -317,6 +317,8 @@
   gap: 2rem;
 }
 .lookupLayout .sourcesBox { width: 100%; }
+.lookupLayout .scrollback { margin-bottom: 1rem; }
+.lookupLayout .evidence { margin-top: 0; }
 .researchLayout .sourcesBox { display: none; }
 .researchBox { min-width: 0; }
 .sourcesBox { min-width: 0; }
