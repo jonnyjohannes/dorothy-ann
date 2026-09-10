@@ -542,7 +542,7 @@ function Topic() {
     exportMessageTimer.current = window.setTimeout(() => setExportMessage(""), 3000);
   };
   useEffect(() => () => { if (exportMessageTimer.current) window.clearTimeout(exportMessageTimer.current); }, []);
-  const hasResearchLayout = mode === "research" || state.sources.length > 0 || Boolean(thread?.turns.some((turn) => (turn.researchRun?.sources.length ?? 0) > 0 || (turn.lookupResults?.length ?? 0) > 0));
+  const hasResearchLayout = mode === "research" || Boolean(thread?.turns.some((turn) => (turn.researchRun?.sources.length ?? 0) > 0));
   const researchController = useRef<AbortController | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -667,7 +667,7 @@ function Topic() {
                 window.setTimeout(() => document.getElementById(`source-${sourceId}`)?.focus(), 0);
               }}
             >
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{renderThreadScrollback(thread, { includeSources: !hasResearchLayout, citationTarget: "evidence" }).markdown}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{renderThreadScrollback(thread, { includeSources: false, citationTarget: "evidence" }).markdown}</ReactMarkdown>
             </article>
           )}
           {state.answer && !thread && (
@@ -695,9 +695,9 @@ function Topic() {
               Research this with Dorothy Ann →
             </Link>
           )}
-          {state.sources.length > 0 && !thread && !hasResearchLayout && (
+          {state.sources.length > 0 && !hasResearchLayout && (
             <section
-              className={`${styles.resultsSection} ${hasResearchLayout ? styles.inlineSources : ""}`}
+              className={styles.resultsSection}
               aria-labelledby="sources-title"
             >
               <h2 id="sources-title">
@@ -709,7 +709,7 @@ function Topic() {
               </h2>
               <ul className={styles.resultList}>
                 {state.sources.map((source) => (
-                  <li key={source.sourceId}>
+                  <li className={styles.evidenceItem} key={source.sourceId}>
                     <a href={source.url} target="_blank" rel="noreferrer">
                       {source.title}
                     </a>
