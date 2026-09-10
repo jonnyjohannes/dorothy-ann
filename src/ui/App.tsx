@@ -535,6 +535,7 @@ function Topic() {
   const [exportMessage, setExportMessage] = useState("");
   const exportMessageTimer = useRef<number | null>(null);
   const [commandMessage, setCommandMessage] = useState("");
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const showExportMessage = (message: string) => {
     setExportMessage(message);
     if (exportMessageTimer.current) window.clearTimeout(exportMessageTimer.current);
@@ -653,7 +654,19 @@ function Topic() {
             </>
           )}
           {thread && (
-            <article className={styles.scrollback} aria-label="Topic scrollback">
+            <article
+              className={styles.scrollback}
+              aria-label="Topic scrollback"
+              onClick={(event) => {
+                const link = (event.target as HTMLElement).closest("a");
+                const href = link?.getAttribute("href");
+                if (!href?.startsWith("#source-")) return;
+                event.preventDefault();
+                const sourceId = href.slice("#source-".length);
+                setSelectedSourceId(sourceId);
+                window.setTimeout(() => document.getElementById(`source-${sourceId}`)?.focus(), 0);
+              }}
+            >
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{renderThreadScrollback(thread, { includeSources: !hasResearchLayout, citationTarget: "evidence" }).markdown}</ReactMarkdown>
             </article>
           )}
@@ -719,7 +732,13 @@ function Topic() {
               <article
                 id={`source-${source.sourceId}`}
                 tabIndex={-1}
-                className={styles.evidenceItem}
+                className={`${styles.evidenceItem} ${selectedSourceId === source.sourceId ? styles.evidenceItemActive : ""}`}
+                aria-current={selectedSourceId === source.sourceId ? "true" : undefined}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  window.open(source.url, "_blank", "noopener,noreferrer");
+                }}
                 key={source.sourceId}
               >
                 <a href={source.url} target="_blank" rel="noreferrer">

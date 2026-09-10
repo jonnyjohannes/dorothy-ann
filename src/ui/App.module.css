@@ -355,6 +355,11 @@
   color: var(--muted);
   line-height: 1.45;
 }
+.evidenceItemActive {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
 .citation {
   color: var(--ink);
   font-weight: 700;
