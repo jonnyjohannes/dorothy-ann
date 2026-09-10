@@ -370,7 +370,7 @@
 .scrollback { max-width: 54rem; margin: 2rem auto 8rem; font-size: 1.05rem; line-height: 1.65; }
 .scrollback h1 { font-size: clamp(1.8rem, 4vw, 3rem); }
 .scrollback a { color: inherit; text-decoration-color: var(--accent); }
-.scrollback blockquote { border-left: 3px solid var(--accent); padding-left: 1rem; color: var(--muted); }
+.scrollback blockquote { margin-left: 0; border-left: 3px solid var(--accent); padding-left: 0; color: var(--muted); }
 .promptBox {
   position: fixed;
   z-index: 3;
