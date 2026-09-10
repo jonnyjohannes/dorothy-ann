@@ -587,8 +587,6 @@ function Topic() {
       {threads && <ThreadPicker onClose={() => setThreads(false)} />}
       <div className={`${styles.topicLayout} ${mode === "research" ? styles.researchLayout : styles.lookupLayout}`}>
         <section className={`${styles.topic} ${mode === "research" ? styles.researchBox : styles.sourcesBox}`}>
-          {state.stage !== "saved" && <p className={styles.kicker} aria-live="polite">{state.stage}</p>}
-          <h1>{(thread?.title ?? query) || "New topic"}</h1>
           {thread && thread.turns.some((turn) => turn.assistantMessage) && (
             <span className={styles.exportLinks}>
               <button className={styles.textButton} onClick={async () => { const artifact = renderThreadScrollback(thread); try { await navigator.clipboard.writeText(artifact.markdown); setExportMessage("Copied."); } catch { setExportMessage("Copy is unavailable; use Export file."); } }}>Copy</button>
