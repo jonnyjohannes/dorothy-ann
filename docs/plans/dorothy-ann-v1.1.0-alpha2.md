@@ -2,15 +2,15 @@
 
 ## Current State
 
-- Status: planning
+- Status: implementation in progress
 - Last updated: 2026-09-08
-- Current focus: finalizing the keyboard-first launcher/prompt contract and thread-switching behavior before implementation
+- Current focus: alpha2 shell refinement is implemented in the working tree; orchestration/recovery and acceptance coverage remain open
 - Handoff lives in: [`## Handoff`](#handoff)
 - Next action: implement the aligned full-screen launcher, `?` prompt macro, transcript attribution/separators, and reliable thread switching
 
 ## Handoff
 
-Start with this document, then read the alpha plan's `Current State`, `Implementation Sync and Deviations`, `Browser Interaction Design`, `Storage Strategy`, `Export` sections, and the existing `src/ui/App.tsx` / `src/adapters/browser/local-stores.ts` persistence paths. The post-alpha scope is intentionally narrower than the alpha surface: a simple scrollback-first web UI, reliable seven-day saved threads containing the complete recoverable state, and a minimal direct-export flow. The v2 envelope, nested validation, migration, expiry cleanup, commit boundary, canonical renderer, and first fullscreen UI pivot are implemented and verified. Those completed milestones were retroactively recorded from the preceding implementation conversation in `## Retroactive Implementation Record`. The next refinement is specified: a nearly full-screen `/threads` launcher with deletion, an Enter-driven `?` prompt macro, compact metadata, and quiet `you` / `DA` attribution separated by horizontal rules. Remaining work is implementing that refinement, then stage-complete orchestration, corruption/quota recovery, richer source disclosure, and full alpha2 browser acceptance.
+The alpha2 shell refinement is now implemented in the working tree: `/threads` is a full-screen keyboard launcher, deletion uses two-step `ctrl-x`, prompt submission infers research from terminal `?`, the brand is `DA`, and scrollback uses quiet `you` / `DA` labels with separators. A request-owner seam now rejects superseded commits, but the existing Topic persistence helpers still need to be fully routed through it. Remaining work is completing atomic stage orchestration, corruption/quota recovery, deterministic export coverage, and full alpha2 browser acceptance.
 
 ## Retroactive Implementation Record
 
@@ -243,11 +243,11 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 
 - [x] 1. Product contract — deliverable: final scrollback UI, TTL, restore, and export decisions in this plan; verify: decision review plus transition matrix.
 - [x] 2. Persisted state contract — deliverable: versioned envelope, nested validation, migration rules, and commit boundary; verify: domain/port contract tests and migration fixtures.
-- [~] 3. Reliable thread orchestration — deliverable: one owner for lookup/research/chat state and atomic committed transitions; verify: reload/follow-up/race/interruption tests.
-- [~] 4. Seven-day retention/recovery — deliverable: expiry cleanup, corrupt/quota/unavailable behavior, and backup semantics; verify: fake IndexedDB tests with clock control.
+- [~] 3. Reliable thread orchestration — deliverable: one owner for lookup/research/chat state and atomic committed transitions; current: request identity owner added and stale event callbacks ignored; remaining: route every transition through the owner and persist committed intermediate stages; verify: reload/follow-up/race/interruption tests.
+- [ ] 4. Seven-day retention/recovery — deliverable: expiry cleanup, corrupt/quota/unavailable behavior, and backup semantics; verify: fake IndexedDB tests with clock control.
 - [x] 5a. Initial scrollback UI — deliverable: fullscreen shell with persistent bottom prompt, sourcesBox/researchBox layout, no sidebar, and slash-command navigation; verify: focused UI tests, lint, typecheck, and production build passed.
-- [~] 5b. Launcher/transcript refinement — deliverable: full-height `/threads` launcher with deletion, Enter-driven `?` macro, square emphasized prompt, compact metadata, and `you` / `DA` turn treatment with separators; verify: focused UI and responsive interaction tests.
-- [~] 6. Minimal export — deliverable: one topic export entry point using the canonical scrollback Markdown renderer with Copy and direct download; verify: byte-identical copy/download snapshots and export-failure tests. Canonical rendering and initial integration are complete; deterministic export coverage remains.
+- [~] 5b. Launcher/transcript refinement — deliverable: full-height `/threads` launcher with deletion, Enter-driven `?` macro, square emphasized prompt, compact metadata, and `you` / `DA` turn treatment with separators; current: launcher, two-step keyboard deletion, route replacement, prompt macro, brand/header, and canonical attribution/separators implemented; remaining: focused responsive/browser acceptance coverage.
+- [~] 6. Minimal export — deliverable: one topic export entry point using the canonical scrollback Markdown renderer with Copy and direct download; current: visible/copy/download paths share `renderThreadScrollback`; remaining: byte-identical and failure-path tests plus removal of legacy workbench from the primary flow.
 - [ ] 7. Alpha2 acceptance — deliverable: updated docs, verification record, and clean branch milestone; verify: lint, typecheck, unit, build, E2E, `git diff --check`.
 
 ## Verification
