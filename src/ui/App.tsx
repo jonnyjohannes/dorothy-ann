@@ -12,9 +12,10 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { LocalArtifactDraftStore, LocalThreadStore } from "../adapters/browser/local-stores";
+import { ThreadStateOwner } from "../application/thread-owner";
 import type { SearchResult, Thread, ThreadSummary } from "../domain/types";
 import { renderThreadScrollback } from "../domain/thread-state";
-import { canPromoteToResearch } from "../domain/policies";
+import { canPromoteToResearch, parseSlashCommand, resolveQueryMode } from "../domain/policies";
 import styles from "./App.module.css";
 
 type Result = SearchResult;
@@ -26,6 +27,7 @@ type StreamState = {
 };
 const store = new LocalThreadStore();
 const draftStore = new LocalArtifactDraftStore();
+const threadOwner = new ThreadStateOwner(store);
 const now = () => new Date().toISOString() as Thread["createdAt"];
 const id = () => crypto.randomUUID();
 
@@ -155,51 +157,64 @@ function Settings() {
 
 function ThreadPicker({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
+  const route = useParams();
+  const activeThreadId = route.threadId;
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [active, setActive] = useState(0);
-  useEffect(() => { void store.list().then(setTopics); }, []);
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  const focused = topics[active];
+  const refresh = () => void store.list().then((next) => { setTopics(next); setActive((value) => Math.min(value, Math.max(0, next.length - 1))); });
+  useEffect(refresh, []);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-      if (event.key === "ArrowDown") { event.preventDefault(); setActive((value) => Math.min(value + 1, Math.max(0, topics.length - 1))); }
-      if (event.key === "ArrowUp") { event.preventDefault(); setActive((value) => Math.max(0, value - 1)); }
-      if (event.key === "Enter" && topics[active]) navigate(`/topics/${topics[active].id}`);
+      if (event.key === "Escape") { event.preventDefault(); onClose(); }
+      if (event.key === "ArrowDown") { event.preventDefault(); setDeleteArmed(false); setActive((value) => Math.min(value + 1, Math.max(0, topics.length - 1))); }
+      if (event.key === "ArrowUp") { event.preventDefault(); setDeleteArmed(false); setActive((value) => Math.max(0, value - 1)); }
+      if (event.key === "Enter" && focused) { event.preventDefault(); navigate(`/topics/${focused.id}`, { replace: true }); }
+      if (event.ctrlKey && event.key.toLowerCase() === "x" && focused) {
+        event.preventDefault();
+        if (!deleteArmed) { setDeleteArmed(true); return; }
+        void store.remove(focused.id).then(() => { if (activeThreadId === focused.id) navigate("/", { replace: true }); refresh(); setDeleteArmed(false); });
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, navigate, onClose, topics]);
-  return <div className={styles.commandOverlay} role="dialog" aria-label="Saved threads">
+  }, [active, deleteArmed, focused, navigate, onClose, topics.length]);
+  return <div className={styles.commandOverlay} role="dialog" aria-modal="true" aria-label="Saved threads">
     <section className={styles.threadPicker}>
       <p className={styles.kicker}>/threads</p>
       <h2>Saved threads</h2>
-      {topics.length ? <ul>{topics.map((topic, index) => <li key={topic.id} className={index === active ? styles.threadActive : ""}><button autoFocus={index === active} onClick={() => navigate(`/topics/${topic.id}`)}>{topic.title}<small>{topic.lastTurnPreview ?? ""}</small></button></li>)}</ul> : <p className={styles.muted}>No saved threads yet.</p>}
-      <p className={styles.muted}>↑/↓ select · Enter open · Escape close</p>
+      {topics.length ? <ul>{topics.map((topic, index) => <li key={topic.id} className={index === active ? styles.threadActive : ""}><button autoFocus={index === active} aria-current={index === active} onClick={() => navigate(`/topics/${topic.id}`, { replace: true })}>{topic.title}<small>{topic.lastTurnPreview ?? ""}</small></button></li>)}</ul> : <p className={styles.muted}>No saved threads yet.</p>}
+      <p className={styles.muted}>{deleteArmed ? "ctrl-x again to confirm deletion" : "↑/↓ select · Enter open · ctrl-x delete · Escape close"}</p>
     </section>
   </div>;
 }
 
+function ThreadsRoute() {
+  const navigate = useNavigate();
+  return <main className={styles.shell}><ThreadPicker onClose={() => navigate("/", { replace: true })} /></main>;
+}
+
 function PromptBox({ value, onChange, onSubmit, onCommand, placeholder, disabled = false }: { value: string; onChange: (value: string) => void; onSubmit: (value: string, mode: "lookup" | "research") => void; onCommand: (command: string) => void; placeholder: string; disabled?: boolean }) {
-  const [mode, setMode] = useState<"lookup" | "research">("lookup");
-  const submit = (event: FormEvent) => { event.preventDefault(); const input = value.trim(); if (!input) return; if (input.startsWith("/")) onCommand(input.split(/\\s+/)[0].toLowerCase()); else onSubmit(input, mode); };
+  const submit = (event: FormEvent) => { event.preventDefault(); const input = value.trim(); if (!input) return; if (input.startsWith("/")) { onCommand(input); return; } onSubmit(input, resolveQueryMode(input)); };
   return <form className={styles.promptBox} onSubmit={submit}>
     <input aria-label="Search query" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} disabled={disabled} autoFocus />
-    <div className={styles.promptActions}>
-      <select aria-label="Lookup or research" value={mode} onChange={(event) => setMode(event.target.value as "lookup" | "research")} disabled={disabled}><option value="lookup">lookup</option><option value="research">research</option></select>
-      <button type="submit" disabled={disabled}>Go</button>
-    </div>
+    <span className={styles.promptHint}>Enter to send · ? for research</span>
+    <button type="submit" aria-label="Go" disabled={disabled}>Send</button>
   </form>;
 }
 
 function Home() {
   const [query, setQuery] = useState("");
   const [threads, setThreads] = useState(false);
+  const [message, setMessage] = useState("");
   const navigate = useNavigate();
   const submit = (input: string, selectedMode: "lookup" | "research") => navigate(`/topics/new?mode=${selectedMode}&q=${encodeURIComponent(input)}`);
-  const command = (input: string) => { if (input === "/settings") navigate("/settings"); else if (input === "/new") { setQuery(""); navigate("/"); } else if (input === "/threads") setThreads(true); };
+  const command = (input: string) => { const command = parseSlashCommand(input); if (command === "/settings") navigate("/settings"); else if (command === "/new") { setQuery(""); navigate("/", { replace: true }); } else if (command === "/threads") navigate("/threads"); else setMessage(`Unknown command: ${input}`); };
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <Link to="/" className={styles.brand}>dorothy-ann</Link>
+        <Link to="/" className={styles.brand}>DA</Link>
         <span className={styles.kicker}>/settings · /threads</span>
       </header>
       {threads && <ThreadPicker onClose={() => setThreads(false)} />}
@@ -207,7 +222,8 @@ function Home() {
         <h2 className={styles.kicker}>fullscreen research desk</h2>
         <p className={styles.muted}>Ask a question, or use <code>/settings</code>, <code>/new</code>, and <code>/threads</code>.</p>
       </section>
-      <PromptBox value={query} onChange={setQuery} onSubmit={submit} onCommand={command} placeholder="Search or type a slash command…" />
+      {message && <p role="status" className={styles.commandMessage}>{message}</p>}
+      <PromptBox value={query} onChange={setQuery} onSubmit={submit} onCommand={command} placeholder="Ask something or type a slash command…" />
     </main>
   );
 }
@@ -485,9 +501,12 @@ function Topic() {
   const [chatStage, setChatStage] = useState("");
   const [thread, setThread] = useState<Thread | null>(null);
   const [exportMessage, setExportMessage] = useState("");
+  const [commandMessage, setCommandMessage] = useState("");
   const researchController = useRef<AbortController | null>(null);
   useEffect(() => {
     let cancelled = false;
+    const requestId = id();
+    threadOwner.begin(`topic:${threadId}`, requestId);
     const run = async () => {
       try {
         if (!query) {
@@ -537,15 +556,20 @@ function Topic() {
           });
           if (!response.ok) throw new Error("research failed");
           await readResearchStream(response, (next) => {
-            if (!cancelled) setState(next);
+            if (!cancelled && threadOwner.isCurrent(`topic:${threadId}`, requestId)) {
+              setState(next);
+            }
           });
         }
       } catch (error) {
-        if (!cancelled) {
+        if (!cancelled && threadOwner.isCurrent(`topic:${threadId}`, requestId)) {
           const interrupted = error instanceof DOMException && error.name === "AbortError";
-          setState((current) => ({ ...current, stage: interrupted ? "interrupted" : "failed", error: interrupted ? "Research stopped." : error instanceof Error ? error.message : "request failed" }));
+          const failure = interrupted ? "Research stopped." : error instanceof Error ? error.message : "request failed";
+          const next = { ...state, stage: interrupted ? "interrupted" : "failed", error: failure };
+          setState(next);
+          void saveTopic(threadId, query, mode, next, interrupted ? "turn_interrupted" : "turn_failed");
         }
-      } finally { researchController.current = null; }
+      } finally { researchController.current = null; threadOwner.finish(`topic:${threadId}`, requestId); }
     };
     void run();
     return () => {
@@ -560,8 +584,7 @@ function Topic() {
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <Link to="/" className={styles.brand}>dorothy-ann</Link>
-        <span className={styles.kicker}>{mode} · {thread?.title ?? "new thread"}</span>
+        <Link to="/" className={styles.brand}>DA</Link>
       </header>
       {threads && <ThreadPicker onClose={() => setThreads(false)} />}
       <div className={`${styles.topicLayout} ${mode === "research" ? styles.researchLayout : styles.lookupLayout}`}>
@@ -596,7 +619,7 @@ function Topic() {
               <p>{renderCitations(state.answer, state.sources)}</p>
             </article>
           )}
-          <PromptBox value={chatInput} onChange={setChatInput} onCommand={(command) => { if (command === "/settings") navigate("/settings"); else if (command === "/new") navigate("/"); else if (command === "/threads") setThreads(true); }} onSubmit={async (prompt) => {
+          <PromptBox value={chatInput} onChange={setChatInput} onCommand={(input) => { const command = parseSlashCommand(input); if (command === "/settings") navigate("/settings"); else if (command === "/new") navigate("/", { replace: true }); else if (command === "/threads") navigate("/threads"); else setCommandMessage(`Unknown command: ${input}`); }} onSubmit={async (prompt) => {
             setChatInput(""); setChatAnswer(""); setChatStage("thinking");
             const pending = await startChatTurn(threadId, prompt); if (pending) setThread(pending);
             const response = await fetch("/api/turn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: prompt, mode: "chat", context: `${state.answer}\n\nSources:\n${state.sources.map((source) => `${source.title}: ${source.snippet ?? source.url}`).join("\n")}` }) });
@@ -605,6 +628,7 @@ function Topic() {
             await readResearchStream(response, (next) => { finalAnswer = next.answer; setChatAnswer(next.answer); setChatStage(next.stage); });
             if (finalAnswer) { const committed = await appendChatTurn(threadId, prompt, finalAnswer); if (committed) setThread(committed); }
           }} placeholder="Continue the conversation, or type /threads…" />
+          {commandMessage && <p className={styles.commandMessage} role="status">{commandMessage}</p>}
           {chatStage && <p className={styles.muted} aria-live="polite">{chatStage}</p>}
           {chatAnswer && <p className={styles.chatAnswer}>{renderCitations(chatAnswer, state.sources)}</p>}
           {mode === "lookup" && canPromoteToResearch(query) && (
@@ -701,6 +725,7 @@ export function App() {
     <Routes>
       <Route path="/unlock" element={<Unlock />} />
       <Route path="/settings" element={<Settings />} />
+      <Route path="/threads" element={<ThreadsRoute />} />
       <Route
         path="/topics/:threadId/export/:draftId"
         element={<ExportWorkbench />}

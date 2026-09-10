@@ -381,20 +381,22 @@
   gap: 0.6rem;
   padding: 0.65rem;
   border: 1px solid var(--line);
-  border-radius: 0.75rem;
+  border-radius: 0;
   background: color-mix(in srgb, var(--paper) 96%, transparent);
   box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 12%);
   backdrop-filter: blur(10px);
 }
-.promptBox > input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); padding: 0.7rem; }
-.promptActions { display: flex; gap: 0.25rem; }
-.promptActions select, .promptActions button { border: 0; border-radius: 0.45rem; background: var(--ink); color: var(--paper); padding: 0.65rem 0.8rem; }
-.commandOverlay { position: fixed; z-index: 4; inset: 0; display: grid; place-items: start center; padding-top: 12vh; background: rgb(0 0 0 / 20%); }
-.threadPicker { width: min(38rem, calc(100vw - 2rem)); padding: 1.25rem; border: 1px solid var(--line); border-radius: 0.75rem; background: var(--paper); box-shadow: 0 1rem 4rem rgb(0 0 0 / 20%); }
+.promptBox > input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); padding: 0.85rem 0.7rem; }
+.promptHint { align-self: center; color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
+.promptBox > button { border: 1px solid var(--ink); border-radius: 0; background: var(--ink); color: var(--paper); padding: 0.65rem 0.9rem; cursor: pointer; }
+.commandMessage { width: min(100%, 72rem); margin: 1rem auto; color: var(--muted); }
+.commandOverlay { position: fixed; z-index: 4; inset: 0; display: grid; place-items: center; padding: clamp(1rem, 7vw, 7rem); background: color-mix(in srgb, var(--paper) 96%, transparent); }
+.threadPicker { width: min(72rem, 100%); min-height: min(82vh, 52rem); padding: clamp(1.5rem, 5vw, 5rem); border: 1px solid var(--line); border-radius: 0; background: var(--paper); box-shadow: var(--shadow); }
 .threadPicker ul { max-height: 55vh; overflow: auto; margin: 1rem 0; padding: 0; list-style: none; }
 .threadPicker li button { display: grid; width: 100%; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); padding: 0.8rem; text-align: left; cursor: pointer; }
 .threadPicker li button small { color: var(--muted); margin-top: 0.25rem; }
 .threadPicker .threadActive button { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.threadPicker li button:focus-visible { outline-offset: -3px; }
 .chatForm {
   position: sticky;
   bottom: 0;
@@ -505,7 +507,8 @@
     bottom: max(0.75rem, env(safe-area-inset-bottom));
     left: 0.75rem;
   }
-  .promptActions select { max-width: 5.5rem; }
+  .promptHint { display: none; }
+  .promptBox > button { padding-inline: 0.7rem; }
   .evidence {
     position: static;
     margin: 2rem 0;
