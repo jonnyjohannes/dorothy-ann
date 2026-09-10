@@ -397,7 +397,11 @@ async function saveTopic(
   if (existing) {
     const previous = existing.turns.at(-1);
     const nextTurn = thread.turns[0];
-    const merged: Thread = { ...existing, updatedAt: timestamp, turns: previous ? [...existing.turns.slice(0, -1), { ...previous, ...nextTurn, id: previous.id, userMessage: previous.userMessage }] : thread.turns };
+    const sameTurn = previous?.userMessage.content === query && previous.mode === nextTurn.mode;
+    const turns = sameTurn
+      ? [...existing.turns.slice(0, -1), { ...previous, ...nextTurn, id: previous.id, userMessage: previous.userMessage }]
+      : [...existing.turns, nextTurn];
+    const merged: Thread = { ...existing, updatedAt: timestamp, turns };
     return store.commit({ thread: merged, reason, committedAt: timestamp });
   }
   return store.commit({ thread, reason, committedAt: timestamp });
@@ -569,6 +573,7 @@ function Topic() {
             });
           return;
         }
+        setState({ stage: "starting", answer: "", sources: [] });
         await saveTopic(threadId, query, mode, { stage: "starting", answer: "", sources: [] }, "query_started").then((committed) => { if (!cancelled) setThread(committed); });
         if (mode === "lookup") {
           const response = await fetch("/api/lookup", {
@@ -676,7 +681,12 @@ function Topic() {
             </article>
           )}
           <PromptBox value={chatInput} onChange={setChatInput} onCommand={(input) => { const command = parseSlashCommand(input); if (command === "/settings") navigate("/settings"); else if (command === "/new") navigate("/", { replace: true }); else if (command === "/threads") navigate("/threads"); else setCommandMessage(`Unknown command: ${input}`); }} onSubmit={async (prompt) => {
-            setChatInput(""); setChatAnswer(""); setChatStage("thinking");
+            setChatInput("");
+            if (mode === "lookup") {
+              navigate(`/topics/${threadId}?mode=research&q=${encodeURIComponent(prompt)}`);
+              return;
+            }
+            setChatAnswer(""); setChatStage("thinking");
             const pending = await startChatTurn(threadId, prompt); if (pending) setThread(pending);
             const response = await fetch("/api/turn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: prompt, mode: "chat", context: `${state.answer}\n\nSources:\n${state.sources.map((source) => `${source.title}: ${source.snippet ?? source.url}`).join("\n")}` }) });
             if (!response.ok) { setChatStage("chat unavailable"); return; }
