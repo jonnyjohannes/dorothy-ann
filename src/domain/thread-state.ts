@@ -24,9 +24,8 @@ export function migrateThread(value: unknown): Thread | null {
   return { ...value, schemaVersion: 2 };
 }
 
-function yaml(value: string): string { return value.replaceAll('"', '\\"'); }
 export function renderThreadScrollback(thread: Thread): { markdown: string; filename: string; sourceUpdatedAt: IsoTimestamp } {
-  const lines = ["---", `title: "${yaml(thread.title)}"`, `created: ${thread.createdAt}`, `updated: ${thread.updatedAt}`, `model: ${thread.modelRef}`, `search_provider: ${thread.searchRef}`, "---", "", `# ${thread.title}`];
+  const lines = [`# ${thread.title}`];
   thread.turns.forEach((turn, index) => {
     lines.push("", "---", "", "## you", "", turn.userMessage.content);
     if (turn.researchRun?.sources.length) {

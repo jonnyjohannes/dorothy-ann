@@ -195,12 +195,10 @@ function ThreadsRoute() {
   return <main className={styles.shell}><ThreadPicker onClose={() => navigate("/", { replace: true })} /></main>;
 }
 
-function PromptBox({ value, onChange, onSubmit, onCommand, placeholder, disabled = false }: { value: string; onChange: (value: string) => void; onSubmit: (value: string, mode: "lookup" | "research") => void; onCommand: (command: string) => void; placeholder: string; disabled?: boolean }) {
+function PromptBox({ value, onChange, onSubmit, onCommand, disabled = false }: { value: string; onChange: (value: string) => void; onSubmit: (value: string, mode: "lookup" | "research") => void; onCommand: (command: string) => void; disabled?: boolean }) {
   const submit = (event: FormEvent) => { event.preventDefault(); const input = value.trim(); if (!input) return; if (input.startsWith("/")) { onCommand(input); return; } onSubmit(input, resolveQueryMode(input)); };
   return <form className={styles.promptBox} onSubmit={submit}>
-    <input aria-label="Search query" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} disabled={disabled} autoFocus />
-    <span className={styles.promptHint}>Enter to send · ? for research</span>
-    <button type="submit" aria-label="Go" disabled={disabled}>Send</button>
+    <input aria-label="Search query" value={value} onChange={(event) => onChange(event.target.value)} placeholder="...? for research" disabled={disabled} autoFocus />
   </form>;
 }
 
@@ -223,7 +221,7 @@ function Home() {
         <p className={styles.muted}>Ask a question, or use <code>/settings</code>, <code>/new</code>, and <code>/threads</code>.</p>
       </section>
       {message && <p role="status" className={styles.commandMessage}>{message}</p>}
-      <PromptBox value={query} onChange={setQuery} onSubmit={submit} onCommand={command} placeholder="Ask something or type a slash command…" />
+      <PromptBox value={query} onChange={setQuery} onSubmit={submit} onCommand={command} />
     </main>
   );
 }
@@ -589,10 +587,8 @@ function Topic() {
       {threads && <ThreadPicker onClose={() => setThreads(false)} />}
       <div className={`${styles.topicLayout} ${mode === "research" ? styles.researchLayout : styles.lookupLayout}`}>
         <section className={`${styles.topic} ${mode === "research" ? styles.researchBox : styles.sourcesBox}`}>
-          <p className={styles.kicker} aria-live="polite">
-            {state.stage}
-          </p>
-          <h1>{query || "Saved topic"}</h1>
+          {state.stage !== "saved" && <p className={styles.kicker} aria-live="polite">{state.stage}</p>}
+          <h1>{(thread?.title ?? query) || "New topic"}</h1>
           {thread && thread.turns.some((turn) => turn.assistantMessage) && (
             <span className={styles.exportLinks}>
               <button className={styles.textButton} onClick={async () => { const artifact = renderThreadScrollback(thread); try { await navigator.clipboard.writeText(artifact.markdown); setExportMessage("Copied."); } catch { setExportMessage("Copy is unavailable; use Export file."); } }}>Copy</button>
@@ -627,7 +623,7 @@ function Topic() {
             let finalAnswer = "";
             await readResearchStream(response, (next) => { finalAnswer = next.answer; setChatAnswer(next.answer); setChatStage(next.stage); });
             if (finalAnswer) { const committed = await appendChatTurn(threadId, prompt, finalAnswer); if (committed) setThread(committed); }
-          }} placeholder="Continue the conversation, or type /threads…" />
+          }} />
           {commandMessage && <p className={styles.commandMessage} role="status">{commandMessage}</p>}
           {chatStage && <p className={styles.muted} aria-live="polite">{chatStage}</p>}
           {chatAnswer && <p className={styles.chatAnswer}>{renderCitations(chatAnswer, state.sources)}</p>}
