@@ -531,7 +531,14 @@ function Topic() {
   const [chatStage, setChatStage] = useState("");
   const [thread, setThread] = useState<Thread | null>(null);
   const [exportMessage, setExportMessage] = useState("");
+  const exportMessageTimer = useRef<number | null>(null);
   const [commandMessage, setCommandMessage] = useState("");
+  const showExportMessage = (message: string) => {
+    setExportMessage(message);
+    if (exportMessageTimer.current) window.clearTimeout(exportMessageTimer.current);
+    exportMessageTimer.current = window.setTimeout(() => setExportMessage(""), 3000);
+  };
+  useEffect(() => () => { if (exportMessageTimer.current) window.clearTimeout(exportMessageTimer.current); }, []);
   const hasResearchLayout = mode === "research" || Boolean(thread?.turns.some((turn) => turn.mode === "research" && turn.researchRun?.sources.length));
   const researchController = useRef<AbortController | null>(null);
   useEffect(() => {
@@ -618,8 +625,8 @@ function Topic() {
         <Link to="/" className={styles.brand}>dorothy ann</Link>
         {thread && thread.turns.some((turn) => turn.assistantMessage) && (
           <div className={styles.headerActions}>
-            <button className={styles.textButton} onClick={async () => { const artifact = renderThreadScrollback(thread); try { await navigator.clipboard.writeText(artifact.markdown); setExportMessage("Copied."); } catch { setExportMessage("Copy is unavailable; use Export file."); } }}>Copy</button>
-            <button className={styles.textButton} onClick={() => { const artifact = renderThreadScrollback(thread); downloadMarkdown(artifact.markdown, artifact.filename); setExportMessage("Markdown exported."); }}>Export</button>
+            <button className={styles.textButton} onClick={async () => { const artifact = renderThreadScrollback(thread); try { await navigator.clipboard.writeText(artifact.markdown); showExportMessage("Copied."); } catch { showExportMessage("Copy is unavailable; use Export file."); } }}>Copy</button>
+            <button className={styles.textButton} onClick={() => { const artifact = renderThreadScrollback(thread); downloadMarkdown(artifact.markdown, artifact.filename); showExportMessage("Markdown exported."); }}>Export</button>
             {exportMessage && <span role="status" className={styles.muted}>{exportMessage}</span>}
           </div>
         )}
@@ -644,7 +651,7 @@ function Topic() {
           )}
           {thread && (
             <article className={styles.scrollback} aria-label="Topic scrollback">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{renderThreadScrollback(thread, { includeSources: !hasResearchLayout }).markdown}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{renderThreadScrollback(thread, { includeSources: !hasResearchLayout, citationTarget: "evidence" }).markdown}</ReactMarkdown>
             </article>
           )}
           {state.answer && !thread && (

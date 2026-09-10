@@ -24,9 +24,10 @@ export function migrateThread(value: unknown): Thread | null {
   return { ...value, schemaVersion: 2 };
 }
 
-export function renderThreadScrollback(thread: Thread, options: { includeSources?: boolean } = {}): { markdown: string; filename: string; sourceUpdatedAt: IsoTimestamp } {
+export function renderThreadScrollback(thread: Thread, options: { includeSources?: boolean; citationTarget?: "evidence" | "source" } = {}): { markdown: string; filename: string; sourceUpdatedAt: IsoTimestamp } {
   const lines: string[] = [];
   const includeSources = options.includeSources ?? true;
+  const citationTarget = options.citationTarget ?? "source";
   thread.turns.forEach((turn, index) => {
     if (index > 0) lines.push("", "---", "");
     lines.push(`> ${turn.userMessage.content}`);
@@ -34,7 +35,15 @@ export function renderThreadScrollback(thread: Thread, options: { includeSources
       lines.push("");
       for (const source of turn.researchRun.sources) lines.push(`- [${source.title}](${source.url}) — ${source.snippet ?? source.displayUrl}`);
     }
-    if (turn.assistantMessage) lines.push("", turn.assistantMessage.content.parts.map((part) => part.type === "text" ? part.markdown : `[[cite:${part.sourceId}]]`).join(""));
+    if (turn.assistantMessage) {
+      const sourceById = new Map(turn.researchRun?.sources.map((source, sourceIndex) => [source.sourceId, { number: sourceIndex + 1, url: source.url }]) ?? []);
+      lines.push("", turn.assistantMessage.content.parts.map((part) => {
+        if (part.type === "text") return part.markdown;
+        const source = sourceById.get(part.sourceId);
+        if (!source) return "[?]";
+        return citationTarget === "evidence" ? `[${source.number}](#source-${part.sourceId})` : `[${source.number}](${source.url})`;
+      }).join(""));
+    }
     if (turn.failure) lines.push("", `> ${turn.status}: ${turn.failure.message}`);
     if (index === thread.turns.length - 1 && !turn.assistantMessage && !turn.failure) lines.push("", `> ${turn.status}`);
   });
