@@ -76,7 +76,7 @@ function Unlock() {
   return (
     <main className={styles.unlockShell}>
       <header className={styles.header}>
-        <span className={styles.brand}>Dorothy Ann</span>
+        <span className={styles.brand}>dorothy ann</span>
       </header>
       <section className={styles.unlockCard} aria-labelledby="unlock-title">
         <p id="unlock-title" className={styles.kicker}>{taglines[taglineIndex]}</p>
@@ -161,7 +161,7 @@ function Settings() {
     <main className={styles.shell}>
       <header className={styles.header}>
         <Link to="/" className={styles.brand}>
-          ← Dorothy Ann
+          ← dorothy ann
         </Link>
         <span className={styles.kicker}>settings</span>
       </header>
@@ -245,7 +245,7 @@ function Home() {
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <Link to="/" className={styles.brand}>Dorothy Ann</Link>
+        <Link to="/" className={styles.brand}>dorothy ann</Link>
       </header>
       {threads && <ThreadPicker onClose={() => setThreads(false)} />}
       <section className={styles.hero}>
@@ -479,7 +479,7 @@ function ExportWorkbench() {
     <main className={styles.shell}>
       <header className={styles.header}>
         <Link to="/" className={styles.brand} onClick={(event) => { if (draftLoaded && markdown !== savedMarkdown && !window.confirm("Leave without saving this edit?")) event.preventDefault(); }}>
-          ← Dorothy Ann
+          ← dorothy ann
         </Link>
         <span className={styles.kicker}>report workbench</span>
       </header>
@@ -615,7 +615,7 @@ function Topic() {
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <Link to="/" className={styles.brand}>Dorothy Ann</Link>
+        <Link to="/" className={styles.brand}>dorothy ann</Link>
         {thread && thread.turns.some((turn) => turn.assistantMessage) && (
           <div className={styles.headerActions}>
             <button className={styles.textButton} onClick={async () => { const artifact = renderThreadScrollback(thread); try { await navigator.clipboard.writeText(artifact.markdown); setExportMessage("Copied."); } catch { setExportMessage("Copy is unavailable; use Export file."); } }}>Copy</button>
