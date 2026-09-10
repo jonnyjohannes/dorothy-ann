@@ -455,7 +455,10 @@
 .commandOverlay { position: fixed; z-index: 4; inset: 0; display: grid; place-items: center; padding: clamp(1rem, 7vw, 7rem); background: color-mix(in srgb, var(--paper) 96%, transparent); }
 .threadPicker { width: min(72rem, 100%); min-height: min(82vh, 52rem); padding: clamp(1.5rem, 5vw, 5rem); border: 1px solid var(--line); border-radius: 0; background: var(--paper); box-shadow: var(--shadow); }
 .threadPicker ul { max-height: 55vh; overflow: auto; margin: 1rem 0; padding: 0; list-style: none; }
-.threadPicker li button { display: grid; width: 100%; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); padding: 0.8rem; text-align: left; cursor: pointer; }
+.threadRow { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); }
+.threadPicker li button { display: grid; min-width: 0; flex: 1; border: 0; background: transparent; color: var(--ink); padding: 0.8rem; text-align: left; cursor: pointer; }
+.threadPicker li .threadDelete { flex: 0 0 auto; padding-inline: 0.8rem; color: var(--muted); font-size: 0.75rem; }
+.threadPicker li .threadDelete:hover { color: var(--ink); }
 .threadPicker li button small { color: var(--muted); margin-top: 0.25rem; }
 .threadPicker .threadActive button { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .threadPicker li button:focus-visible { outline-offset: -3px; }

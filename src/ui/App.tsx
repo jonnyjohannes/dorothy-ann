@@ -188,31 +188,29 @@ function ThreadPicker({ onClose }: { onClose: () => void }) {
   const activeThreadId = route.threadId;
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [active, setActive] = useState(0);
-  const [deleteArmed, setDeleteArmed] = useState(false);
   const focused = topics[active];
   const refresh = () => void store.list().then((next) => { setTopics(next); setActive((value) => Math.min(value, Math.max(0, next.length - 1))); });
+  const deleteTopic = (topic: ThreadSummary) => {
+    if (!window.confirm(`Delete “${topic.title}”?`)) return;
+    void store.remove(topic.id).then(() => { if (activeThreadId === topic.id) navigate("/", { replace: true }); refresh(); });
+  };
   useEffect(refresh, []);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") { event.preventDefault(); onClose(); }
-      if (event.key === "ArrowDown") { event.preventDefault(); setDeleteArmed(false); setActive((value) => Math.min(value + 1, Math.max(0, topics.length - 1))); }
-      if (event.key === "ArrowUp") { event.preventDefault(); setDeleteArmed(false); setActive((value) => Math.max(0, value - 1)); }
+      if (event.key === "ArrowDown") { event.preventDefault(); setActive((value) => Math.min(value + 1, Math.max(0, topics.length - 1))); }
+      if (event.key === "ArrowUp") { event.preventDefault(); setActive((value) => Math.max(0, value - 1)); }
       if (event.key === "Enter" && focused) { event.preventDefault(); navigate(`/topics/${focused.id}`, { replace: true }); }
-      if (event.ctrlKey && event.key.toLowerCase() === "x" && focused) {
-        event.preventDefault();
-        if (!deleteArmed) { setDeleteArmed(true); return; }
-        void store.remove(focused.id).then(() => { if (activeThreadId === focused.id) navigate("/", { replace: true }); refresh(); setDeleteArmed(false); });
-      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, deleteArmed, focused, navigate, onClose, topics.length]);
+  }, [active, focused, navigate, onClose, topics.length]);
   return <div className={styles.commandOverlay} role="dialog" aria-modal="true" aria-label="Saved threads">
     <section className={styles.threadPicker}>
       <p className={styles.kicker}>/threads</p>
       <h2>Saved threads</h2>
-      {topics.length ? <ul>{topics.map((topic, index) => <li key={topic.id} className={index === active ? styles.threadActive : ""}><button autoFocus={index === active} aria-current={index === active} onClick={() => navigate(`/topics/${topic.id}`, { replace: true })}>{topic.title}<small>{topic.lastTurnPreview ?? ""}</small></button></li>)}</ul> : <p className={styles.muted}>No saved threads yet.</p>}
-      <p className={styles.muted}>{deleteArmed ? "ctrl-x again to confirm deletion" : "↑/↓ select · Enter open · ctrl-x delete · Escape close"}</p>
+      {topics.length ? <ul>{topics.map((topic, index) => <li key={topic.id} className={`${index === active ? styles.threadActive : ""} ${styles.threadRow}`}><button autoFocus={index === active} aria-current={index === active} onClick={() => navigate(`/topics/${topic.id}`, { replace: true })}>{topic.title}<small>{topic.lastTurnPreview ?? ""}</small></button><button className={styles.threadDelete} aria-label={`Delete ${topic.title}`} onClick={() => deleteTopic(topic)}>Delete</button></li>)}</ul> : <p className={styles.muted}>No saved threads yet.</p>}
+      <p className={styles.muted}>↑/↓ select · Enter open · Delete remove · Escape close</p>
     </section>
   </div>;
 }
