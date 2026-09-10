@@ -4,13 +4,23 @@
 
 - Status: planning
 - Last updated: 2026-09-08
-- Current focus: refining the launcher, prompt macro, and transcript visual language from hands-on UI feedback
+- Current focus: implementing the selected `you` / `DA` transcript refinement, launcher deletion, prompt macro, and metadata cleanup
 - Handoff lives in: [`## Handoff`](#handoff)
 - Next action: implement the selected `you` / `DA` attribution, turn separators, launcher, prompt macro, and metadata cleanup
 
 ## Handoff
 
-Start with this document, then read the alpha plan's `Current State`, `Implementation Sync and Deviations`, `Browser Interaction Design`, `Storage Strategy`, `Export` sections, and the existing `src/ui/App.tsx` / `src/adapters/browser/local-stores.ts` persistence paths. The post-alpha scope is intentionally narrower than the alpha surface: a simple scrollback-first web UI, reliable seven-day saved threads containing the complete recoverable state, and a minimal direct-export flow. The v2 envelope, nested validation, migration, expiry cleanup, commit boundary, canonical renderer, and fullscreen UI pivot are implemented and verified. The next refinement is specified: a nearly full-screen `/threads` launcher with deletion, an Enter-driven `?` prompt macro, compact metadata, and quiet `you` / `DA` attribution separated by horizontal rules. Remaining work is implementing that refinement, then stage-complete orchestration, corruption/quota recovery, richer source disclosure, and full alpha2 browser acceptance.
+Start with this document, then read the alpha plan's `Current State`, `Implementation Sync and Deviations`, `Browser Interaction Design`, `Storage Strategy`, `Export` sections, and the existing `src/ui/App.tsx` / `src/adapters/browser/local-stores.ts` persistence paths. The post-alpha scope is intentionally narrower than the alpha surface: a simple scrollback-first web UI, reliable seven-day saved threads containing the complete recoverable state, and a minimal direct-export flow. The v2 envelope, nested validation, migration, expiry cleanup, commit boundary, canonical renderer, and first fullscreen UI pivot are implemented and verified. Those completed milestones were retroactively recorded from the preceding implementation conversation in `## Retroactive Implementation Record`. The next refinement is specified: a nearly full-screen `/threads` launcher with deletion, an Enter-driven `?` prompt macro, compact metadata, and quiet `you` / `DA` attribution separated by horizontal rules. Remaining work is implementing that refinement, then stage-complete orchestration, corruption/quota recovery, richer source disclosure, and full alpha2 browser acceptance.
+
+## Retroactive Implementation Record
+
+The following work occurred before this plan was fully used as the continuity record and is now captured here:
+
+- `dcc27ed` — implemented the v2 persisted thread envelope, nested validation, migration, seven-day expiry cleanup, commit boundary, canonical scrollback renderer, and initial Copy/export integration. Verification at the time: lint, typecheck, 41 unit tests, build, and `git diff --check`.
+- `a014403` — implemented the first fullscreen-shell pass: persistent bottom prompt, source/research layout, removed mounted sidebar/drawer, and `/settings`, `/new`, `/threads` navigation. Verification at the time: lint, typecheck, 41 unit tests, build, and `git diff --check`.
+- `bf6e077` — recorded the launcher/transcript refinement decisions from the subsequent design feedback. No source implementation was included in that commit.
+
+These records are historical continuity, not claims that the remaining orchestration, recovery, or acceptance work is complete.
 
 ## Summary
 
@@ -221,8 +231,9 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [x] 2. Persisted state contract — deliverable: versioned envelope, nested validation, migration rules, and commit boundary; verify: domain/port contract tests and migration fixtures.
 - [~] 3. Reliable thread orchestration — deliverable: one owner for lookup/research/chat state and atomic committed transitions; verify: reload/follow-up/race/interruption tests.
 - [~] 4. Seven-day retention/recovery — deliverable: expiry cleanup, corrupt/quota/unavailable behavior, and backup semantics; verify: fake IndexedDB tests with clock control.
-- [x] 5. Scrollback UI — deliverable: fullscreen shell with persistent bottom prompt, sourcesBox/researchBox layout, no sidebar, and slash-command navigation; verify: focused UI tests, lint, typecheck, and production build passed; broader RTL/Playwright interaction coverage remains in ledger item 7.
-- [~] 6. Minimal export — deliverable: one topic export entry point using the canonical scrollback Markdown renderer with Copy and direct download; verify: byte-identical copy/download snapshots and export-failure tests.
+- [x] 5a. Initial scrollback UI — deliverable: fullscreen shell with persistent bottom prompt, sourcesBox/researchBox layout, no sidebar, and slash-command navigation; verify: focused UI tests, lint, typecheck, and production build passed.
+- [~] 5b. Launcher/transcript refinement — deliverable: full-height `/threads` launcher with deletion, Enter-driven `?` macro, square emphasized prompt, compact metadata, and `you` / `DA` turn treatment with separators; verify: focused UI and responsive interaction tests.
+- [~] 6. Minimal export — deliverable: one topic export entry point using the canonical scrollback Markdown renderer with Copy and direct download; verify: byte-identical copy/download snapshots and export-failure tests. Canonical rendering and initial integration are complete; deterministic export coverage remains.
 - [ ] 7. Alpha2 acceptance — deliverable: updated docs, verification record, and clean branch milestone; verify: lint, typecheck, unit, build, E2E, `git diff --check`.
 
 ## Verification
