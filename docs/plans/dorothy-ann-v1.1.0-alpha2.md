@@ -4,13 +4,13 @@
 
 - Status: implementation in progress
 - Last updated: 2026-09-08
-- Current focus: alpha2 shell refinement is complete for this milestone; preparing the implementation PR while tracking orchestration/recovery follow-up work
+- Current focus: explicit transcript/evidence components and persisted lookup/research mode semantics are implemented; validating the refactor
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: review the alpha2 milestone PR, then continue storage recovery and atomic orchestration hardening
+- Next action: review the component refactor, then continue remaining acceptance and recovery work
 
 ## Handoff
 
-The alpha2 shell refinement is implemented and verified through the current milestone: `/threads` is a full-screen keyboard launcher, deletion uses two-step `ctrl-x`, prompt submission infers research from terminal `?`, the home header is minimal, thread Copy/Export actions sit top-right, saved research threads use a 3/4 conversation + 1/4 evidence layout, and the visible query is an unindented Markdown quote with a guide rule. Sources are omitted from the left research stream to avoid duplication while remaining in evidence and export output. A request-owner seam exists and rejects superseded commits. Remaining work is completing atomic stage orchestration, corruption/quota recovery, deterministic export failure coverage, legacy workbench removal, and full alpha2 browser acceptance.
+The alpha2 shell refinement is implemented and verified through the current milestone: `/threads` is a full-screen keyboard launcher, deletion uses an explicit row-level Delete button with confirmation, prompt submission infers research from terminal `?`, the home header is minimal, thread Copy/Export actions sit top-right, saved research threads use a 3/4 conversation + 1/4 evidence layout, and the visible query is an unindented Markdown quote with a guide rule. Sources are omitted from the canonical left topic stream to avoid duplication; lookup results render full-width using evidence-card styling, while research uses the same cards in the right evidence column. A request-owner seam exists and rejects superseded commits. Remaining work is completing atomic stage orchestration, corruption/quota recovery, deterministic export failure coverage, legacy workbench removal, and full alpha2 browser acceptance.
 
 ## Retroactive Implementation Record
 
@@ -233,7 +233,7 @@ There is no separate report format, export workbench, or alternate serialization
 2. **Define a single persisted thread state model.** Specify schema/version changes, nested validation, retention metadata, commit reasons, request identity, and migration behavior. Add focused domain/port tests before changing the UI.
 3. **Unify topic orchestration and persistence.** Route lookup, research stages, follow-up chat, interruption, retry, and reload through one thread state owner. Ensure every committed transition updates the full thread and summary atomically, and stale request IDs cannot commit over newer state.
 4. **Implement seven-day cleanup and recovery.** Add lazy/eager expiry cleanup, unavailable/quota/corrupt-record handling, import/export retention rules, and deterministic tests for all storage boundaries.
-5. **Implement the keyboard-first fullscreen shell.** Build the full-height `/threads` launcher with exact slash-command parsing, ctrl-x delete/confirm, focus restoration, active-thread route replacement, `DA` home navigation, no top-right mode/title metadata, Enter-driven `?` prompt routing, square prompt emphasis, canonical visible transcript, quiet `you` / `DA` attribution, and horizontal turn separators.
+5. **Implement the keyboard-first fullscreen shell.** Build the full-height `/threads` launcher with exact slash-command parsing, explicit row-level Delete confirmation, focus restoration, active-thread route replacement, `dorothy ann` home navigation, no top-right mode/title metadata, Enter-driven `?` prompt routing, square prompt emphasis, canonical visible transcript, quoted user queries, and horizontal turn separators.
 6. **Reduce export to one topic-level flow.** Reuse the same deterministic scrollback renderer for the growing Markdown view, Copy, and direct `.md` download; do not add an editor, chooser, or report workbench.
 7. **Run alpha2 acceptance and update the alpha2 ledger.** Verify reload at every meaningful stage, follow-up continuity, expiry, mobile layout, export recovery, and no loss of committed state.
 
@@ -243,10 +243,10 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 
 - [x] 1. Product contract — deliverable: final scrollback UI, TTL, restore, and export decisions in this plan; verify: decision review plus transition matrix.
 - [x] 2. Persisted state contract — deliverable: versioned envelope, nested validation, migration rules, and commit boundary; verify: domain/port contract tests and migration fixtures.
-- [~] 3. Reliable thread orchestration — deliverable: one owner for lookup/research/chat state and atomic committed transitions; current: request identity owner added and stale event callbacks ignored; remaining: route every transition through the owner and persist committed intermediate stages; verify: reload/follow-up/race/interruption tests.
+- [~] 3. Reliable thread orchestration — deliverable: one owner for lookup/research/chat state and atomic committed transitions; current: request identity owner added, lookup results persist, lookup follow-ups append research turns, and Topic now derives restored mode from saved turns; remaining: route every transition through the owner and persist committed intermediate stages; verify: reload/follow-up/race/interruption tests.
 - [ ] 4. Seven-day retention/recovery — deliverable: expiry cleanup, corrupt/quota/unavailable behavior, and backup semantics; verify: fake IndexedDB tests with clock control.
 - [x] 5a. Initial scrollback UI — deliverable: fullscreen shell with persistent bottom prompt, sourcesBox/researchBox layout, no sidebar, and slash-command navigation; verify: focused UI tests, lint, typecheck, and production build passed.
-- [~] 5b. Launcher/transcript refinement — deliverable: full-height `/threads` launcher with deletion, Enter-driven `?` macro, square emphasized prompt, compact metadata, and quoted query treatment; current: launcher, two-step keyboard deletion, route replacement, prompt macro, minimal headers, top-right topic actions, 3/4 conversation + 1/4 evidence layout, and left-aligned quoted queries implemented; remaining: focused responsive/browser acceptance coverage.
+- [~] 5b. Launcher/transcript refinement — deliverable: full-height `/threads` launcher with deletion, Enter-driven `?` macro, square emphasized prompt, compact metadata, and quoted query treatment; current: launcher, explicit row-level Delete confirmation, route replacement, prompt macro, minimal headers, top-right topic actions, 3/4 conversation + 1/4 evidence layout, and left-aligned quoted queries implemented; remaining: focused responsive/browser acceptance coverage.
 - [~] 6. Minimal export — deliverable: one topic export entry point using the canonical scrollback Markdown renderer with Copy and direct download; current: visible/copy/download paths share `renderThreadScrollback`; remaining: byte-identical and failure-path tests plus removal of legacy workbench from the primary flow.
 - [ ] 7. Alpha2 acceptance — deliverable: updated docs, verification record, and clean branch milestone; verify: lint, typecheck, unit, build, E2E, `git diff --check`.
 
@@ -257,7 +257,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - A completed follow-up appears in the same restored thread and receives the full intended prior context.
 - Aborted, stale, duplicate, or out-of-order events cannot overwrite a newer thread state.
 - `/threads` selection replaces the active route/thread and restores the selected thread rather than leaving the previously open thread mounted.
-- `ctrl-x` requires a second `ctrl-x` confirmation, deletes the focused row and related records, and restores focus predictably.
+- The launcher Delete action requires confirmation, removes the focused row and related records, and restores focus predictably.
 - An expired thread and all related records are absent after cleanup; an unexpired thread remains restorable.
 - Corrupt records are isolated without preventing other topics from loading.
 - Mobile users can read upward through the stream and compose at the bottom without horizontal overflow or inaccessible hidden controls.
@@ -285,7 +285,7 @@ These are a UI/UX refinement of alpha2, not new persistence or provider scope. T
 ### Launcher and transcript refinement
 
 - `/threads` is a full-viewport launcher overlay: nearly full width and height, generous outer padding, centered content/list, keyboard-first selection, and a visually calm tmux/fzf-inspired presentation.
-- Thread selection and deletion are keyboard-first. Thread rows are selectable but have no clickable delete control. `ctrl-x` arms deletion for the focused row; a second `ctrl-x` confirms and removes it. The launcher legend must show `ctrl-x delete · ctrl-x confirm`; no mouse-only confirmation affordance is added. After deletion, focus moves to the nearest remaining row; deleting the active thread routes to a fresh home state.
+- Thread selection remains keyboard-first, while each row now has an explicit Delete action with confirmation. After deletion, focus moves to the nearest remaining row; deleting the active thread routes to a fresh home state.
 - The prompt bar has no visible lookup/research buttons or selector. Submission is Enter-driven: ordinary input performs lookup; a terminal `?` selects research. The prompt bar keeps a short hint explaining the `?` macro and should receive stronger visual emphasis without rounded borders.
 - Remove the `Saved` kicker and `Saved topic` placeholder/title treatment from restored topics. The topic query/title should be the primary identity. The visible stream and the copied/downloaded artifact use the same canonical Markdown serialization, including its deterministic frontmatter; do not create a separate metadata omission/projection rule for this pass.
 - In research mode, the transcript/researchBox is the left three-quarter column and sources/evidence is the right one-quarter column. This relationship must hold for the active stream, not only for an export rendering.

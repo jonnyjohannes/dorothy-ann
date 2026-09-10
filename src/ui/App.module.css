@@ -5,11 +5,16 @@
   color: var(--ink);
 }
 .header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: 100%;
   padding: 1.25rem 0;
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  backdrop-filter: blur(10px);
 }
 .brand {
   color: inherit;
@@ -122,6 +127,56 @@
   background: var(--paper);
   color: var(--ink);
 }
+.unlockShell {
+  min-height: 100vh;
+  padding: 0 2rem;
+  background: var(--paper);
+  color: var(--ink);
+}
+.unlockCard {
+  width: min(100%, 72rem);
+  margin: 28vh auto 0;
+}
+.unlockCard > .kicker {
+  width: min(100%, 40rem);
+  margin-inline: auto;
+}
+.unlockForm {
+  display: flex;
+  width: min(100%, 40rem);
+  margin-inline: auto;
+  border: 1px solid var(--line);
+}
+.unlockForm input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  padding: 1rem;
+}
+.unlockForm button {
+  display: none;
+  border: 0;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 0 1.25rem;
+  cursor: pointer;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .card button,
 .workbenchActions button {
   border: 1px solid var(--ink);
@@ -197,6 +252,7 @@
 }
 .backupControls h3 { margin: 0; font-size: 0.9rem; }
 .backupControls p { margin: 0; font-size: 0.8rem; color: var(--muted); }
+.backupControls .textButton { justify-self: start; }
 .drawerNote {
   position: absolute;
   right: 1.5rem;
@@ -261,6 +317,8 @@
   gap: 2rem;
 }
 .lookupLayout .sourcesBox { width: 100%; }
+.lookupLayout .scrollback { margin-bottom: 1rem; }
+.lookupLayout .evidence { margin-top: 0; }
 .researchLayout .sourcesBox { display: none; }
 .researchBox { min-width: 0; }
 .sourcesBox { min-width: 0; }
@@ -286,6 +344,11 @@
   text-decoration-thickness: 0.18em;
   text-underline-offset: 0.12em;
 }
+.evidenceList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 .evidenceItem {
   border-bottom: 1px solid var(--line);
   padding: 0.75rem 0;
@@ -298,6 +361,11 @@
 .evidenceItem p {
   color: var(--muted);
   line-height: 1.45;
+}
+.evidenceItemActive {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
 }
 .citation {
   color: var(--ink);
@@ -332,12 +400,12 @@
   display: block;
   margin-top: 2rem;
 }
-.lookupLayout .evidence { display: none; }
 .resultList {
-  padding-left: 1.2rem;
+  padding: 0;
+  list-style: none;
 }
 .resultList li {
-  margin: 1.25rem 0;
+  margin: 0;
 }
 .resultList small {
   display: block;
@@ -390,10 +458,19 @@
 .promptHint { align-self: center; color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
 .promptBox > button { border: 1px solid var(--ink); border-radius: 0; background: var(--ink); color: var(--paper); padding: 0.65rem 0.9rem; cursor: pointer; }
 .commandMessage { width: min(100%, 72rem); margin: 1rem auto; color: var(--muted); }
+.researchLoader { display: flex; align-items: center; gap: 0.75rem; margin: 3rem 0 1rem; color: var(--muted); }
+.loaderBars { display: inline-flex; align-items: end; gap: 0.18rem; height: 1.5rem; border-left: 3px solid var(--accent); padding-left: 0.6rem; }
+.loaderBars i { display: block; width: 0.22rem; height: 0.6rem; background: var(--accent); animation: loaderPulse 0.9s ease-in-out infinite alternate; }
+.loaderBars i:nth-child(2) { animation-delay: 0.18s; }
+.loaderBars i:nth-child(3) { animation-delay: 0.36s; }
+@keyframes loaderPulse { from { height: 0.35rem; opacity: 0.45; } to { height: 1.35rem; opacity: 1; } }
 .commandOverlay { position: fixed; z-index: 4; inset: 0; display: grid; place-items: center; padding: clamp(1rem, 7vw, 7rem); background: color-mix(in srgb, var(--paper) 96%, transparent); }
 .threadPicker { width: min(72rem, 100%); min-height: min(82vh, 52rem); padding: clamp(1.5rem, 5vw, 5rem); border: 1px solid var(--line); border-radius: 0; background: var(--paper); box-shadow: var(--shadow); }
 .threadPicker ul { max-height: 55vh; overflow: auto; margin: 1rem 0; padding: 0; list-style: none; }
-.threadPicker li button { display: grid; width: 100%; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); padding: 0.8rem; text-align: left; cursor: pointer; }
+.threadRow { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); }
+.threadPicker li button { display: grid; min-width: 0; flex: 1; border: 0; background: transparent; color: var(--ink); padding: 0.8rem; text-align: left; cursor: pointer; }
+.threadPicker li .threadDelete { flex: 0 0 auto; padding-inline: 0.8rem; color: var(--muted); font-size: 0.75rem; }
+.threadPicker li .threadDelete:hover { color: var(--ink); }
 .threadPicker li button small { color: var(--muted); margin-top: 0.25rem; }
 .threadPicker .threadActive button { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .threadPicker li button:focus-visible { outline-offset: -3px; }
@@ -479,9 +556,12 @@
   color: var(--muted);
 }
 @media (max-width: 760px) {
-  .shell {
+  .shell,
+  .unlockShell {
     padding: 0 1rem;
   }
+  .unlockCard { margin-top: 22vh; }
+  .unlockForm button { padding-inline: 0.8rem; }
   .queryForm {
     display: block;
   }

@@ -1,7 +1,4 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeSanitize from "rehype-sanitize";
 import {
   Link,
   Route,
@@ -17,6 +14,8 @@ import type { SearchResult, Thread, ThreadSummary } from "../domain/types";
 import { renderThreadScrollback } from "../domain/thread-state";
 import { canPromoteToResearch, parseSlashCommand, resolveQueryMode } from "../domain/policies";
 import styles from "./App.module.css";
+import { TurnTranscriptBox } from "./TurnTranscriptBox";
+import { EvidenceBox } from "./EvidenceBox";
 
 type Result = SearchResult;
 type StreamState = {
@@ -27,6 +26,7 @@ type StreamState = {
 };
 const store = new LocalThreadStore();
 const draftStore = new LocalArtifactDraftStore();
+const rotatingTaglines = ["dorothy ann", "take chances", "make mistakes", "get messy"] as const;
 const threadOwner = new ThreadStateOwner(store);
 const now = () => new Date().toISOString() as Thread["createdAt"];
 const id = () => crypto.randomUUID();
@@ -55,12 +55,22 @@ function BackupControls() {
     } catch { setMessage("That backup could not be imported."); }
   };
   return <section className={styles.backupControls} aria-label="Data backup">
-    <h3>Data</h3>
-    <button onClick={() => void download()}>Export backup</button>
-    <button onClick={() => input.current?.click()}>Import backup</button>
+    <h2>Data</h2>
+    <button className={styles.textButton} onClick={() => void download()}>Export backup</button>
+    <button className={styles.textButton} onClick={() => input.current?.click()}>Import backup</button>
     <input ref={input} type="file" accept="application/json" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void importBackup(file); event.target.value = ""; }} />
     {message && <p role="status">{message}</p>}
   </section>;
+}
+
+function RotatingBrand({ to, prefix = "" }: { to?: string; prefix?: string }) {
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => setIndex((value) => (value + 1) % rotatingTaglines.length), 3000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const content = `${prefix}${rotatingTaglines[index]}`;
+  return to ? <Link to={to} className={styles.brand}>{content}</Link> : <span className={styles.brand}>{content}</span>;
 }
 
 function Unlock() {
@@ -68,12 +78,13 @@ function Unlock() {
   const [passphrase, setPassphrase] = useState("");
   const [message, setMessage] = useState("");
   return (
-    <main className={styles.center}>
-      <section className={styles.card} aria-labelledby="unlock-title">
-        <p className={styles.kicker}>private research desk</p>
-        <h1 id="unlock-title">dorothy-ann</h1>
-        <p>This research desk is private.</p>
+    <main className={styles.unlockShell}>
+      <header className={styles.header}>
+        <RotatingBrand />
+      </header>
+      <section className={styles.unlockCard} aria-label="Unlock">
         <form
+          className={styles.unlockForm}
           onSubmit={async (event) => {
             event.preventDefault();
             const response = await fetch("/api/auth/passphrase", {
@@ -85,20 +96,41 @@ function Unlock() {
             else setMessage("That passphrase did not work.");
           }}
         >
-          <label htmlFor="passphrase">Passphrase</label>
+          <label className={styles.srOnly} htmlFor="passphrase">Passphrase</label>
           <input
             id="passphrase"
             type="password"
             value={passphrase}
             onChange={(event) => setPassphrase(event.target.value)}
             autoComplete="current-password"
+            placeholder="passphrase"
+            autoFocus
           />
-          <button type="submit">Unlock</button>
+
         </form>
-        {message && <p role="status">{message}</p>}
+        {message && <p role="status" className={styles.muted}>{message}</p>}
       </section>
     </main>
   );
+}
+
+function applyTheme(theme: string) {
+  const prefersDark = typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const resolved = theme === "auto" && prefersDark ? "dark" : theme === "auto" ? "light" : theme;
+  document.documentElement.dataset.theme = resolved;
+}
+
+function ThemeBootstrap() {
+  useEffect(() => {
+    const theme = localStorage.getItem("dorothy-ann-theme") ?? "auto";
+    applyTheme(theme);
+    if (theme !== "auto" || typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const update = () => applyTheme("auto");
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return null;
 }
 
 function ThemeControl() {
@@ -108,11 +140,9 @@ function ThemeControl() {
   const change = (value: string) => {
     setTheme(value);
     localStorage.setItem("dorothy-ann-theme", value);
-    document.documentElement.dataset.theme = value;
+    applyTheme(value);
   };
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
+  useEffect(() => { applyTheme(theme); }, [theme]);
   return (
     <label className={styles.themeControl}>
       Appearance
@@ -133,9 +163,7 @@ function Settings() {
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <Link to="/" className={styles.brand}>
-          ← dorothy-ann
-        </Link>
+        <RotatingBrand to="/" prefix="← " />
         <span className={styles.kicker}>settings</span>
       </header>
       <section className={styles.settings}>
@@ -143,11 +171,11 @@ function Settings() {
         <section className={styles.settingsSection}>
           <h2>Appearance</h2>
           <p>Choose how dorothy-ann looks on this device.</p>
-          <ThemeControl />
+          <p><ThemeControl /></p>
         </section>
         <section className={styles.settingsSection}>
           <h2>Storage and retention</h2>
-          <p>Saved topics stay in this browser for seven days after meaningful activity. Expired topics are removed automatically; backups preserve an unexpired topic’s original expiry.</p>
+          <p>Saved topics stay in this browser for 7 days after meaningful activity. Expired topics are removed automatically; backups preserve an unexpired topic’s original expiry.</p>
           <BackupControls />
         </section>
       </section>
@@ -161,31 +189,29 @@ function ThreadPicker({ onClose }: { onClose: () => void }) {
   const activeThreadId = route.threadId;
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [active, setActive] = useState(0);
-  const [deleteArmed, setDeleteArmed] = useState(false);
   const focused = topics[active];
   const refresh = () => void store.list().then((next) => { setTopics(next); setActive((value) => Math.min(value, Math.max(0, next.length - 1))); });
+  const deleteTopic = (topic: ThreadSummary) => {
+    if (!window.confirm(`Delete “${topic.title}”?`)) return;
+    void store.remove(topic.id).then(() => { if (activeThreadId === topic.id) navigate("/", { replace: true }); refresh(); });
+  };
   useEffect(refresh, []);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") { event.preventDefault(); onClose(); }
-      if (event.key === "ArrowDown") { event.preventDefault(); setDeleteArmed(false); setActive((value) => Math.min(value + 1, Math.max(0, topics.length - 1))); }
-      if (event.key === "ArrowUp") { event.preventDefault(); setDeleteArmed(false); setActive((value) => Math.max(0, value - 1)); }
+      if (event.key === "ArrowDown") { event.preventDefault(); setActive((value) => Math.min(value + 1, Math.max(0, topics.length - 1))); }
+      if (event.key === "ArrowUp") { event.preventDefault(); setActive((value) => Math.max(0, value - 1)); }
       if (event.key === "Enter" && focused) { event.preventDefault(); navigate(`/topics/${focused.id}`, { replace: true }); }
-      if (event.ctrlKey && event.key.toLowerCase() === "x" && focused) {
-        event.preventDefault();
-        if (!deleteArmed) { setDeleteArmed(true); return; }
-        void store.remove(focused.id).then(() => { if (activeThreadId === focused.id) navigate("/", { replace: true }); refresh(); setDeleteArmed(false); });
-      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, deleteArmed, focused, navigate, onClose, topics.length]);
+  }, [active, focused, navigate, onClose, topics.length]);
   return <div className={styles.commandOverlay} role="dialog" aria-modal="true" aria-label="Saved threads">
     <section className={styles.threadPicker}>
       <p className={styles.kicker}>/threads</p>
       <h2>Saved threads</h2>
-      {topics.length ? <ul>{topics.map((topic, index) => <li key={topic.id} className={index === active ? styles.threadActive : ""}><button autoFocus={index === active} aria-current={index === active} onClick={() => navigate(`/topics/${topic.id}`, { replace: true })}>{topic.title}<small>{topic.lastTurnPreview ?? ""}</small></button></li>)}</ul> : <p className={styles.muted}>No saved threads yet.</p>}
-      <p className={styles.muted}>{deleteArmed ? "ctrl-x again to confirm deletion" : "↑/↓ select · Enter open · ctrl-x delete · Escape close"}</p>
+      {topics.length ? <ul>{topics.map((topic, index) => <li key={topic.id} className={`${index === active ? styles.threadActive : ""} ${styles.threadRow}`}><button autoFocus={index === active} aria-current={index === active} onClick={() => navigate(`/topics/${topic.id}`, { replace: true })}>{topic.title}<small>{topic.lastTurnPreview ?? ""}</small></button><button className={styles.threadDelete} aria-label={`Delete ${topic.title}`} onClick={() => deleteTopic(topic)}>Delete</button></li>)}</ul> : <p className={styles.muted}>No saved threads yet.</p>}
+      <p className={styles.muted}>↑/↓ select · Enter open · Delete remove · Escape close</p>
     </section>
   </div>;
 }
@@ -212,11 +238,10 @@ function Home() {
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <Link to="/" className={styles.brand}>DA</Link>
+        <RotatingBrand to="/" />
       </header>
       {threads && <ThreadPicker onClose={() => setThreads(false)} />}
       <section className={styles.hero}>
-        <h2 className={styles.kicker}>fullscreen research desk</h2>
         <p className={styles.muted}>Ask a question, or use <code>/settings</code>, <code>/new</code>, and <code>/threads</code>.</p>
       </section>
       {message && <p role="status" className={styles.commandMessage}>{message}</p>}
@@ -343,6 +368,7 @@ async function saveTopic(
               createdAt: timestamp,
             }
           : undefined,
+        lookupResults: mode === "lookup" ? sources : undefined,
         researchRun:
           mode === "research"
             ? {
@@ -365,7 +391,11 @@ async function saveTopic(
   if (existing) {
     const previous = existing.turns.at(-1);
     const nextTurn = thread.turns[0];
-    const merged: Thread = { ...existing, updatedAt: timestamp, turns: previous ? [...existing.turns.slice(0, -1), { ...previous, ...nextTurn, id: previous.id, userMessage: previous.userMessage }] : thread.turns };
+    const sameTurn = previous?.userMessage.content === query && previous.mode === nextTurn.mode;
+    const turns = sameTurn
+      ? [...existing.turns.slice(0, -1), { ...previous, ...nextTurn, id: previous.id, userMessage: previous.userMessage }]
+      : [...existing.turns, nextTurn];
+    const merged: Thread = { ...existing, updatedAt: timestamp, turns };
     return store.commit({ thread: merged, reason, committedAt: timestamp });
   }
   return store.commit({ thread, reason, committedAt: timestamp });
@@ -373,6 +403,9 @@ async function saveTopic(
 
 function transcriptMarkdown(thread: Thread): string {
   return renderThreadScrollback(thread).markdown;
+}
+function sourcesForThread(thread: Thread): Result[] {
+  return Array.from(new Map(thread.turns.flatMap((turn) => turn.researchRun?.sources ?? turn.lookupResults ?? []).map((source) => [source.sourceId, source])).values());
 }
 
 function downloadMarkdown(markdown: string, filename: string) {
@@ -445,9 +478,7 @@ function ExportWorkbench() {
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <Link to="/" className={styles.brand} onClick={(event) => { if (draftLoaded && markdown !== savedMarkdown && !window.confirm("Leave without saving this edit?")) event.preventDefault(); }}>
-          ← dorothy-ann
-        </Link>
+        <RotatingBrand to="/" prefix="← " />
         <span className={styles.kicker}>report workbench</span>
       </header>
       <section className={styles.workbench}>
@@ -497,9 +528,19 @@ function Topic() {
   const [chatAnswer, setChatAnswer] = useState("");
   const [chatStage, setChatStage] = useState("");
   const [thread, setThread] = useState<Thread | null>(null);
+  const hasResearchHistory = Boolean(thread?.turns.some((turn) => turn.mode === "research" || turn.researchRun));
+  const effectiveMode = mode === "research" || hasResearchHistory ? "research" : "lookup";
   const [exportMessage, setExportMessage] = useState("");
+  const exportMessageTimer = useRef<number | null>(null);
   const [commandMessage, setCommandMessage] = useState("");
-  const hasResearchLayout = mode === "research" || state.sources.length > 0 || Boolean(thread?.turns.some((turn) => turn.researchRun?.sources.length));
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const showExportMessage = (message: string) => {
+    setExportMessage(message);
+    if (exportMessageTimer.current) window.clearTimeout(exportMessageTimer.current);
+    exportMessageTimer.current = window.setTimeout(() => setExportMessage(""), 3000);
+  };
+  useEffect(() => () => { if (exportMessageTimer.current) window.clearTimeout(exportMessageTimer.current); }, []);
+  const isResearchMode = effectiveMode === "research";
   const researchController = useRef<AbortController | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -513,7 +554,11 @@ function Topic() {
               ? await store.load(threadId)
               : null;
           const turn = saved?.turns.at(-1);
-          if (saved && !cancelled) setThread(saved);
+          const savedSources = saved ? sourcesForThread(saved) : [];
+          if (saved && !cancelled) {
+            setThread(saved);
+            if (saved.turns.some((savedTurn) => savedTurn.mode === "research" || savedTurn.researchRun) && mode !== "research") navigate(`/topics/${threadId}?mode=research`, { replace: true });
+          }
           if (turn && !cancelled)
             setState({
               stage: "saved",
@@ -521,10 +566,11 @@ function Topic() {
                 turn.assistantMessage?.content.parts
                   .map((part) => (part.type === "text" ? part.markdown : ""))
                   .join("") ?? "",
-              sources: turn.researchRun?.sources ?? [],
+              sources: savedSources,
             });
           return;
         }
+        setState({ stage: "starting", answer: "", sources: [] });
         await saveTopic(threadId, query, mode, { stage: "starting", answer: "", sources: [] }, "query_started").then((committed) => { if (!cancelled) setThread(committed); });
         if (mode === "lookup") {
           const response = await fetch("/api/lookup", {
@@ -582,39 +628,46 @@ function Topic() {
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <Link to="/" className={styles.brand}>DA</Link>
+        <RotatingBrand to="/" />
         {thread && thread.turns.some((turn) => turn.assistantMessage) && (
           <div className={styles.headerActions}>
-            <button className={styles.textButton} onClick={async () => { const artifact = renderThreadScrollback(thread); try { await navigator.clipboard.writeText(artifact.markdown); setExportMessage("Copied."); } catch { setExportMessage("Copy is unavailable; use Export file."); } }}>Copy</button>
-            <button className={styles.textButton} onClick={() => { const artifact = renderThreadScrollback(thread); downloadMarkdown(artifact.markdown, artifact.filename); setExportMessage("Markdown exported."); }}>Export</button>
+            <button className={styles.textButton} onClick={async () => { const artifact = renderThreadScrollback(thread); try { await navigator.clipboard.writeText(artifact.markdown); showExportMessage("Copied."); } catch { showExportMessage("Copy is unavailable; use Export file."); } }}>Copy</button>
+            <button className={styles.textButton} onClick={() => { const artifact = renderThreadScrollback(thread); downloadMarkdown(artifact.markdown, artifact.filename); showExportMessage("Markdown exported."); }}>Export</button>
             {exportMessage && <span role="status" className={styles.muted}>{exportMessage}</span>}
           </div>
         )}
       </header>
       {threads && <ThreadPicker onClose={() => setThreads(false)} />}
-      <div className={`${styles.topicLayout} ${hasResearchLayout ? styles.researchLayout : styles.lookupLayout}`}>
-        <section className={`${styles.topic} ${hasResearchLayout ? styles.researchBox : styles.sourcesBox}`}>
+      <div className={`${styles.topicLayout} ${isResearchMode ? styles.researchLayout : styles.lookupLayout}`}>
+        <section className={styles.topic}>
           {state.error && (
             <>
               <p role="alert">{state.error}</p>
               <button onClick={() => window.location.reload()}>Retry</button>
             </>
           )}
-          {mode === "research" && ["loading", "starting", "sources found", "extracting evidence", "synthesizing"].includes(state.stage) && (
-            <button onClick={() => researchController.current?.abort()}>Stop</button>
+          {isResearchMode && ["loading", "starting", "sources found", "extracting evidence", "synthesizing"].includes(state.stage) && (
+            <>
+              <div className={styles.researchLoader} role="status" aria-live="polite">
+                <span className={styles.loaderBars} aria-hidden="true"><i /><i /><i /></span>
+                <span>{state.stage === "loading" || state.stage === "starting" ? "researching" : state.stage}</span>
+              </div>
+              <button onClick={() => researchController.current?.abort()}>Stop</button>
+            </>
           )}
-          {thread && (
-            <article className={styles.scrollback} aria-label="Topic scrollback">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{renderThreadScrollback(thread, { includeSources: !hasResearchLayout }).markdown}</ReactMarkdown>
-            </article>
-          )}
+          {thread && <TurnTranscriptBox thread={thread} onEvidenceSelect={(sourceId) => { setSelectedSourceId(sourceId); window.setTimeout(() => document.getElementById(`source-${sourceId}`)?.focus(), 0); }} />}
           {state.answer && !thread && (
             <article className={styles.answer}>
               <p>{renderCitations(state.answer, state.sources)}</p>
             </article>
           )}
           <PromptBox value={chatInput} onChange={setChatInput} onCommand={(input) => { const command = parseSlashCommand(input); if (command === "/settings") navigate("/settings"); else if (command === "/new") navigate("/", { replace: true }); else if (command === "/threads") navigate("/threads"); else setCommandMessage(`Unknown command: ${input}`); }} onSubmit={async (prompt) => {
-            setChatInput(""); setChatAnswer(""); setChatStage("thinking");
+            setChatInput("");
+            if (effectiveMode === "lookup") {
+              navigate(`/topics/${threadId}?mode=research&q=${encodeURIComponent(prompt)}`);
+              return;
+            }
+            setChatAnswer(""); setChatStage("thinking");
             const pending = await startChatTurn(threadId, prompt); if (pending) setThread(pending);
             const response = await fetch("/api/turn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: prompt, mode: "chat", context: `${state.answer}\n\nSources:\n${state.sources.map((source) => `${source.title}: ${source.snippet ?? source.url}`).join("\n")}` }) });
             if (!response.ok) { setChatStage("chat unavailable"); return; }
@@ -633,57 +686,9 @@ function Topic() {
               Research this with Dorothy Ann →
             </Link>
           )}
-          {state.sources.length > 0 && (
-            <section
-              className={`${styles.resultsSection} ${hasResearchLayout ? styles.inlineSources : ""}`}
-              aria-labelledby="sources-title"
-            >
-              <h2 id="sources-title">
-                {mode === "research" ? "What I found" : "Results"}
-                <span className={styles.sourceCount}>
-                  {" "}
-                  {state.sources.length}
-                </span>
-              </h2>
-              <ul className={styles.resultList}>
-                {state.sources.map((source) => (
-                  <li key={source.sourceId}>
-                    <a href={source.url} target="_blank" rel="noreferrer">
-                      {source.title}
-                    </a>
-                    <small>{source.displayUrl}</small>
-                    {source.snippet && <p>{source.snippet}</p>}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+          {!isResearchMode && state.sources.length > 0 && <EvidenceBox sources={state.sources} selectedSourceId={selectedSourceId} onSelect={setSelectedSourceId} />}
         </section>
-        {state.sources.length > 0 && (
-          <aside className={styles.evidence} aria-label="Evidence">
-            <h2>Evidence</h2>
-            <p>
-              {state.sources.length} source
-              {state.sources.length === 1 ? "" : "s"} attached to this turn.
-            </p>
-            {state.sources.map((source) => (
-              <article
-                id={`source-${source.sourceId}`}
-                tabIndex={-1}
-                className={styles.evidenceItem}
-                key={source.sourceId}
-              >
-                <a href={source.url} target="_blank" rel="noreferrer">
-                  {source.title}
-                </a>
-                <small>{source.displayUrl}</small>
-                {source.snippet && (
-                  <p>{source.snippet.replace(/<[^>]+>/g, "")}</p>
-                )}
-              </article>
-            ))}
-          </aside>
-        )}
+        {isResearchMode && state.sources.length > 0 && <EvidenceBox sources={state.sources} selectedSourceId={selectedSourceId} onSelect={setSelectedSourceId} />}
       </div>
     </main>
   );
@@ -715,7 +720,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
 export function App() {
   return (
-    <AuthGate>
+    <>
+      <ThemeBootstrap />
+      <AuthGate>
     <Routes>
       <Route path="/unlock" element={<Unlock />} />
       <Route path="/settings" element={<Settings />} />
@@ -728,5 +735,6 @@ export function App() {
       <Route path="*" element={<Home />} />
     </Routes>
     </AuthGate>
+    </>
   );
 }

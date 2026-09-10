@@ -15,7 +15,7 @@ export interface EvidencePack { query: string; sources: ContextEvidence[]; creat
 export type ResearchRunStatus = "searching" | "extracting" | "ready" | "partial" | "insufficient_evidence" | "synthesizing" | "completed" | "failed" | "interrupted";
 export interface ResearchRun { id: ResearchRunId; origin: "search" | "promoted_lookup"; status: ResearchRunStatus; queries: string[]; lookupId?: string; targetViablePages: number; sources: SearchResult[]; extractions: ExtractionOutcome[]; evidenceSourceIds: SourceId[]; startedAt: IsoTimestamp; updatedAt: IsoTimestamp; completedAt?: IsoTimestamp; failure?: TurnFailure }
 export interface TurnFailure { stage: "search" | "extraction" | "synthesis" | "chat" | "report"; code: string; message: string; retryable: boolean; occurredAt: IsoTimestamp }
-export interface Turn { id: TurnId; mode: TurnMode; status: TurnStatus; createdAt: IsoTimestamp; updatedAt: IsoTimestamp; userMessage: UserMessage; assistantMessage?: AssistantMessage; researchRun?: ResearchRun; failure?: TurnFailure }
+export interface Turn { id: TurnId; mode: TurnMode; status: TurnStatus; createdAt: IsoTimestamp; updatedAt: IsoTimestamp; userMessage: UserMessage; assistantMessage?: AssistantMessage; lookupResults?: SearchResult[]; researchRun?: ResearchRun; failure?: TurnFailure }
 export interface Thread { schemaVersion: 1 | 2; id: ThreadId; title: string; createdAt: IsoTimestamp; updatedAt: IsoTimestamp; modelRef: string; searchRef: string; turns: Turn[] }
 export type ThreadSaveReason = "created" | "query_started" | "lookup_completed" | "research_stage" | "turn_completed" | "turn_failed" | "turn_interrupted" | "renamed";
 export interface ThreadCommit { thread: Thread; reason: ThreadSaveReason; requestId?: string; committedAt: IsoTimestamp }
