@@ -10,7 +10,7 @@ export function EvidenceBox({ sources, selectedSourceId, onSelect }: { sources: 
           <li
             id={`source-${source.sourceId}`}
             tabIndex={-1}
-            className={`${styles.evidenceItem} ${selectedSourceId === source.sourceId ? styles.evidenceItemActive : ""}`}
+            className={`${styles.evidenceItem} ${source.image ? styles.evidenceItemWithImage : ""} ${selectedSourceId === source.sourceId ? styles.evidenceItemActive : ""}`}
             aria-current={selectedSourceId === source.sourceId ? "true" : undefined}
             onFocus={() => onSelect(source.sourceId)}
             onKeyDown={(event) => {
@@ -32,11 +32,13 @@ export function EvidenceBox({ sources, selectedSourceId, onSelect }: { sources: 
                 onError={(event) => { event.currentTarget.hidden = true; }}
               />
             )}
-            <a href={source.url} target="_blank" rel="noreferrer">
-              {source.title}
-            </a>
-            <small>{source.displayUrl}</small>
-            {source.snippet && <p>{source.snippet.replace(/<[^>]+>/g, "")}</p>}
+            <div className={styles.evidenceContent}>
+              <a href={source.url} target="_blank" rel="noreferrer">
+                {source.title}
+              </a>
+              <small>{source.displayUrl}</small>
+              {source.snippet && <p>{source.snippet.replace(/<[^>]+>/g, "")}</p>}
+            </div>
           </li>
         ))}
       </ul>
