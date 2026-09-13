@@ -70,7 +70,12 @@ function RotatingBrand({ to, prefix = "" }: { to?: string; prefix?: string }) {
     return () => window.clearInterval(timer);
   }, []);
   const content = `${prefix}${rotatingTaglines[index]}`;
-  return to ? <Link to={to} className={styles.brand}>{content}</Link> : <span className={styles.brand}>{content}</span>;
+  return (
+    <span className={styles.brandGroup}>
+      <span className={styles.signature} aria-hidden="true">~∞|°_°|∞~</span>
+      {to ? <Link to={to} className={styles.brand}>{content}</Link> : <span className={styles.brand}>{content}</span>}
+    </span>
+  );
 }
 
 function safeReturnTo(value: string | null): string {
