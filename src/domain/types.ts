@@ -7,7 +7,8 @@ export interface AssistantContent { parts: AssistantContentPart[] }
 export interface UserMessage { id: MessageId; role: "user"; content: string; createdAt: IsoTimestamp }
 export interface UsageMetadata { inputTokens?: number; outputTokens?: number; searches?: number; extractedPages?: number; estimatedCostUsd?: number }
 export interface AssistantMessage { id: MessageId; role: "assistant"; content: AssistantContent; createdAt: IsoTimestamp; usage?: UsageMetadata }
-export interface SearchResult { sourceId: SourceId; rank: number; title: string; url: string; canonicalUrl: string; displayUrl: string; snippet?: string; publishedAt?: IsoTimestamp }
+export interface SearchResultImage { src: string; width?: number; height?: number; alt?: string }
+export interface SearchResult { sourceId: SourceId; rank: number; title: string; url: string; canonicalUrl: string; displayUrl: string; snippet?: string; publishedAt?: IsoTimestamp; image?: SearchResultImage }
 export interface ExtractedPage { sourceId: SourceId; canonicalUrl: string; title?: string; text: string; extractedAt: IsoTimestamp; characterCount: number }
 export type ExtractionOutcome = { sourceId: SourceId; status: "viable"; page: ExtractedPage } | { sourceId: SourceId; status: "skipped"; reason: "duplicate" | "unsafe_url" | "blocked" | "unsupported_content" | "empty_content" | "limit_reached" } | { sourceId: SourceId; status: "failed"; code: "fetch_failed" | "timeout" | "extract_failed"; retryable: boolean };
 export interface ContextEvidence { source: SearchResult; page: ExtractedPage }

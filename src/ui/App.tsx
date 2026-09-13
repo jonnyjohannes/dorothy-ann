@@ -73,8 +73,15 @@ function RotatingBrand({ to, prefix = "" }: { to?: string; prefix?: string }) {
   return to ? <Link to={to} className={styles.brand}>{content}</Link> : <span className={styles.brand}>{content}</span>;
 }
 
+function safeReturnTo(value: string | null): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
+  try { const url = new URL(value, window.location.origin); return url.origin === window.location.origin ? `${url.pathname}${url.search}${url.hash}` : "/"; } catch { return "/"; }
+}
+
 function Unlock() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const returnTo = safeReturnTo(params.get("returnTo"));
   const [passphrase, setPassphrase] = useState("");
   const [message, setMessage] = useState("");
   return (
@@ -92,7 +99,7 @@ function Unlock() {
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ passphrase }),
             });
-            if (response.ok) { setMessage("Unlocked."); navigate("/"); }
+            if (response.ok) { setMessage("Unlocked."); navigate(returnTo, { replace: true }); }
             else setMessage("That passphrase did not work.");
           }}
         >
@@ -225,6 +232,7 @@ function PromptBox({ value, onChange, onSubmit, onCommand, disabled = false }: {
   const submit = (event: FormEvent) => { event.preventDefault(); const input = value.trim(); if (!input) return; if (input.startsWith("/")) { onCommand(input); return; } onSubmit(input, resolveQueryMode(input)); };
   return <form className={styles.promptBox} onSubmit={submit}>
     <input aria-label="Search query" value={value} onChange={(event) => onChange(event.target.value)} placeholder="...? for research" disabled={disabled} autoFocus />
+    <button type="submit" disabled={disabled || !value.trim()}>{resolveQueryMode(value) === "research" ? "Ask Dorothy Ann" : "Go"}</button>
   </form>;
 }
 
@@ -232,7 +240,16 @@ function Home() {
   const [query, setQuery] = useState("");
   const [threads, setThreads] = useState(false);
   const [message, setMessage] = useState("");
+  const [params] = useSearchParams();
+  const externalQuery = params.get("q");
   const navigate = useNavigate();
+  useEffect(() => {
+    const input = externalQuery?.trim();
+    if (!input) return;
+    const mode = resolveQueryMode(input);
+    const threadId = id();
+    navigate(`/topics/${threadId}?mode=${mode}&q=${encodeURIComponent(input)}`, { replace: true });
+  }, [externalQuery, navigate]);
   const submit = (input: string, selectedMode: "lookup" | "research") => navigate(`/topics/new?mode=${selectedMode}&q=${encodeURIComponent(input)}`);
   const command = (input: string) => { const command = parseSlashCommand(input); if (command === "/settings") navigate("/settings"); else if (command === "/new") { setQuery(""); navigate("/", { replace: true }); } else if (command === "/threads") navigate("/threads"); else setMessage(`Unknown command: ${input}`); };
   return (
@@ -351,7 +368,7 @@ async function saveTopic(
       {
         id: id() as Thread["turns"][number]["id"],
         mode: mode === "research" ? "research" : "chat",
-        status: state.error ? "failed" : "completed",
+        status: state.error ? (state.stage === "interrupted" ? "interrupted" : "failed") : ["starting", "loading", "sources found", "extracting evidence", "synthesizing"].includes(state.stage) ? "running" : "completed",
         createdAt: timestamp,
         updatedAt: timestamp,
         userMessage: {
@@ -368,9 +385,9 @@ async function saveTopic(
               createdAt: timestamp,
             }
           : undefined,
-        lookupResults: mode === "lookup" ? sources : undefined,
+        lookupResults: mode === "lookup" && state.stage !== "starting" ? sources : undefined,
         researchRun:
-          mode === "research"
+          mode === "research" && (state.stage === "complete" || Boolean(state.error))
             ? {
                 id: id() as never,
                 origin: "search",
@@ -572,6 +589,14 @@ function Topic() {
         }
         const existing = await store.load(threadId);
         if (existing && !cancelled) setThread(existing);
+        const existingTurn = existing?.turns.at(-1);
+        const sameQuery = existingTurn?.userMessage.content === query && existingTurn.mode === mode;
+        if (existingTurn && sameQuery && existingTurn.status !== "pending") {
+          const savedSources = existingTurn.researchRun?.sources ?? existingTurn.lookupResults ?? [];
+          const savedAnswer = existingTurn.assistantMessage?.content.parts.map((part) => part.type === "text" ? part.markdown : "").join("") ?? "";
+          if (!cancelled) setState({ stage: existingTurn.status === "running" ? "interrupted" : existingTurn.status === "failed" ? "failed" : "saved", answer: savedAnswer, sources: savedSources, error: existingTurn.status === "running" ? "This search was interrupted. Retry to continue." : existingTurn.failure?.message });
+          return;
+        }
         setState({ stage: "starting", answer: "", sources: [] });
         await saveTopic(threadId, query, mode, { stage: "starting", answer: "", sources: [] }, "query_started").then((committed) => { if (!cancelled) setThread(committed); });
         if (mode === "lookup") {
@@ -716,7 +741,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         const status = await fetch("/api/providers/status").then((response) => response.json()) as { fixtureMode?: boolean };
         if (!status.fixtureMode) {
           const session = await fetch("/api/auth/session").then((response) => response.json()) as { authenticated?: boolean };
-          if (!session.authenticated) { navigate("/unlock", { replace: true }); return; }
+          if (!session.authenticated) {
+            const returnTo = `${location.pathname}${location.search}`;
+            navigate(`/unlock?returnTo=${encodeURIComponent(returnTo)}`, { replace: true });
+            return;
+          }
         }
         if (!cancelled) setState("ready");
       } catch { if (!cancelled) setState("error"); }

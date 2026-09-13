@@ -353,6 +353,15 @@
   border-bottom: 1px solid var(--line);
   padding: 0.75rem 0;
 }
+.evidenceThumbnail {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  margin-bottom: 0.65rem;
+  border-radius: 0.35rem;
+  background: color-mix(in srgb, var(--line) 55%, transparent);
+  object-fit: cover;
+}
 .evidenceItem small {
   display: block;
   color: var(--muted);
