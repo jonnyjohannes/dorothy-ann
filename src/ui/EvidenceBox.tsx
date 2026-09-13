@@ -4,6 +4,7 @@ import styles from "./App.module.css";
 export function EvidenceBox({ sources, selectedSourceId, onSelect }: { sources: SearchResult[]; selectedSourceId: string | null; onSelect: (sourceId: string) => void }) {
   return (
     <aside className={styles.evidence} aria-label="Evidence">
+      <h2 className={styles.srOnly}>Evidence</h2>
       <ul className={styles.evidenceList}>
         {sources.map((source) => (
           <li
@@ -19,6 +20,18 @@ export function EvidenceBox({ sources, selectedSourceId, onSelect }: { sources: 
             }}
             key={source.sourceId}
           >
+            {source.image && (
+              <img
+                className={styles.evidenceThumbnail}
+                src={source.image.src}
+                width={source.image.width}
+                height={source.image.height}
+                alt=""
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                onError={(event) => { event.currentTarget.hidden = true; }}
+              />
+            )}
             <a href={source.url} target="_blank" rel="noreferrer">
               {source.title}
             </a>
