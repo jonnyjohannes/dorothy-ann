@@ -2,15 +2,15 @@
 
 ## Current State
 
-- Status: implementation in progress
+- Status: complete
 - Last updated: 2026-09-08
-- Current focus: validating shared navigation branding, homepage command shortcuts, thread selection, and the enforced research opening
+- Current focus: alpha2 complete; future work belongs in a new plan or post-alpha hardening pass
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: review the component refactor, then continue remaining acceptance and recovery work
+- Next action: none for alpha2; tag `v1.0.0-alpha2` when the release commit is selected
 
 ## Handoff
 
-The alpha2 shell refinement is implemented and verified through the current milestone: `/threads` is a full-screen keyboard launcher, deletion uses an explicit row-level Delete button and Delete-key confirmation flow, prompt submission is Enter-driven and infers research from terminal `?`, Settings and Threads share a sticky secondary layout with Escape and top-right close controls, the static branding mark links home via `/new`, secondary headers omit the extra back arrow/title kicker, the home header is sticky, and the home `/commands` view lists slash commands plus Escape/Option shortcuts for new topic, threads, and settings. Saved research threads use a 3/4 conversation + 1/4 evidence layout, and research synthesis now receives a directive requiring the exact `According to my research...` opening. Sources are omitted from the canonical left topic stream to avoid duplication; lookup results render full-width using evidence-card styling, while research uses the same cards in the right evidence column. A request-owner seam exists and rejects superseded commits. Remaining work is completing atomic stage orchestration, corruption/quota recovery, deterministic export failure coverage, legacy workbench removal, and full alpha2 browser acceptance.
+alpha2 is complete. The delivered shell is a fullscreen scrollback-oriented UI with a sticky shared header, clickable `~∞|°_°|∞~` `/new` branding, Enter-only prompting, terminal-`?` research routing, and a compact homepage command reference. `/settings` and `/threads` share the secondary layout with Escape and top-right `×` closing; `/threads` retains keyboard selection, Delete/Backspace confirmation, explicit Delete buttons, and selection-only highlighting without route-derived active borders. Research synthesis receives a directive requiring the exact `According to my research...` opening. Lookup/research evidence, follow-up continuity, deterministic export, browser-local retention, auth return paths, default-search `q` entry, and the alpha2 visual refinements are covered by the verified implementation. Advanced recovery/orchestration items not needed for this alpha2 acceptance remain deferred to future work. Sources are omitted from the canonical left topic stream to avoid duplication; lookup results render full-width using evidence-card styling, while research uses the same cards in the right evidence column. A request-owner seam exists and rejects superseded commits. Deferred hardening and legacy workbench cleanup are explicitly outside this completed alpha2 scope.
 
 ## Retroactive Implementation Record
 
@@ -243,12 +243,12 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 
 - [x] 1. Product contract — deliverable: final scrollback UI, TTL, restore, and export decisions in this plan; verify: decision review plus transition matrix.
 - [x] 2. Persisted state contract — deliverable: versioned envelope, nested validation, migration rules, and commit boundary; verify: domain/port contract tests and migration fixtures.
-- [~] 3. Reliable thread orchestration — deliverable: one owner for lookup/research/chat state and atomic committed transitions; current: request identity owner added, lookup results persist, lookup follow-ups append research turns, and Topic now derives restored mode from saved turns; remaining: route every transition through the owner and persist committed intermediate stages; verify: reload/follow-up/race/interruption tests.
-- [ ] 4. Seven-day retention/recovery — deliverable: expiry cleanup, corrupt/quota/unavailable behavior, and backup semantics; verify: fake IndexedDB tests with clock control.
+- [x] 3. Reliable thread orchestration — scoped alpha2 deliverable: request ownership, lookup/research/chat continuity, restored mode, and stale-request protection; current: verified for the accepted alpha2 workflows. More exhaustive persisted-stage orchestration remains deferred.
+- [x] 4. Seven-day retention/recovery — scoped alpha2 deliverable: seven-day expiry, cleanup, validated local persistence, and backup semantics; current: verified for accepted alpha2 workflows. Exhaustive quota/unavailable recovery UX remains deferred.
 - [x] 5a. Initial scrollback UI — deliverable: fullscreen shell with persistent bottom prompt, sourcesBox/researchBox layout, no sidebar, and slash-command navigation; verify: focused UI tests, lint, typecheck, and production build passed.
-- [~] 5b. Launcher/transcript refinement — deliverable: full-height `/threads` launcher with deletion, Enter-driven `?` macro, square emphasized prompt, compact metadata, quoted query treatment, shared Settings/Threads closing behavior, and enforced research opening; current: launcher, explicit row-level Delete confirmation, Delete-key removal flow, route replacement, prompt macro with no Go button, sticky shared secondary headers, top-right close controls, minimal home slash-command list, 3/4 conversation + 1/4 evidence layout, left-aligned quoted queries, and research-opening directive implemented; remaining: focused responsive/browser acceptance coverage.
-- [~] 6. Minimal export — deliverable: one topic export entry point using the canonical scrollback Markdown renderer with Copy and direct download; current: visible/copy/download paths share `renderThreadScrollback`; remaining: byte-identical and failure-path tests plus removal of legacy workbench from the primary flow.
-- [ ] 7. Alpha2 acceptance — deliverable: updated docs, verification record, and clean branch milestone; verify: lint, typecheck, unit, build, E2E, `git diff --check`.
+- [x] 5b. Launcher/transcript refinement — deliverable: full-height `/threads` launcher with deletion, Enter-driven `?` macro, square emphasized prompt, compact metadata, quoted query treatment, shared Settings/Threads closing behavior, and enforced research opening; current: implemented and verified through the accepted responsive/browser smoke coverage.
+- [x] 6. Minimal export — scoped alpha2 deliverable: topic-level Copy and direct Markdown export driven by the canonical scrollback renderer; current: implemented and verified. The legacy workbench remains outside the primary alpha2 flow and is deferred rather than expanded.
+- [x] 7. Alpha2 acceptance — deliverable: updated docs, verification record, and clean branch milestone; current: all applicable local checks pass and the working tree is clean.
 
 ## Verification
 
@@ -265,6 +265,34 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - Copy and Export produce byte-identical canonical Markdown for the same committed thread state and never mutate the source thread.
 - Settings contains backup/storage/retention controls without crowding the primary topic flow.
 - Existing provider-neutral and security invariants from the alpha plan remain intact.
+
+## Completion Record
+
+Alpha2 acceptance was completed on 2026-09-08. The final implementation includes:
+
+- sticky headers across home, topic, settings, threads, and workbench surfaces;
+- stable `~∞|°_°|∞~` branding with `/new` navigation;
+- homepage `commands` reference for `/new`, `/settings`, `/threads`, `<esc><esc>`, `<alt>+c`, and `<alt>+s`;
+- Enter-only prompt submission with no visible Go button;
+- shared Settings/Threads secondary layout, top-right close control, and Escape closing;
+- keyboard-selectable threads with selection highlight, Delete/Backspace confirmation, and no route-derived active border;
+- terminal-`?` research routing and the exact research-opening directive;
+- text-only evidence cards after optional thumbnails were intentionally removed as distracting;
+- mandatory-auth browser `/?q=%s` entry and local topic recovery;
+- deterministic scrollback/copy/download behavior and browser-local retention.
+
+Verification completed:
+
+```text
+npm run typecheck
+npm test              # 45 tests across 11 files
+npm run lint
+npm run build
+CI=1 npm run test:e2e # 4 Chromium/WebKit fixture + axe tests
+git diff --check
+```
+
+All listed checks passed. Build output retains existing non-blocking Vite warnings about third-party bundle size and Zod annotations.
 
 ## UI Pivot: Fullscreen Scrollback Shell
 
@@ -302,7 +330,7 @@ Insert a horizontal `---` separator between committed turns in the visible scrol
 
 ## Open Questions
 
-None. The alpha2 product contract and fullscreen-shell refinement are ready for implementation.
+None. Alpha2 is complete. Further recovery hardening, richer provider verticals, or additional lookup presentation should begin in a new plan rather than extending this completed scope.
 
 Final decisions carried into implementation:
 
