@@ -1,7 +1,12 @@
 import type { EvidencePack, ExtractedPage, SearchResult, SourceId } from "./types.js";
 
 export type QueryMode = "lookup" | "research";
+export type SlashCommand = "/settings" | "/new" | "/threads";
 export function inferQueryMode(query: string): QueryMode { return query.trimEnd().endsWith("?") ? "research" : "lookup"; }
+export function parseSlashCommand(input: string): SlashCommand | null {
+  const value = input.trim().toLowerCase();
+  return value === "/settings" || value === "/new" || value === "/threads" ? value : null;
+}
 export function resolveQueryMode(query: string, override?: QueryMode): QueryMode { return override ?? inferQueryMode(query); }
 export function titleFromQuery(query: string): string { const title = query.trim().replace(/\s+/g, " "); return title.length > 60 ? `${title.slice(0, 57).trimEnd()}…` : title; }
 export const researchPrefixes = ["what", "what's", "why", "how", "when", "where", "who", "which", "is", "are", "can", "could", "should", "does", "do", "did"] as const;

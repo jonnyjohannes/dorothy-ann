@@ -2,16 +2,16 @@
 
 ## Current State
 
-- Status: alpha live; post-launch hardening optional
+- Status: alpha2 implementation complete
 - Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha.md`
 - Last updated: 2026-09-06
-- Current focus: production verification complete — Vercel auth, Upstash limiting, live Brave lookup, live extraction, Anthropic research synthesis, citations, and report/transcript export have passed interactive smoke testing
+- Current focus: alpha2 browser `q` entry verified locally; optional lookup thumbnails deferred after UI review
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: remove temporary diagnostic logging, run the final local checks, and record the deployed production URL and smoke results
+- Next action: deploy alpha2 changes and run authenticated production smoke for external lookup/research entry
 
 ## Handoff
 
-Read `Current State`, `Implementation Sync and Deviations`, `Concrete Application Stack`, `Browser Interaction Design`, `Application HTTP and Streaming Contract`, `Explicit Non-Goals`, `Implementation Plan`, and `Operator Setup and Secret Handoff` first. The original product contract remains the target; `Implementation Sync and Deviations` records what is implemented, what was added, and what must still be closed. Local live keys are available for acceptance testing, but deployment is deferred to the final Vercel step. The alpha is a Vercel-hosted React/Vite SPA with a portable Hono backend, browser-only IndexedDB threads, Brave search, application-owned extraction, Anthropic synthesis, passphrase auth, and Markdown reports.
+Read `Current State`, `Implementation Sync and Deviations`, `Concrete Application Stack`, `Browser Interaction Design`, `Application HTTP and Streaming Contract`, `Explicit Non-Goals`, `Implementation Plan`, and `Operator Setup and Secret Handoff` first. The alpha2 scope is limited to a private browser-search entry point with terminal-`?` research routing, auth return preservation, and duplicate-submission protection. Optional lookup thumbnails were explored and intentionally deferred after UI review. Plan Ledger item 13 is verified locally; production smoke for the new entry path remains.
 
 Ledger steps 1–5 have working verified baselines but remain open for the completion work recorded in `Implementation Sync and Deviations`. Milestone 1 hardened the extractor with pinned DNS connection selection, streamed body limits, and expanded reserved-address checks; TLS policy was documented separately and remains operator-controlled. Milestone 2 added protected application routes, same-origin mutation checks, request-size bounds, rolling session refresh, and Upstash limiter selection. Milestone 3 added bounded concurrent extraction, deterministic frozen evidence events, request-abort handling, and SSE heartbeats. Milestone 4 added IndexedDB schema upgrades/validation, autosaved report and transcript drafts, resume/start-over behavior, native share fallback, and topic backup controls. Milestone 5 added a live/fixture auth gate, streaming SSE consumption, research Stop/interruption behavior, UI contract tests, Playwright Chromium/WebKit configuration, and axe coverage. Milestone 6 added provider error normalization, protected live provider routes, security response headers, a built-asset secret scan, loopback dev-proxy origin handling, fixture-mode provider isolation, and a documented local TLS trust handoff. The application deliberately does not reject or set `NODE_TLS_REJECT_UNAUTHORIZED`; operator/deployment configuration remains responsible for keeping verification enabled. Local verification is green at 38 tests, lint, typecheck, build, provider readiness with TLS verification enabled, and four Playwright Chromium/WebKit fixture/axe tests. A direct extractor smoke reached the real TLS handshake with verification enabled and confirmed the local `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` trust-chain issue; no insecure fallback was added. Live chat/research acceptance remains pending an interactive authenticated session and operator-managed local CA trust; an earlier unauthenticated smoke was invalidated after the route protection milestone. Authentication now has scrypt hash verification, signed expiring cookies with previous-key verification, fixture-safe auth routes, cookie logout, in-memory rate limiting, and an Upstash limiter seam. Brave lookup now normalizes bounded ranked results, deduplicates canonical URLs, handles provider failures, and serves fixture/live provider paths without involving model or extraction code. Step 6 has a working Readability/content-type/URL-validation baseline, but remains active until production fetches use the validated DNS result and streamed byte bounds. A new fixture-only `/api/turn` SSE endpoint emits ordered chat/research lifecycle events with exactly one terminal completion event. Follow-up chat turns now append to the existing IndexedDB topic and the transcript workbench exports all saved turns. The provider-neutral Anthropic adapter now builds delimited evidence envelopes, streams normalized content, parses citation sentinels across chunk boundaries, rejects unknown source IDs as plain text, and captures usage. A deterministic `/api/report` endpoint returns an editable Markdown answer report. The new fixture `/api/research` endpoint now runs query → sources → extraction → synthesis → completion events. The Vite browser shell now calls `/api/lookup` and `/api/research`, renders ranked sources and answers, proxies `/api` to the local Node runtime, and persists completed lookup/research topics through the IndexedDB stores. The topic drawer loads saved summaries, saved topics can be reopened, renamed, and explicitly deleted with confirmation; New topic returns to the focused home composer. The desktop evidence column exposes attached source links and mobile collapses it below the answer. `GET /api/providers/status` exposes boolean readiness only, never credentials. Retry semantics, report workbench, and final extractor hardening remain active. Fixture mode allows implementation through step 11 without live credentials; step 12 needs the deployment inputs. Do not add remote thread storage, sync, autonomous research, context compaction, topic archiving, edit-history branching, rich editors, or second-provider work to the alpha.
 
@@ -56,6 +56,45 @@ This section records the implementation reality where it differs from the origin
 ## Summary
 
 Dorothy Ann v1.0.0-alpha is a personal, source-aware browser search surface with two explicit costs: quick ranked lookup and bounded researched answers. It keeps threads in the current browser, exposes evidence, supports follow-up chat, and exports editable Markdown without coupling domain data to a provider or hosting runtime.
+
+## Post-Launch Alpha Pass: Browser Search Entry and Lookup Behavior
+
+### Current scope
+
+This planned pass keeps authentication mandatory and adds a browser-facing search-engine template:
+
+```text
+https://dorothy-ann.vercel.app/?q=%s
+```
+
+The root `q` parameter is an entry point into the existing application workflows, not a new unauthenticated search API.
+
+### Decided behavior
+
+- Authentication remains mandatory for both lookup and research.
+- An unauthenticated request preserves its complete same-origin return path through `/unlock`, including the decoded search query.
+- A decoded, non-empty `q` value is normalized and routed through the existing query-mode policy.
+- A query whose trimmed value ends in `?` enters research mode.
+- Other queries enter the cheap lookup mode.
+- The terminal `?` remains part of the submitted query; it determines routing but is not silently removed from the provider request.
+- The external entry point must canonicalize into a stable topic/request state so refresh does not repeat lookup, extraction, or synthesis accidentally.
+- Existing `/api/lookup` and `/api/research` contracts remain the backend boundaries; this pass does not expose a new public provider endpoint.
+- Optional Brave web-result thumbnails were considered but are deferred; lookup source cards remain text-only for this alpha2 pass.
+- This pass does not add a separate Brave Image Search mode or image-specific result API.
+
+### Alpha2 scope status
+
+The lookup behavior scope for this alpha2 pass is resolved. No additional lookup behaviors are planned for this pass beyond the browser `q` entry semantics described above. Optional thumbnails are explicitly deferred. New lookup ideas should be planned separately rather than silently expanding this implementation item.
+
+### Initial implementation shape
+
+1. Parse and validate `q` at the root SPA boundary.
+2. Preserve and validate the return path across mandatory unlock.
+3. Reuse `resolveQueryMode` for lookup/research selection.
+4. Launch the existing lookup or research flow.
+5. Replace the actionable external URL with a stable topic URL after consumption.
+6. Persist enough state to make reload and browser Back behavior non-duplicating.
+7. Add unit, contract, and browser tests for encoded queries, auth return, routing, and exactly-once local submission behavior.
 
 ## Problem Statement
 
@@ -2124,6 +2163,8 @@ The application may later become installable as a PWA, but offline support shoul
 
 12. **Harden and deploy the alpha.** Apply security headers, production request/body/output limits, redacted logging, secret validation, accessibility checks, responsive polish, and Vercel environment/function configuration. Run live Brave/Anthropic/Upstash smoke tests and verify local/Vercel contract parity. **Verify:** all quality commands pass; Playwright desktop Chromium/mobile WebKit happy and representative recovery paths pass; axe reports zero serious/critical violations; built frontend contains no server secret; deployed `weather` performs no model call; promoted research performs no duplicate search; and the Vercel function cannot fetch private-network targets.
 
+13. **Add the private browser-search entry point and expanded lookup behavior.** Accept `/?q=%s` as a mandatory-auth entry point, preserve the original same-origin destination through unlock, route decoded queries through the existing lookup/research policy including terminal-`?` research, canonicalize consumed requests into stable topic state, and prevent duplicate work on reload/back. Optional lookup thumbnails are deferred. **Verify:** focused routing/auth/storage and Playwright coverage prove encoded lookup and research queries, auth return, refresh/back recovery, and no accidental duplicate provider work across loading, success, empty, failure, keyboard, mobile, and persistence states.
+
 ## Plan Ledger
 
 Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blocked.
@@ -2140,6 +2181,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [~] 10. Research/chat/evidence UI — deliverable: accepted turn/evidence states and recovery interactions; current: staged SSE rendering, evidence presentation, interrupted Stop behavior, retry affordance, chat retry state, citation focus restoration, fixture/live auth integration, and basic Chromium/WebKit coverage implemented; remaining: full partial/zero-evidence state matrix and recovery E2E paths.
 - [~] 11. Reports and recovery UI — deliverable: Markdown workbench, drafts, export/share, data backup; current: editable report/transcript workbench, IndexedDB autosave/resume, start-over, dirty Back confirmation, copy/download/share fallback, drawer backup import/export, and malformed-backup recovery implemented; remaining: backup recovery UX polish, topic-report generation, and deterministic artifact tests.
 - [x] 12. Hardened Vercel alpha — deliverable: configured secure deployment; current: security headers, request bounds, secret scan, provider readiness, documented TLS trust handoff, fixture browser smoke, axe smoke, Vercel Node handler adaptation, production API checks, Upstash auth, live lookup, live research/extraction/synthesis, citation rendering, and report/transcript smoke all pass. Optional post-launch hardening remains tracked separately.
+- [x] 13. Alpha2 browser-search entry and lookup polish — deliverable: mandatory-auth `/?q=%s` entry point, terminal-`?` research routing, auth return preservation, stable consumed-topic navigation, and duplicate-submission protection; optional lookup thumbnails explicitly deferred after UI review; current: implemented and locally verified; remaining: authenticated production smoke for external lookup and terminal-`?` research entry.
 
 ## Verification
 
@@ -2147,7 +2189,7 @@ Latest local verification on 2026-09-05:
 
 - `npm run lint` passed.
 - `npm run typecheck` passed.
-- `npm test` passed: 39 tests across 10 files.
+- `npm test` passed: 45 tests across 11 files.
 - `npm run build` passed.
 - `CI=1 NODE_TLS_REJECT_UNAUTHORIZED=1 npm run test:e2e` passed: 4 Chromium/WebKit fixture and axe smoke tests.
 - `git diff --check` passed and the working tree is clean.
@@ -2182,6 +2224,8 @@ Alpha acceptance assertions:
 - All drawers, sheets, dialogs, progress, failures, and workbench actions are keyboard/screen-reader usable on desktop and mobile layouts.
 - Provider adapters can be replaced by test doubles without changing domain, orchestration, UI, storage, or artifact formats.
 - The local Node and Vercel adapters expose identical versioned API/event contracts.
+- Alpha2 external entry verification passed in fixture UI tests: `/?q=life%20alive` performed one lookup and rendered the result; lookup source normalization remains text-only by deliberate scope.
+- Alpha2 `npm run typecheck`, `npm test`, `npm run build`, `npm run lint`, and `CI=1 npm run test:e2e` passed; the four Chromium/WebKit fixture and axe smoke tests are green. Authenticated production smoke for `/?q=%s` and terminal-`?` research remains to be run after deployment.
 
 ## Operator Setup and Secret Handoff
 

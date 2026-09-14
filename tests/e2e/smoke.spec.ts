@@ -6,7 +6,7 @@ test("fixture lookup is keyboard reachable on desktop and mobile", async ({ page
   const query = page.getByLabel("Search query");
   await expect(query).toBeVisible();
   await query.fill("weather");
-  await page.getByRole("button", { name: "Go" }).click();
+  await query.press("Enter");
   await expect(page.getByRole("heading", { name: "Evidence" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Fixture result for weather" }).first()).toBeVisible();
 });
