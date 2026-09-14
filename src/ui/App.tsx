@@ -171,31 +171,46 @@ function ThemeControl() {
   );
 }
 
-function Settings() {
+function SecondaryLayout({ label, onClose, children }: { label: string; onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); onClose(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
         <RotatingBrand to="/" prefix="← " />
-        <span className={styles.kicker}>settings</span>
+        <span className={styles.kicker}>{label}</span>
+        <button className={styles.closeButton} aria-label={`Close ${label}`} onClick={onClose}>×</button>
       </header>
-      <section className={styles.settings}>
-        <h1>Settings</h1>
-        <section className={styles.settingsSection}>
-          <h2>Appearance</h2>
-          <p>Choose how dorothy-ann looks on this device.</p>
-          <p><ThemeControl /></p>
-        </section>
-        <section className={styles.settingsSection}>
-          <h2>Storage and retention</h2>
-          <p>Saved topics stay in this browser for 7 days after meaningful activity. Expired topics are removed automatically; backups preserve an unexpired topic’s original expiry.</p>
-          <BackupControls />
-        </section>
-      </section>
+      <section className={styles.settings}>{children}</section>
     </main>
   );
 }
 
-function ThreadPicker({ onClose }: { onClose: () => void }) {
+function Settings() {
+  const navigate = useNavigate();
+  return (
+    <SecondaryLayout label="settings" onClose={() => navigate("/", { replace: true })}>
+      <h1>Settings</h1>
+      <section className={styles.settingsSection}>
+        <h2>Appearance</h2>
+        <p>Choose how dorothy-ann looks on this device.</p>
+        <p><ThemeControl /></p>
+      </section>
+      <section className={styles.settingsSection}>
+        <h2>Storage and retention</h2>
+        <p>Saved topics stay in this browser for 7 days after meaningful activity. Expired topics are removed automatically; backups preserve an unexpired topic’s original expiry.</p>
+        <BackupControls />
+      </section>
+    </SecondaryLayout>
+  );
+}
+
+function ThreadPicker({ onClose, embedded = false }: { onClose: () => void; embedded?: boolean }) {
   const navigate = useNavigate();
   const route = useParams();
   const activeThreadId = route.threadId;
@@ -210,7 +225,8 @@ function ThreadPicker({ onClose }: { onClose: () => void }) {
   useEffect(refresh, []);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); onClose(); }
+      if (!embedded && event.key === "Escape") { event.preventDefault(); onClose(); }
+      if (event.key === "Delete" && focused) { event.preventDefault(); deleteTopic(focused); }
       if (event.key === "ArrowDown") { event.preventDefault(); setActive((value) => Math.min(value + 1, Math.max(0, topics.length - 1))); }
       if (event.key === "ArrowUp") { event.preventDefault(); setActive((value) => Math.max(0, value - 1)); }
       if (event.key === "Enter" && focused) { event.preventDefault(); navigate(`/topics/${focused.id}`, { replace: true }); }
@@ -218,26 +234,24 @@ function ThreadPicker({ onClose }: { onClose: () => void }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [active, focused, navigate, onClose, topics.length]);
-  return <div className={styles.commandOverlay} role="dialog" aria-modal="true" aria-label="Saved threads">
-    <section className={styles.threadPicker}>
+  const picker = <section className={`${styles.threadPicker} ${embedded ? styles.threadPickerInline : ""}`} role={embedded ? undefined : "dialog"} aria-modal={embedded ? undefined : "true"} aria-label="Saved threads">
       <p className={styles.kicker}>/threads</p>
       <h2>Saved threads</h2>
       {topics.length ? <ul>{topics.map((topic, index) => <li key={topic.id} className={`${index === active ? styles.threadActive : ""} ${styles.threadRow}`}><button autoFocus={index === active} aria-current={index === active} onClick={() => navigate(`/topics/${topic.id}`, { replace: true })}>{topic.title}<small>{topic.lastTurnPreview ?? ""}</small></button><button className={styles.threadDelete} aria-label={`Delete ${topic.title}`} onClick={() => deleteTopic(topic)}>Delete</button></li>)}</ul> : <p className={styles.muted}>No saved threads yet.</p>}
       <p className={styles.muted}>↑/↓ select · Enter open · Delete remove · Escape close</p>
-    </section>
-  </div>;
+    </section>;
+  return embedded ? picker : <div className={styles.commandOverlay} role="dialog" aria-modal="true" aria-label="Saved threads">{picker}</div>;
 }
 
 function ThreadsRoute() {
   const navigate = useNavigate();
-  return <main className={styles.shell}><ThreadPicker onClose={() => navigate("/", { replace: true })} /></main>;
+  return <SecondaryLayout label="threads" onClose={() => navigate("/", { replace: true })}><ThreadPicker embedded onClose={() => navigate("/", { replace: true })} /></SecondaryLayout>;
 }
 
 function PromptBox({ value, onChange, onSubmit, onCommand, disabled = false }: { value: string; onChange: (value: string) => void; onSubmit: (value: string, mode: "lookup" | "research") => void; onCommand: (command: string) => void; disabled?: boolean }) {
   const submit = (event: FormEvent) => { event.preventDefault(); const input = value.trim(); if (!input) return; if (input.startsWith("/")) { onCommand(input); return; } onSubmit(input, resolveQueryMode(input)); };
   return <form className={styles.promptBox} onSubmit={submit}>
     <input aria-label="Search query" value={value} onChange={(event) => onChange(event.target.value)} placeholder="...? for research" disabled={disabled} autoFocus />
-    <button type="submit" disabled={disabled || !value.trim()}>{resolveQueryMode(value) === "research" ? "Ask Dorothy Ann" : "Go"}</button>
   </form>;
 }
 
@@ -264,7 +278,12 @@ function Home() {
       </header>
       {threads && <ThreadPicker onClose={() => setThreads(false)} />}
       <section className={styles.hero}>
-        <p className={styles.muted}>Ask a question, or use <code>/settings</code>, <code>/new</code>, and <code>/threads</code>.</p>
+        <p className={styles.muted}>slash commands:</p>
+        <ul className={styles.commandList}>
+          <li><code>/new</code></li>
+          <li><code>/settings</code></li>
+          <li><code>/threads</code></li>
+        </ul>
       </section>
       {message && <p role="status" className={styles.commandMessage}>{message}</p>}
       <PromptBox value={query} onChange={setQuery} onSubmit={submit} onCommand={command} />

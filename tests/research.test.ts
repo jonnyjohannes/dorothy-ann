@@ -43,6 +43,7 @@ describe("research orchestration", () => {
 
   it("reuses seeded lookup sources and carries the original query into synthesis", async () => {
     let synthesisInput = "";
+    let systemInstruction = "";
     let searchCalled = false;
     const seeded = sources.slice(0, 1);
     for await (const event of runResearch("what were the highlights", "turn-3", {
@@ -52,11 +53,12 @@ describe("research orchestration", () => {
       context: "wwdc 2026 apple news",
       search: { search: async () => { searchCalled = true; return sources; } },
       extractor: { extract: async (source) => ({ sourceId: source.sourceId, status: "viable" as const, page: { sourceId: source.sourceId, canonicalUrl: source.canonicalUrl, title: source.title, text: "evidence", extractedAt: new Date().toISOString() as never, characterCount: 8 } }) },
-      chat: { stream: async function* (input) { synthesisInput = input.currentUserContent; yield { type: "completed" as const }; } },
+      chat: { stream: async function* (input) { synthesisInput = input.currentUserContent; systemInstruction = input.systemInstruction; yield { type: "completed" as const }; } },
     })) { void event; }
     expect(searchCalled).toBe(false);
     expect(synthesisInput).toContain("wwdc 2026 apple news");
     expect(synthesisInput).toContain("what were the highlights");
+    expect(systemInstruction).toContain('must begin exactly with "According to my research..."');
   });
 
   it("does not synthesize without viable evidence", async () => {
