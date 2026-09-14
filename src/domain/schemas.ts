@@ -2,8 +2,7 @@ import { z } from "zod";
 
 const id = z.string().min(1);
 const timestamp = z.string().datetime({ offset: true });
-const searchResultImageSchema = z.object({ src: z.string().url().refine((value) => value.startsWith("https://"), "thumbnail must use HTTPS"), width: z.number().int().positive().max(4_000).optional(), height: z.number().int().positive().max(4_000).optional(), alt: z.string().max(300).optional() });
-export const searchResultSchema = z.object({ sourceId: id, rank: z.number().int().positive(), title: z.string(), url: z.string().url(), canonicalUrl: z.string().url(), displayUrl: z.string(), snippet: z.string().optional(), publishedAt: timestamp.optional(), image: searchResultImageSchema.optional() });
+export const searchResultSchema = z.object({ sourceId: id, rank: z.number().int().positive(), title: z.string(), url: z.string().url(), canonicalUrl: z.string().url(), displayUrl: z.string(), snippet: z.string().optional(), publishedAt: timestamp.optional() });
 export const extractedPageSchema = z.object({ sourceId: id, canonicalUrl: z.string().url(), title: z.string().optional(), text: z.string().max(20_000), extractedAt: timestamp, characterCount: z.number().int().nonnegative() });
 const usageSchema = z.object({ inputTokens: z.number().nonnegative().optional(), outputTokens: z.number().nonnegative().optional(), searches: z.number().nonnegative().optional(), extractedPages: z.number().nonnegative().optional(), estimatedCostUsd: z.number().nonnegative().optional() });
 const failureSchema = z.object({ stage: z.enum(["search", "extraction", "synthesis", "chat", "report"]), code: z.string(), message: z.string(), retryable: z.boolean(), occurredAt: timestamp });

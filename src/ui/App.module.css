@@ -379,23 +379,6 @@
   border-bottom: 1px solid var(--line);
   padding: 0.75rem 0;
 }
-.evidenceItemWithImage {
-  display: grid;
-  grid-template-columns: minmax(3.5rem, 1fr) minmax(0, 4fr);
-  gap: 0.8rem;
-  align-items: start;
-}
-.evidenceContent {
-  min-width: 0;
-}
-.evidenceThumbnail {
-  display: block;
-  width: 100%;
-  aspect-ratio: 1;
-  border-radius: 0.35rem;
-  background: color-mix(in srgb, var(--line) 55%, transparent);
-  object-fit: cover;
-}
 .evidenceItem small {
   display: block;
   color: var(--muted);

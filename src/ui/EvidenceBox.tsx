@@ -10,7 +10,7 @@ export function EvidenceBox({ sources, selectedSourceId, onSelect }: { sources: 
           <li
             id={`source-${source.sourceId}`}
             tabIndex={-1}
-            className={`${styles.evidenceItem} ${source.image ? styles.evidenceItemWithImage : ""} ${selectedSourceId === source.sourceId ? styles.evidenceItemActive : ""}`}
+            className={`${styles.evidenceItem} ${selectedSourceId === source.sourceId ? styles.evidenceItemActive : ""}`}
             aria-current={selectedSourceId === source.sourceId ? "true" : undefined}
             onFocus={() => onSelect(source.sourceId)}
             onKeyDown={(event) => {
@@ -20,25 +20,11 @@ export function EvidenceBox({ sources, selectedSourceId, onSelect }: { sources: 
             }}
             key={source.sourceId}
           >
-            {source.image && (
-              <img
-                className={styles.evidenceThumbnail}
-                src={source.image.src}
-                width={source.image.width}
-                height={source.image.height}
-                alt=""
-                loading="lazy"
-                referrerPolicy="no-referrer"
-                onError={(event) => { event.currentTarget.hidden = true; }}
-              />
-            )}
-            <div className={styles.evidenceContent}>
-              <a href={source.url} target="_blank" rel="noreferrer">
-                {source.title}
-              </a>
-              <small>{source.displayUrl}</small>
-              {source.snippet && <p>{source.snippet.replace(/<[^>]+>/g, "")}</p>}
-            </div>
+            <a href={source.url} target="_blank" rel="noreferrer">
+              {source.title}
+            </a>
+            <small>{source.displayUrl}</small>
+            {source.snippet && <p>{source.snippet.replace(/<[^>]+>/g, "")}</p>}
           </li>
         ))}
       </ul>
