@@ -300,18 +300,12 @@ function Home() {
       {threads && <ThreadPicker onClose={() => setThreads(false)} />}
       <section className={styles.hero}>
         <h1>commands</h1>
-        <p className={styles.muted}>slash commands:</p>
-        <ul className={styles.commandList}>
-          <li><code>/new</code></li>
-          <li><code>/settings</code></li>
-          <li><code>/threads</code></li>
-        </ul>
-        <p className={styles.muted}>keyboard shortcuts:</p>
-        <ul className={styles.commandList}>
-          <li><kbd>esc</kbd> <kbd>esc</kbd> — new topic</li>
-          <li><kbd>⌥</kbd> <kbd>S</kbd> — threads</li>
-          <li><kbd>⌥</kbd> <kbd>C</kbd> — settings</li>
-        </ul>
+        <p className={styles.muted}>commands:</p>
+        <div className={styles.commandList}>
+          <p><code>/new</code> — <code>esc</code> <code>esc</code></p>
+          <p><code>/settings</code> — <code>alt</code> + <code>c</code></p>
+          <p><code>/threads</code> — <code>alt</code> + <code>s</code></p>
+        </div>
       </section>
       {message && <p role="status" className={styles.commandMessage}>{message}</p>}
       <PromptBox value={query} onChange={setQuery} onSubmit={submit} onCommand={command} />

@@ -128,11 +128,8 @@
   color: var(--muted);
   line-height: 1.8;
 }
-.commandList kbd {
-  padding: 0.1rem 0.3rem;
-  border: 1px solid var(--line);
-  color: var(--ink);
-  font: inherit;
+.commandList p {
+  margin: 0;
 }
 .center {
   display: grid;
