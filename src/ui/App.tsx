@@ -216,8 +216,15 @@ function ThreadPicker({ onClose, embedded = false }: { onClose: () => void; embe
   const activeThreadId = route.threadId;
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [active, setActive] = useState(0);
-  const focused = topics[active];
-  const refresh = () => void store.list().then((next) => { setTopics(next); setActive((value) => Math.min(value, Math.max(0, next.length - 1))); });
+  const activeIndex = topics.length ? Math.min(active, topics.length - 1) : 0;
+  const focused = topics[activeIndex];
+  const refresh = () => void store.list().then((next) => {
+    setTopics(next);
+    setActive((value) => {
+      const currentIndex = activeThreadId ? next.findIndex((topic) => topic.id === activeThreadId) : -1;
+      return currentIndex >= 0 ? currentIndex : Math.min(value, Math.max(0, next.length - 1));
+    });
+  });
   const deleteTopic = (topic: ThreadSummary) => {
     if (!window.confirm(`Delete “${topic.title}”?`)) return;
     void store.remove(topic.id).then(() => { if (activeThreadId === topic.id) navigate("/", { replace: true }); refresh(); });
@@ -226,7 +233,7 @@ function ThreadPicker({ onClose, embedded = false }: { onClose: () => void; embe
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!embedded && event.key === "Escape") { event.preventDefault(); onClose(); }
-      if (event.key === "Delete" && focused) { event.preventDefault(); deleteTopic(focused); }
+      if ((event.key === "Delete" || event.key === "Backspace") && focused) { event.preventDefault(); deleteTopic(focused); }
       if (event.key === "ArrowDown") { event.preventDefault(); setActive((value) => Math.min(value + 1, Math.max(0, topics.length - 1))); }
       if (event.key === "ArrowUp") { event.preventDefault(); setActive((value) => Math.max(0, value - 1)); }
       if (event.key === "Enter" && focused) { event.preventDefault(); navigate(`/topics/${focused.id}`, { replace: true }); }
@@ -237,7 +244,7 @@ function ThreadPicker({ onClose, embedded = false }: { onClose: () => void; embe
   const picker = <section className={`${styles.threadPicker} ${embedded ? styles.threadPickerInline : ""}`} role={embedded ? undefined : "dialog"} aria-modal={embedded ? undefined : "true"} aria-label="Saved threads">
       <p className={styles.kicker}>/threads</p>
       <h2>Saved threads</h2>
-      {topics.length ? <ul>{topics.map((topic, index) => <li key={topic.id} className={`${index === active ? styles.threadActive : ""} ${styles.threadRow}`}><button autoFocus={index === active} aria-current={index === active} onClick={() => navigate(`/topics/${topic.id}`, { replace: true })}>{topic.title}<small>{topic.lastTurnPreview ?? ""}</small></button><button className={styles.threadDelete} aria-label={`Delete ${topic.title}`} onClick={() => deleteTopic(topic)}>Delete</button></li>)}</ul> : <p className={styles.muted}>No saved threads yet.</p>}
+      {topics.length ? <ul>{topics.map((topic, index) => <li key={topic.id} className={`${index === activeIndex ? styles.threadActive : ""} ${styles.threadRow}`}><button autoFocus={index === activeIndex} aria-current={index === activeIndex} onKeyDown={(event) => { if ((event.key === "Delete" || event.key === "Backspace") && index === activeIndex) { event.preventDefault(); deleteTopic(topic); } }} onClick={() => navigate(`/topics/${topic.id}`, { replace: true })}>{topic.title}<small>{topic.lastTurnPreview ?? ""}</small></button><button className={styles.threadDelete} aria-label={`Delete ${topic.title}`} onClick={() => deleteTopic(topic)}>Delete</button></li>)}</ul> : <p className={styles.muted}>No saved threads yet.</p>}
       <p className={styles.muted}>↑/↓ select · Enter open · Delete remove · Escape close</p>
     </section>;
   return embedded ? picker : <div className={styles.commandOverlay} role="dialog" aria-modal="true" aria-label="Saved threads">{picker}</div>;
