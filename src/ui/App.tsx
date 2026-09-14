@@ -183,7 +183,6 @@ function SecondaryLayout({ label, onClose, children }: { label: string; onClose:
     <main className={styles.shell}>
       <header className={styles.header}>
         <RotatingBrand to="/" prefix="← " />
-        <span className={styles.kicker}>{label}</span>
         <button className={styles.closeButton} aria-label={`Close ${label}`} onClick={onClose}>×</button>
       </header>
       <section className={styles.settings}>{children}</section>
