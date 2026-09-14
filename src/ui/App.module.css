@@ -515,7 +515,7 @@
 .threadPicker li .threadDelete:hover { color: var(--ink); }
 .threadPicker li button small { color: var(--muted); margin-top: 0.25rem; }
 .threadPicker .threadSelected button { background: color-mix(in srgb, var(--accent) 18%, transparent); }
-.threadPicker li button:focus-visible { outline-offset: -3px; }
+.threadPicker li button:focus-visible { outline: none; }
 .chatForm {
   position: sticky;
   bottom: 0;
