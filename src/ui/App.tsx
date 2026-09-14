@@ -302,9 +302,9 @@ function Home() {
         <h1>commands</h1>
         <p className={styles.muted}>commands:</p>
         <div className={styles.commandList}>
-          <p><code>/new</code> — <code>esc</code> <code>esc</code></p>
-          <p><code>/settings</code> — <code>alt</code> + <code>c</code></p>
-          <p><code>/threads</code> — <code>alt</code> + <code>s</code></p>
+          <p><code>/new</code> — <code>&lt;esc&gt;</code> <code>&lt;esc&gt;</code></p>
+          <p><code>/settings</code> — <code>&lt;alt&gt;</code> + <code>c</code></p>
+          <p><code>/threads</code> — <code>&lt;alt&gt;</code> + <code>s</code></p>
         </div>
       </section>
       {message && <p role="status" className={styles.commandMessage}>{message}</p>}
