@@ -510,9 +510,6 @@
 .threadPicker li .threadDelete { flex: 0 0 auto; padding-inline: 0.8rem; color: var(--muted); font-size: 0.75rem; }
 .threadPicker li .threadDelete:hover { color: var(--ink); }
 .threadPicker li button small { color: var(--muted); margin-top: 0.25rem; }
-.threadPicker .threadActive {
-  border: 3px solid var(--accent);
-}
 .threadPicker .threadSelected button { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .threadPicker li button:focus-visible { outline-offset: -3px; }
 .chatForm {
