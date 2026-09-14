@@ -500,7 +500,12 @@
   background: transparent;
 }
 .threadPicker ul { max-height: 55vh; overflow: auto; margin: 1rem 0; padding: 0; list-style: none; }
-.threadRow { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); }
+.threadRow {
+  display: flex;
+  align-items: stretch;
+  margin-block: 1.5rem;
+  padding-block: 1.25rem;
+}
 .threadPicker li button { display: grid; min-width: 0; flex: 1; border: 0; background: transparent; color: var(--ink); padding: 0.8rem; text-align: left; cursor: pointer; }
 .threadPicker li .threadDelete { flex: 0 0 auto; padding-inline: 0.8rem; color: var(--muted); font-size: 0.75rem; }
 .threadPicker li .threadDelete:hover { color: var(--ink); }
