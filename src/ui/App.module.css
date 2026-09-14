@@ -29,6 +29,7 @@
   font-weight: 700;
   letter-spacing: -0.08em;
   white-space: nowrap;
+  text-decoration: none;
 }
 .brand {
   color: inherit;
@@ -122,10 +123,16 @@
   color: var(--muted);
 }
 .commandList {
-  margin: 0;
+  margin: 0 0 1.5rem;
   padding-left: 1.25rem;
   color: var(--muted);
   line-height: 1.8;
+}
+.commandList kbd {
+  padding: 0.1rem 0.3rem;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font: inherit;
 }
 .center {
   display: grid;

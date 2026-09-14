@@ -4,13 +4,13 @@
 
 - Status: implementation in progress
 - Last updated: 2026-09-08
-- Current focus: validating shared sticky navigation for Settings/Threads, Enter-only prompt submission, thread keyboard deletion/closing, and the enforced research opening
+- Current focus: validating shared navigation branding, homepage command shortcuts, thread selection, and the enforced research opening
 - Handoff lives in: [`## Handoff`](#handoff)
 - Next action: review the component refactor, then continue remaining acceptance and recovery work
 
 ## Handoff
 
-The alpha2 shell refinement is implemented and verified through the current milestone: `/threads` is a full-screen keyboard launcher, deletion uses an explicit row-level Delete button and Delete-key confirmation flow, prompt submission is Enter-driven and infers research from terminal `?`, Settings and Threads share a sticky secondary layout with Escape and top-right close controls, the home header is sticky, and the home screen lists only the three supported slash commands. Saved research threads use a 3/4 conversation + 1/4 evidence layout, and research synthesis now receives a directive requiring the exact `According to my research...` opening. Sources are omitted from the canonical left topic stream to avoid duplication; lookup results render full-width using evidence-card styling, while research uses the same cards in the right evidence column. A request-owner seam exists and rejects superseded commits. Remaining work is completing atomic stage orchestration, corruption/quota recovery, deterministic export failure coverage, legacy workbench removal, and full alpha2 browser acceptance.
+The alpha2 shell refinement is implemented and verified through the current milestone: `/threads` is a full-screen keyboard launcher, deletion uses an explicit row-level Delete button and Delete-key confirmation flow, prompt submission is Enter-driven and infers research from terminal `?`, Settings and Threads share a sticky secondary layout with Escape and top-right close controls, the static branding mark links home via `/new`, secondary headers omit the extra back arrow/title kicker, the home header is sticky, and the home `/commands` view lists slash commands plus Escape/Option shortcuts for new topic, threads, and settings. Saved research threads use a 3/4 conversation + 1/4 evidence layout, and research synthesis now receives a directive requiring the exact `According to my research...` opening. Sources are omitted from the canonical left topic stream to avoid duplication; lookup results render full-width using evidence-card styling, while research uses the same cards in the right evidence column. A request-owner seam exists and rejects superseded commits. Remaining work is completing atomic stage orchestration, corruption/quota recovery, deterministic export failure coverage, legacy workbench removal, and full alpha2 browser acceptance.
 
 ## Retroactive Implementation Record
 

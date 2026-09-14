@@ -72,7 +72,7 @@ function RotatingBrand({ to, prefix = "" }: { to?: string; prefix?: string }) {
   const content = `${prefix}${rotatingTaglines[index]}`;
   return (
     <span className={styles.brandGroup}>
-      <span className={styles.signature} aria-hidden="true">~∞|°_°|∞~</span>
+      <Link to="/new" className={styles.signature} aria-label="New topic">~∞|°_°|∞~</Link>
       {to ? <Link to={to} className={styles.brand}>{content}</Link> : <span className={styles.brand}>{content}</span>}
     </span>
   );
@@ -182,7 +182,7 @@ function SecondaryLayout({ label, onClose, children }: { label: string; onClose:
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <RotatingBrand to="/" prefix="← " />
+        <RotatingBrand to="/" />
         <button className={styles.closeButton} aria-label={`Close ${label}`} onClick={onClose}>×</button>
       </header>
       <section className={styles.settings}>{children}</section>
@@ -258,6 +258,24 @@ function PromptBox({ value, onChange, onSubmit, onCommand, disabled = false }: {
   </form>;
 }
 
+function GlobalShortcuts() {
+  const navigate = useNavigate();
+  const lastEscape = useRef(0);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.altKey && event.code === "KeyS") { event.preventDefault(); navigate("/threads"); return; }
+      if (event.altKey && event.code === "KeyC") { event.preventDefault(); navigate("/settings"); return; }
+      if (event.key !== "Escape") return;
+      const now = Date.now();
+      if (now - lastEscape.current < 500) { event.preventDefault(); navigate("/new", { replace: true }); }
+      lastEscape.current = now;
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navigate]);
+  return null;
+}
+
 function Home() {
   const [query, setQuery] = useState("");
   const [threads, setThreads] = useState(false);
@@ -281,11 +299,18 @@ function Home() {
       </header>
       {threads && <ThreadPicker onClose={() => setThreads(false)} />}
       <section className={styles.hero}>
+        <h1>commands</h1>
         <p className={styles.muted}>slash commands:</p>
         <ul className={styles.commandList}>
           <li><code>/new</code></li>
           <li><code>/settings</code></li>
           <li><code>/threads</code></li>
+        </ul>
+        <p className={styles.muted}>keyboard shortcuts:</p>
+        <ul className={styles.commandList}>
+          <li><kbd>esc</kbd> <kbd>esc</kbd> — new topic</li>
+          <li><kbd>⌥</kbd> <kbd>S</kbd> — threads</li>
+          <li><kbd>⌥</kbd> <kbd>C</kbd> — settings</li>
         </ul>
       </section>
       {message && <p role="status" className={styles.commandMessage}>{message}</p>}
@@ -522,7 +547,7 @@ function ExportWorkbench() {
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <RotatingBrand to="/" prefix="← " />
+        <RotatingBrand to="/" />
         <span className={styles.kicker}>report workbench</span>
       </header>
       <section className={styles.workbench}>
@@ -789,6 +814,7 @@ export function App() {
     <>
       <ThemeBootstrap />
       <AuthGate>
+        <GlobalShortcuts />
     <Routes>
       <Route path="/unlock" element={<Unlock />} />
       <Route path="/settings" element={<Settings />} />
