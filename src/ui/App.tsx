@@ -216,12 +216,13 @@ function ThreadPicker({ onClose, embedded = false }: { onClose: () => void; embe
   const activeThreadId = route.threadId;
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [active, setActive] = useState(0);
-  const activeIndex = topics.length ? Math.min(active, topics.length - 1) : 0;
-  const focused = topics[activeIndex];
+  const selectedIndex = topics.length ? Math.min(active, topics.length - 1) : 0;
+  const currentIndex = activeThreadId ? Math.max(0, topics.findIndex((topic) => topic.id === activeThreadId)) : 0;
+  const focused = topics[selectedIndex];
   const refresh = () => void store.list().then((next) => {
     setTopics(next);
     setActive((value) => {
-      const currentIndex = activeThreadId ? next.findIndex((topic) => topic.id === activeThreadId) : -1;
+      const currentIndex = activeThreadId ? next.findIndex((topic) => topic.id === activeThreadId) : 0;
       return currentIndex >= 0 ? currentIndex : Math.min(value, Math.max(0, next.length - 1));
     });
   });
@@ -244,7 +245,7 @@ function ThreadPicker({ onClose, embedded = false }: { onClose: () => void; embe
   const picker = <section className={`${styles.threadPicker} ${embedded ? styles.threadPickerInline : ""}`} role={embedded ? undefined : "dialog"} aria-modal={embedded ? undefined : "true"} aria-label="Saved threads">
       <p className={styles.kicker}>/threads</p>
       <h2>Saved threads</h2>
-      {topics.length ? <ul>{topics.map((topic, index) => <li key={topic.id} className={`${index === activeIndex ? styles.threadActive : ""} ${styles.threadRow}`}><button autoFocus={index === activeIndex} aria-current={index === activeIndex} onKeyDown={(event) => { if ((event.key === "Delete" || event.key === "Backspace") && index === activeIndex) { event.preventDefault(); deleteTopic(topic); } }} onClick={() => navigate(`/topics/${topic.id}`, { replace: true })}>{topic.title}<small>{topic.lastTurnPreview ?? ""}</small></button><button className={styles.threadDelete} aria-label={`Delete ${topic.title}`} onClick={() => deleteTopic(topic)}>Delete</button></li>)}</ul> : <p className={styles.muted}>No saved threads yet.</p>}
+      {topics.length ? <ul>{topics.map((topic, index) => <li key={topic.id} className={`${styles.threadRow} ${index === currentIndex ? styles.threadActive : ""} ${index === selectedIndex ? styles.threadSelected : ""}`}><button autoFocus={index === selectedIndex} aria-current={index === currentIndex ? "true" : undefined} onKeyDown={(event) => { if ((event.key === "Delete" || event.key === "Backspace") && index === selectedIndex) { event.preventDefault(); deleteTopic(topic); } }} onClick={() => navigate(`/topics/${topic.id}`, { replace: true })}>{topic.title}<small>{topic.lastTurnPreview ?? ""}</small></button><button className={styles.threadDelete} aria-label={`Delete ${topic.title}`} onClick={() => deleteTopic(topic)}>Delete</button></li>)}</ul> : <p className={styles.muted}>No saved threads yet.</p>}
       <p className={styles.muted}>↑/↓ select · Enter open · Delete remove · Escape close</p>
     </section>;
   return embedded ? picker : <div className={styles.commandOverlay} role="dialog" aria-modal="true" aria-label="Saved threads">{picker}</div>;
