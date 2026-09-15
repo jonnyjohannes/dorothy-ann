@@ -1,5 +1,6 @@
 import type { SearchResult } from "../domain/types";
 import styles from "./App.module.css";
+import { sourceAccentSlot } from "./color-scheme";
 
 export function EvidenceBox({ sources, selectedSourceId, onSelect }: { sources: SearchResult[]; selectedSourceId: string | null; onSelect: (sourceId: string) => void }) {
   return (
@@ -20,7 +21,13 @@ export function EvidenceBox({ sources, selectedSourceId, onSelect }: { sources: 
             }}
             key={source.sourceId}
           >
-            <a href={source.url} target="_blank" rel="noreferrer">
+            <a
+              href={source.url}
+              target="_blank"
+              rel="noreferrer"
+              className={styles.sourceAccent}
+              style={{ "--relational-accent": `var(--accent-${sourceAccentSlot(source.sourceId, 8) + 1})` } as React.CSSProperties}
+            >
               {source.title}
             </a>
             <small>{source.displayUrl}</small>

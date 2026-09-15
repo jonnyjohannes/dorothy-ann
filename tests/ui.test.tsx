@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "../src/ui/App";
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); });
 
 describe("browser shell", () => {
   it("renders the fixture composer after the readiness check", async () => {
@@ -13,6 +13,14 @@ describe("browser shell", () => {
     expect(await screen.findByLabelText("Search query")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("...? for research")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Send" })).not.toBeInTheDocument();
+  });
+
+  it("offers an independent persisted color scheme setting", async () => {
+    localStorage.setItem("dorothy-ann-color-scheme", "rose-pine");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ fixtureMode: true }), { status: 200 })));
+    render(<MemoryRouter initialEntries={["/settings"]}><App /></MemoryRouter>);
+    const colors = await screen.findByLabelText("Colors");
+    expect(colors).toHaveValue("rose-pine");
   });
 
   it("redirects live unauthenticated users to unlock", async () => {

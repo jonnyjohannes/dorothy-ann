@@ -417,6 +417,35 @@
   font-weight: 700;
   text-decoration-color: var(--accent);
 }
+.sourceAccent,
+.evidence a.sourceAccent,
+.scrollback a.sourceAccent {
+  color: var(--relational-accent, var(--ink));
+  text-decoration-color: var(--relational-accent, var(--accent));
+  text-decoration-thickness: 0.18em;
+  text-underline-offset: 0.12em;
+}
+.answerMarkdown {
+  min-width: 0;
+}
+.answerHeading {
+  color: var(--relational-accent, var(--ink));
+}
+.answerMarkdown h1,
+.answerMarkdown h2,
+.answerMarkdown h3,
+.answerMarkdown h4,
+.answerMarkdown h5,
+.answerMarkdown h6 {
+  line-height: 1.1;
+}
+.answerMarkdown p,
+.answerMarkdown ul,
+.answerMarkdown ol,
+.answerMarkdown pre,
+.answerMarkdown blockquote {
+  max-width: 70ch;
+}
 .settings {
   width: min(100%, 48rem);
   margin: 10vh auto;

@@ -16,6 +16,8 @@ import { canPromoteToResearch, parseSlashCommand, resolveQueryMode } from "../do
 import styles from "./App.module.css";
 import { TurnTranscriptBox } from "./TurnTranscriptBox";
 import { EvidenceBox } from "./EvidenceBox";
+import { MarkdownAnswer } from "./MarkdownAnswer";
+import { readColorScheme, type ColorScheme } from "./color-scheme";
 
 type Result = SearchResult;
 type StreamState = {
@@ -135,10 +137,15 @@ function applyTheme(theme: string) {
   document.documentElement.dataset.theme = resolved;
 }
 
+function applyColorScheme(scheme: ColorScheme) {
+  document.documentElement.dataset.colorScheme = scheme;
+}
+
 function ThemeBootstrap() {
   useEffect(() => {
     const theme = localStorage.getItem("dorothy-ann-theme") ?? "auto";
     applyTheme(theme);
+    applyColorScheme(readColorScheme(localStorage.getItem("dorothy-ann-color-scheme")));
     if (theme !== "auto" || typeof window.matchMedia !== "function") return;
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const update = () => applyTheme("auto");
@@ -174,6 +181,27 @@ function ThemeControl() {
   );
 }
 
+function ColorSchemeControl() {
+  const [scheme, setScheme] = useState<ColorScheme>(() => readColorScheme(localStorage.getItem("dorothy-ann-color-scheme")));
+  const change = (value: string) => {
+    const next = readColorScheme(value);
+    setScheme(next);
+    localStorage.setItem("dorothy-ann-color-scheme", next);
+    applyColorScheme(next);
+  };
+  useEffect(() => { applyColorScheme(scheme); }, [scheme]);
+  return (
+    <label className={styles.themeControl}>
+      Colors
+      <select aria-label="Colors" value={scheme} onChange={(event) => change(event.target.value)}>
+        <option value="mono">mono</option>
+        <option value="catppuccin">catppuccin</option>
+        <option value="rose-pine">rose pine</option>
+      </select>
+    </label>
+  );
+}
+
 function SecondaryLayout({ label, onClose, children }: { label: string; onClose: () => void; children: React.ReactNode }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -199,6 +227,7 @@ function Settings() {
     <SecondaryLayout label="settings" onClose={() => navigate("/", { replace: true })}>
       <h2 className={styles.pageTitle}><code>/settings</code></h2>
       <p><ThemeControl /></p>
+      <p><ColorSchemeControl /></p>
       <BackupControls />
     </SecondaryLayout>
   );
@@ -358,29 +387,6 @@ async function readResearchStream(
     if (next.done) break;
   }
   if (buffer.trim()) process(buffer);
-}
-
-function renderCitations(answer: string, sources: Result[]) {
-  return answer.split(/(\[\[cite:[^\]]+\]\])/g).map((part, index) => {
-    const match = /^\[\[cite:(.+)\]\]$/.exec(part);
-    if (!match) return <span key={index}>{part}</span>;
-    const sourceIndex = sources.findIndex(
-      (source) => source.sourceId === match[1],
-    );
-    return sourceIndex >= 0 ? (
-      <a
-        className={styles.citation}
-        key={index}
-        href={`#source-${match[1]}`}
-        title={sources[sourceIndex].title}
-        onClick={() => window.setTimeout(() => document.getElementById(`source-${match[1]}`)?.focus(), 0)}
-      >
-        [{sourceIndex + 1}]
-      </a>
-    ) : (
-      <span key={index}>{part}</span>
-    );
-  });
 }
 
 async function startChatTurn(threadId: string, prompt: string): Promise<Thread | null> {
@@ -764,7 +770,7 @@ function Topic() {
           {thread && <TurnTranscriptBox thread={thread} onEvidenceSelect={(sourceId) => { setSelectedSourceId(sourceId); window.setTimeout(() => document.getElementById(`source-${sourceId}`)?.focus(), 0); }} />}
           {state.answer && !thread && (
             <article className={styles.answer}>
-              <p>{renderCitations(state.answer, state.sources)}</p>
+              <MarkdownAnswer markdown={state.answer} sources={state.sources} />
             </article>
           )}
           <PromptBox value={chatInput} onChange={setChatInput} onCommand={(input) => { const command = parseSlashCommand(input); if (command === "/settings") navigate("/settings"); else if (command === "/new") navigate("/", { replace: true }); else if (command === "/threads") navigate("/threads"); else setCommandMessage(`Unknown command: ${input}`); }} onSubmit={async (prompt) => {
@@ -783,7 +789,7 @@ function Topic() {
           }} />
           {commandMessage && <p className={styles.commandMessage} role="status">{commandMessage}</p>}
           {chatStage && <p className={styles.muted} aria-live="polite">{chatStage}</p>}
-          {chatAnswer && <p className={styles.chatAnswer}>{renderCitations(chatAnswer, state.sources)}</p>}
+          {chatAnswer && <MarkdownAnswer className={styles.chatAnswer} markdown={chatAnswer} sources={state.sources} />}
           {mode === "lookup" && canPromoteToResearch(query) && (
             <Link
               className={styles.promotion}
