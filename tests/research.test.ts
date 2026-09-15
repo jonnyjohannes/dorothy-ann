@@ -102,7 +102,7 @@ describe("research orchestration", () => {
       seedSources: sources.slice(0, 1),
       extractor: { extract: async (source) => ({ sourceId: source.sourceId, status: "viable" as const, page: { sourceId: source.sourceId, canonicalUrl: source.canonicalUrl, title: source.title, text: "evidence", extractedAt: new Date().toISOString() as never, characterCount: 8 } }) },
       chat: { planResearch: async () => ({ status: "ready" as const, queries: [] as [] }), stream: async function* () {
-        yield { type: "content" as const, part: { type: "text" as const, markdown: "According to my research..." } };
+        yield { type: "content" as const, part: { type: "text" as const, markdown: "# According to my research..." } };
         yield { type: "content" as const, part: { type: "text" as const, markdown: "According to my research, sourdough chips are crunchy." } };
       } },
     })) if (event.type === "answer.delta") answers.push(event.markdown);

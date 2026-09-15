@@ -25,9 +25,11 @@ export type ResearchEvent =
 
 const RESEARCH_OPENING = "According to my research...";
 const RESEARCH_SYNTHESIS_DIRECTIVE = "Be complete but concise. Keep to supported facts, distinguish uncertainty, and do not invent details. Answer directly and carefully. Use Markdown liberally to make the structure legible: use headings for major sections, bold and italics for emphasis, inline code for keywords or terms, and citations/links where useful. Cite only supplied source IDs.";
+function stripResearchOpening(answer: string): string {
+  return answer.replace(/^\s*(?:#{1,6}\s*)?According to my research(?:\.\.\.|…|,)\s*/i, "");
+}
 function enforceResearchOpening(answer: string): string {
-  const normalized = answer.trimStart().replace(/^According to my research(?:\.\.\.|…|,)\s*/i, "");
-  return `${RESEARCH_OPENING}\n\n${normalized}`;
+  return `${RESEARCH_OPENING}\n\n${stripResearchOpening(answer.trimStart())}`;
 }
 
 export interface ResearchDependencies {
@@ -78,7 +80,7 @@ async function* synthesize(chat: ChatProvider, input: NormalizedChatInput): Asyn
     if (event.type !== "content") continue;
     receivedContent = true;
     const markdown = event.part.type === "text" ? event.part.markdown : `[[cite:${event.part.sourceId}]]`;
-    const normalized = first ? enforceResearchOpening(markdown) : markdown.replace(/^According to my research(?:\.\.\.|…|,)\s*/i, "");
+    const normalized = first ? enforceResearchOpening(markdown) : stripResearchOpening(markdown);
     yield { type: "answer.delta", markdown: normalized };
     first = false;
   }

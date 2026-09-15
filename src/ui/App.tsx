@@ -542,6 +542,7 @@ function downloadMarkdown(markdown: string, filename: string) {
 function Topic() {
   const [params] = useSearchParams();
   const route = useParams();
+  const startedFromNew = useRef(route.threadId === "new");
   const [threadId] = useState(() => route.threadId === "new" ? id() : route.threadId ?? id());
   const query = params.get("q") ??"";
   const mode = params.get("mode") ?? "lookup";
@@ -668,7 +669,7 @@ function Topic() {
   useEffect(() => {
     if (query && mode === "research" && state.stage === "complete" && !state.storageError)
       void saveTopic(threadId, query, mode, state, "turn_completed")
-        .then(setThread)
+        .then((saved) => { setThread(saved); if (startedFromNew.current) navigate(`/topics/${saved.id}?mode=research`, { replace: true }); })
         .catch(() => setState((current) => ({ ...current, error: "not saved — retry", storageError: true })));
   }, [mode, query, threadId, state]);
   useEffect(() => {
@@ -700,7 +701,7 @@ function Topic() {
             <>
               <p role="alert">{state.error}</p>
               {state.storageError ? (
-                <button onClick={async () => { try { const saved = await saveTopic(threadId, query, mode, { ...state, error: undefined, storageError: false }, "turn_completed"); setThread(saved); setState((current) => ({ ...current, error: undefined, storageError: false })); } catch { setState((current) => ({ ...current, error: "not saved — retry" })); } }}>Retry save</button>
+                <button onClick={async () => { try { const saved = await saveTopic(threadId, query, mode, { ...state, error: undefined, storageError: false }, "turn_completed"); setThread(saved); if (startedFromNew.current) navigate(`/topics/${saved.id}?mode=research`, { replace: true }); setState((current) => ({ ...current, error: undefined, storageError: false })); } catch { setState((current) => ({ ...current, error: "not saved — retry" })); } }}>Retry save</button>
               ) : <button onClick={() => window.location.reload()}>Retry</button>}
             </>
           )}
