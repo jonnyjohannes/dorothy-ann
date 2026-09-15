@@ -52,9 +52,15 @@ export function sourceAccentSlot(sourceId: string, paletteSize: number, threadSe
   return order[stableHash(`${threadSeed}:${sourceId}`) % order.length] ?? 0;
 }
 
-export function headingAccentSlot(headingIndex: number, paletteSize: number, threadSeed = ""): number {
+export function headingAccentSlot(_headingIndex: number, paletteSize: number, threadSeed = ""): number {
+  if (paletteSize <= 0) return 0;
+  const order = spreadOrder(paletteSize);
+  return order[stableHash(threadSeed) % order.length] ?? 0;
+}
+
+export function inlineAccentSlot(inlineIndex: number, paletteSize: number, threadSeed = ""): number {
   if (paletteSize <= 0) return 0;
   const order = spreadOrder(paletteSize);
   const offset = stableHash(threadSeed) % order.length;
-  return order[(headingIndex + offset) % order.length] ?? 0;
+  return order[(inlineIndex + offset) % order.length] ?? 0;
 }

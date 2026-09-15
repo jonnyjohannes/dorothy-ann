@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultAccentSlot, headingAccentSlot, primaryAccentSlot, readColorScheme, readPrimaryAccent, sourceAccentSlot } from "../src/ui/color-scheme";
+import { defaultAccentSlot, headingAccentSlot, inlineAccentSlot, primaryAccentSlot, readColorScheme, readPrimaryAccent, sourceAccentSlot } from "../src/ui/color-scheme";
 
 describe("color scheme policy", () => {
   it("falls back to mono for missing or invalid values", () => {
@@ -26,11 +26,12 @@ describe("color scheme policy", () => {
     expect(primaryAccentSlot("rose-pine", "e068a5")).toBe(0);
   });
 
-  it("uses a spread heading order and thread-specific offset", () => {
-    const slots = [0, 1, 2, 3, 4].map((index) => headingAccentSlot(index, 8, "thread-a"));
-    expect(new Set(slots).size).toBe(5);
-    expect(slots[0]).not.toBe(slots[1]);
-    expect(slots).not.toEqual([0, 1, 2, 3, 4]);
+  it("keeps headings stable within a thread and spreads inline accents", () => {
+    const headings = [0, 1, 2, 3, 4].map((index) => headingAccentSlot(index, 8, "thread-a"));
+    expect(new Set(headings).size).toBe(1);
     expect(headingAccentSlot(0, 8, "thread-a")).not.toBe(headingAccentSlot(0, 8, "thread-b"));
+    const inline = [0, 1, 2, 3].map((index) => inlineAccentSlot(index, 8, "thread-a"));
+    expect(new Set(inline).size).toBe(4);
+    expect(inline).not.toEqual([0, 1, 2, 3]);
   });
 });

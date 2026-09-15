@@ -3,7 +3,7 @@ import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import type { SearchResult } from "../domain/types";
 import styles from "./App.module.css";
-import { headingAccentSlot, sourceAccentSlot } from "./color-scheme";
+import { headingAccentSlot, inlineAccentSlot, sourceAccentSlot } from "./color-scheme";
 
 const paletteSize = 8;
 
@@ -32,7 +32,7 @@ export function MarkdownAnswer({ markdown, sources, className, threadSeed = "" }
   const sourceById = new Map(sources.map((source) => [String(source.sourceId), source]));
   const answer = citationMarkdown(markdown, sources);
   const inline = (Tag: "strong" | "em" | "code") => ({ children, ...props }: React.ComponentPropsWithoutRef<typeof Tag>) => {
-    const slot = headingAccentSlot(inlineIndex, paletteSize, threadSeed);
+    const slot = inlineAccentSlot(inlineIndex, paletteSize, threadSeed);
     inlineIndex += 1;
     return <Tag {...props} className={styles.answerInlineAccent} style={relationalStyle(slot)}>{children}</Tag>;
   };
