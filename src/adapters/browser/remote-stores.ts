@@ -29,10 +29,9 @@ export class RemoteThreadStore implements ThreadStore {
     return body;
   }
   async list(): Promise<ThreadSummary[]> {
-    const body = await this.request("/api/threads") as { summaries?: unknown; threads?: unknown } | unknown[];
-    const summaries = Array.isArray(body) ? body : body && typeof body === "object" ? (body as { summaries?: unknown; threads?: unknown }).summaries ?? (body as { threads?: unknown }).threads : undefined;
-    if (!Array.isArray(summaries)) throw new Error("malformed_response");
-    return summaries as ThreadSummary[];
+    const body = await this.request("/api/threads") as { summaries?: unknown };
+    if (!body || !Array.isArray(body.summaries)) throw new Error("malformed_response");
+    return body.summaries as ThreadSummary[];
   }
   async load(threadId: string): Promise<Thread | null> { const response = await fetch(`/api/threads/${encodeURIComponent(threadId)}`, { credentials: "same-origin", cache: "no-store" }); const body = await jsonResponse(response) as { thread?: unknown; revision?: unknown }; if (response.status === 404) return null; if (!response.ok) throw new Error("storage_error"); if (!body || !threadSchema.safeParse(body.thread).success || typeof body.revision !== "number") throw new Error("malformed_response"); this.revisions.set(threadId, body.revision); return body.thread as Thread; }
   async save(thread: Thread, activityAt?: string): Promise<void> { await this.commit({ thread, reason: "created", committedAt: (activityAt ?? new Date().toISOString()) as ThreadCommit["committedAt"] }); }

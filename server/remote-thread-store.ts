@@ -98,10 +98,9 @@ export class RemoteThreadStore implements ThreadStore {
     const activityAt = input.activityAt ?? input.committedAt;
     const expiry = input.expiresAt ?? expiryFor(activityAt);
     const record: RemoteThreadRecord = { schemaVersion: 2, thread: { ...input.thread, schemaVersion: 2 }, lastMeaningfulActivityAt: activityAt, expiresAt: expiry, revision: expected + 1 };
-    const result = await this.redis.eval<[number, number, string?]>(COMMIT_SCRIPT, [this.recordKey(input.thread.id), this.indexKey()], [String(expected), JSON.stringify(record), String(new Date(expiry).getTime()), String(new Date(input.thread.updatedAt).getTime()), input.thread.id]);
+    const result = await this.redis.eval<[number, number, RemoteThreadRecord]>(COMMIT_SCRIPT, [this.recordKey(input.thread.id), this.indexKey()], [String(expected), JSON.stringify(record), String(new Date(expiry).getTime()), String(new Date(input.thread.updatedAt).getTime()), input.thread.id]);
     if (!Array.isArray(result) || result[0] !== 1) throw new Error("storage_conflict");
-    const rawRecord = result[2];
-    const committed = parseRecord(typeof rawRecord === "string" ? JSON.parse(rawRecord) : rawRecord);
+    const committed = parseRecord(result[2]);
     if (!committed) throw new Error("invalid_remote_thread");
     return committed.thread;
   }
