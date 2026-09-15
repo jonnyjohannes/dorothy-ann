@@ -312,7 +312,7 @@ function ThreadPicker({ onClose, embedded = false }: { onClose: () => void; embe
     const onKey = (event: KeyboardEvent) => {
       if (!embedded && event.key === "Escape") { event.preventDefault(); onClose(); }
       const editingFilter = event.target instanceof HTMLInputElement && event.target.classList.contains(styles.threadSearch);
-      if (editingFilter && (event.key === "Delete" || event.key === "Backspace")) return;
+      if (editingFilter && (event.key === "Delete" || event.key === "Backspace") && event.target.value.length > 0) return;
       if ((event.key === "Delete" || event.key === "Backspace") && focused) { event.preventDefault(); deleteTopic(focused); }
       if (event.key === "ArrowDown") { event.preventDefault(); setActive((value) => Math.min(value + 1, Math.max(0, visibleTopics.length - 1))); }
       if (event.key === "ArrowUp") { event.preventDefault(); setActive((value) => Math.max(0, value - 1)); }
