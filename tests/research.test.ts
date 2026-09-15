@@ -88,33 +88,9 @@ describe("research orchestration", () => {
     expect(events.some((event) => event.type === "answer.delta")).toBe(false);
   });
 
-  it("enforces the exact research opening for a planner-ready answer", async () => {
+  it("passes provider synthesis through without adding or rewriting the opening", async () => {
     const answers: string[] = [];
-    for await (const event of runResearch("question", "turn-opening", {
-      fixture: false,
-      maxResults: 3,
-      seedSources: sources.slice(0, 1),
-      extractor: { extract: async (source) => ({ sourceId: source.sourceId, status: "viable" as const, page: { sourceId: source.sourceId, canonicalUrl: source.canonicalUrl, title: source.title, text: "evidence", extractedAt: new Date().toISOString() as never, characterCount: 8 } }) },
-      chat: { planResearch: async () => ({ status: "ready" as const, queries: [] as [] }), stream: async function* () { yield { type: "content" as const, part: { type: "text" as const, markdown: "A synthesized answer." } }; } },
-    })) if (event.type === "answer.delta") answers.push(event.markdown);
-    expect(answers.join("" )).toMatch(/^According to my research\.\.\./);
-  });
-
-  it("normalizes a provider opening without duplicating the research preamble", async () => {
-    const answers: string[] = [];
-    for await (const event of runResearch("question", "turn-opening-duplicate", {
-      fixture: false,
-      maxResults: 3,
-      seedSources: sources.slice(0, 1),
-      extractor: { extract: async (source) => ({ sourceId: source.sourceId, status: "viable" as const, page: { sourceId: source.sourceId, canonicalUrl: source.canonicalUrl, title: source.title, text: "evidence", extractedAt: new Date().toISOString() as never, characterCount: 8 } }) },
-      chat: { planResearch: async () => ({ status: "ready" as const, queries: [] as [] }), stream: async function* () { yield { type: "content" as const, part: { type: "text" as const, markdown: "According to my research, the answer is here." } }; } },
-    })) if (event.type === "answer.delta") answers.push(event.markdown);
-    expect(answers.join("")).toBe("According to my research...\n\nthe answer is here.");
-  });
-
-  it("removes an opening repeated in a later streamed chunk", async () => {
-    const answers: string[] = [];
-    for await (const event of runResearch("question", "turn-opening-stream", {
+    for await (const event of runResearch("question", "turn-opening-pass-through", {
       fixture: false,
       maxResults: 3,
       seedSources: sources.slice(0, 1),
@@ -124,19 +100,7 @@ describe("research orchestration", () => {
         yield { type: "content" as const, part: { type: "text" as const, markdown: "According to my research, sourdough chips are crunchy." } };
       } },
     })) if (event.type === "answer.delta") answers.push(event.markdown);
-    expect(answers.join("")).toBe("According to my research...\n\nsourdough chips are crunchy.");
-  });
-
-  it("removes repeated or heading-formatted research openings", async () => {
-    const answers: string[] = [];
-    for await (const event of runResearch("question", "turn-opening-heading", {
-      fixture: false,
-      maxResults: 3,
-      seedSources: sources.slice(0, 1),
-      extractor: { extract: async (source) => ({ sourceId: source.sourceId, status: "viable" as const, page: { sourceId: source.sourceId, canonicalUrl: source.canonicalUrl, title: source.title, text: "evidence", extractedAt: new Date().toISOString() as never, characterCount: 8 } }) },
-      chat: { planResearch: async () => ({ status: "ready" as const, queries: [] as [] }), stream: async function* () { yield { type: "content" as const, part: { type: "text" as const, markdown: "# According to my research...\n\nAccording to my research...\n\nThe answer." } }; } },
-    })) if (event.type === "answer.delta") answers.push(event.markdown);
-    expect(answers.join("")).toBe("According to my research...\n\nThe answer.");
+    expect(answers.join("")).toBe("According to my research...According to my research, sourdough chips are crunchy.");
   });
 
   it("lets the planner request up to three visible searches and synthesizes merged evidence", async () => {

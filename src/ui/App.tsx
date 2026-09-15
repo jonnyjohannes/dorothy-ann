@@ -379,7 +379,6 @@ function Home() {
       </header>
       {threads && <ThreadPicker onClose={() => setThreads(false)} />}
       <section className={styles.hero}>
-        <h2 className={styles.pageTitle}><code>according to my research...</code></h2>
         <div className={styles.commandList}>
           <p><code>/new</code> — <code>&lt;esc&gt;</code> <code>&lt;esc&gt;</code></p>
           <p><code>/settings</code> — <code>&lt;alt&gt;</code> + <code>c</code></p>
