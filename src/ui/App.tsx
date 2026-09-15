@@ -448,6 +448,27 @@ async function appendChatTurn(threadId: string, prompt: string, answer: string):
   return store.commit({ thread: { ...thread, updatedAt: timestamp, turns: previous?.mode === "chat" && previous.userMessage.content === prompt ? [...thread.turns.slice(0, -1), completed] : [...thread.turns, completed] }, reason: "turn_completed", committedAt: timestamp });
 }
 
+function pendingTopic(threadId: string, query: string, mode: string): Thread {
+  const timestamp = now();
+  return {
+    schemaVersion: 1,
+    id: threadId as Thread["id"],
+    title: query.slice(0, 60),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    modelRef: "configured",
+    searchRef: "brave",
+    turns: [{
+      id: id() as Thread["turns"][number]["id"],
+      mode: mode === "research" ? "research" : "chat",
+      status: "running",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      userMessage: { id: id() as never, role: "user", content: query, createdAt: timestamp },
+    }],
+  };
+}
+
 async function saveTopic(
   threadId: string,
   query: string,
@@ -611,6 +632,7 @@ function Topic() {
           return;
         }
         setState({ stage: "starting", answer: "", sources: [] });
+        if (!existing && !cancelled) setThread(pendingTopic(threadId, query, mode));
         if (mode === "lookup") {
           const response = await fetch("/api/lookup", {
             method: "POST",
