@@ -590,8 +590,10 @@
   padding-block: 1.25rem;
 }
 .threadPicker li button { display: grid; min-width: 0; flex: 1; border: 0; background: transparent; color: var(--ink); padding: 0.8rem; text-align: left; cursor: pointer; }
-.threadPicker li .threadDelete { flex: 0 0 auto; padding-inline: 0.8rem; color: var(--muted); font-size: 0.75rem; }
-.threadPicker li .threadDelete:hover { color: var(--ink); }
+.threadPicker li .threadDelete { flex: 0 0 auto; padding: 0.35rem 0.55rem; color: #d20f39; font-size: 1.1rem; font-weight: 700; line-height: 1; text-decoration: none; }
+.threadPicker li .threadDelete:hover { color: #e11d48; }
+:global(:root[data-theme="dark"]) .threadPicker li .threadDelete { color: #f38ba8; }
+:global(:root[data-theme="dark"]) .threadPicker li .threadDelete:hover { color: #f5a3b8; }
 .threadPicker li button small { color: var(--muted); margin-top: 0.25rem; }
 .threadPicker .threadSelected button { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .threadPicker li button:focus-visible { outline: none; }
