@@ -12,6 +12,7 @@ export function EvidenceBox({ sources, selectedSourceId, onSelect }: { sources: 
             id={`source-${source.sourceId}`}
             tabIndex={-1}
             className={`${styles.evidenceItem} ${selectedSourceId === source.sourceId ? styles.evidenceItemActive : ""}`}
+            style={{ "--relational-accent": `var(--accent-${sourceAccentSlot(source.sourceId, 8) + 1})` } as React.CSSProperties}
             aria-current={selectedSourceId === source.sourceId ? "true" : undefined}
             onFocus={() => onSelect(source.sourceId)}
             onKeyDown={(event) => {
@@ -26,7 +27,6 @@ export function EvidenceBox({ sources, selectedSourceId, onSelect }: { sources: 
               target="_blank"
               rel="noreferrer"
               className={styles.sourceAccent}
-              style={{ "--relational-accent": `var(--accent-${sourceAccentSlot(source.sourceId, 8) + 1})` } as React.CSSProperties}
             >
               {source.title}
             </a>

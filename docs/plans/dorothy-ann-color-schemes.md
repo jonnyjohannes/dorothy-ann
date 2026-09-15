@@ -4,14 +4,14 @@
 
 - Status: complete
 - Last updated: 2026-09-15
-- Current focus: color schemes implemented and verified
-- Next action: feature is committed; review or merge `dff9868`
+- Current focus: initial color schemes plus primary-accent refinement implemented and verified
+- Next action: commit the refinement and review the resulting diff
 
 ## Handoff
 
 The v1.0.0 launch is complete in [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md). This plan remains feature-scoped: color schemes affect the UI theme contract, browser persistence, accessibility, and transcript/source presentation, but not domain research orchestration.
 
-Implementation is complete. Theme tokens, browser persistence, the Colors setting, stable source accents, and shared sanitized Markdown rendering are implemented. Unit tests, lint, typecheck, production build, Playwright smoke tests, and axe coverage pass.
+The initial color scheme implementation is complete and committed. This follow-up adds two scoped refinements: selected Evidence items use their source identity accent, and Settings exposes a Primary accent selector for decorations outside the rotating constellation. The primary accent remains UI-only and does not alter source/citation identity.
 
 The current design direction is a colorful hypertext constellation. Each source gets a deterministic accent keyed by stable `sourceId`; its Evidence-box link and every corresponding answer citation share that accent. Headings inside the synthesized Markdown answer use a separate deterministic rotation for reading rhythm, not semantic meaning. Route and application UI headings are out of scope. Color supplements visible source numbers, labels, links, and structure rather than replacing them. No animation or per-stream random recoloring.
 
@@ -123,8 +123,9 @@ The `mono` scheme should preserve current appearance behavior. Catppuccin and Ro
 Keep the existing `/settings` surface compact. Add a second labeled select beside/under Appearance:
 
 ```text
-Appearance   auto
-Colors       mono
+Appearance       auto
+Colors           mono
+Primary accent   scheme default
 ```
 
 User-facing labels may be `mono`, `catppuccin`, and `rose pine`; stored values remain stable kebab-free identifiers. Persist the setting in local storage under a new key, for example `dorothy-ann-color-scheme`. Invalid or missing values fall back to `mono`. Existing users must retain their current appearance setting and must not be forced through a migration prompt.
@@ -142,6 +143,7 @@ Initial mapping should cover the current visible surfaces:
 - research direction block and generated-search query text;
 - every Evidence-box source link, with one stable accent per source identity;
 - every answer citation, matching the accent of its Evidence-box source;
+- selected Evidence item highlighting, using that item's same source identity accent;
 - evidence/source cards and source count markers;
 - loader bars and progress labels;
 - buttons, separators, and underlines where a bounded accent improves scanning.
@@ -176,12 +178,16 @@ Do not color every word or every paragraph. Use relational color where the reade
 
 2. **Browser preference lifecycle**
    - add a separate persisted color-scheme key;
+   - add a persisted primary-accent choice, defaulting to the scheme's designated accent;
    - apply `data-color-scheme` during bootstrap and on Settings changes;
+   - apply the selected accent to the shared `--accent` token used by focus, finder, and bounded decoration;
    - retain existing `auto/light/dark` appearance behavior;
    - verify invalid storage and first-load behavior.
 
 3. **Settings control**
    - add the Colors selector without adding a new page or global store;
+   - add a Primary accent selector whose labels come from the active scheme's accent family;
+   - expose only `yellow` for `mono`; expose the named curated accents for the themed schemes;
    - keep the compact settings layout and accessible labels;
    - verify keyboard operation and persistence across reload.
 
@@ -211,15 +217,18 @@ Do not color every word or every paragraph. Use relational color where the reade
 - [x] 4. Playful element mapping
 - [x] 5. Accessibility and regression coverage
 - [x] 6. Acceptance
+- [x] 7. Primary accent and source-highlight refinement
 
 ## Verification
 
-- `npm test` — 12 files, 59 tests passed
+- `npm test` — 12 files, 60 tests passed
 - `npm run lint` — passed
 - `npm run typecheck` — passed
 - `npm run build` — passed (Vite emitted existing dependency/chunk-size warnings)
 - `npm run test:e2e` — 4 Playwright smoke/accessibility tests passed
 - `git diff --check` — passed
+
+Follow-up verification also passed after the primary-accent refinement: lint, typecheck, build, full unit tests, and all 4 Playwright smoke/accessibility tests.
 
 ## Acceptance Criteria
 
@@ -240,6 +249,7 @@ Do not color every word or every paragraph. Use relational color where the reade
 
 - The stored choices are exactly `mono`, `catppuccin`, and `rose-pine`.
 - Catppuccin and Rosé Pine are curated, official-palette-inspired accent sets in the UI theme layer; no external theme package is added.
+- Primary accent is a separate browser-local preference. `mono` exposes only yellow; themed schemes expose their named accent slots plus a scheme-default option. The selected primary accent controls `--accent` for focus, finder, and non-relational decoration only.
 - Each inspired scheme has separate light/dark accent values tested against the existing white/black surfaces.
 - Source/citation identity is keyed by stable `sourceId`; heading rotation is keyed by synthesized-document heading order.
 - The live and persisted synthesized answer share a sanitized Markdown renderer with custom `h1`–`h6` components.

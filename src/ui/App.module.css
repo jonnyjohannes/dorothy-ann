@@ -408,8 +408,8 @@
   line-height: 1.45;
 }
 .evidenceItemActive {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  outline: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--relational-accent, var(--accent)) 18%, transparent);
+  outline: 1px solid var(--relational-accent, var(--accent));
   outline-offset: -1px;
 }
 .citation {

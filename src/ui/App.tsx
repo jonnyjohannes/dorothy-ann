@@ -17,7 +17,14 @@ import styles from "./App.module.css";
 import { TurnTranscriptBox } from "./TurnTranscriptBox";
 import { EvidenceBox } from "./EvidenceBox";
 import { MarkdownAnswer } from "./MarkdownAnswer";
-import { readColorScheme, type ColorScheme } from "./color-scheme";
+import {
+  ACCENT_NAMES,
+  primaryAccentSlot,
+  readColorScheme,
+  readPrimaryAccent,
+  type ColorScheme,
+  type PrimaryAccent,
+} from "./color-scheme";
 
 type Result = SearchResult;
 type StreamState = {
@@ -141,11 +148,18 @@ function applyColorScheme(scheme: ColorScheme) {
   document.documentElement.dataset.colorScheme = scheme;
 }
 
+function applyPrimaryAccent(scheme: ColorScheme, accent: PrimaryAccent) {
+  const slot = primaryAccentSlot(scheme, accent);
+  document.documentElement.style.setProperty("--accent", `var(--accent-${slot + 1})`);
+}
+
 function ThemeBootstrap() {
   useEffect(() => {
     const theme = localStorage.getItem("dorothy-ann-theme") ?? "auto";
     applyTheme(theme);
-    applyColorScheme(readColorScheme(localStorage.getItem("dorothy-ann-color-scheme")));
+    const scheme = readColorScheme(localStorage.getItem("dorothy-ann-color-scheme"));
+    applyColorScheme(scheme);
+    applyPrimaryAccent(scheme, readPrimaryAccent(localStorage.getItem("dorothy-ann-primary-accent")));
     if (theme !== "auto" || typeof window.matchMedia !== "function") return;
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const update = () => applyTheme("auto");
@@ -188,8 +202,10 @@ function ColorSchemeControl() {
     setScheme(next);
     localStorage.setItem("dorothy-ann-color-scheme", next);
     applyColorScheme(next);
+    applyPrimaryAccent(next, readPrimaryAccent(localStorage.getItem("dorothy-ann-primary-accent")));
+    window.dispatchEvent(new Event("dorothy-ann-color-scheme-change"));
   };
-  useEffect(() => { applyColorScheme(scheme); }, [scheme]);
+  useEffect(() => { applyColorScheme(scheme); applyPrimaryAccent(scheme, readPrimaryAccent(localStorage.getItem("dorothy-ann-primary-accent"))); }, [scheme]);
   return (
     <label className={styles.themeControl}>
       Colors
@@ -197,6 +213,33 @@ function ColorSchemeControl() {
         <option value="mono">mono</option>
         <option value="catppuccin">catppuccin</option>
         <option value="rose-pine">rose pine</option>
+      </select>
+    </label>
+  );
+}
+
+function PrimaryAccentControl() {
+  const [scheme, setScheme] = useState<ColorScheme>(() => readColorScheme(localStorage.getItem("dorothy-ann-color-scheme")));
+  const [accent, setAccent] = useState<PrimaryAccent>(() => readPrimaryAccent(localStorage.getItem("dorothy-ann-primary-accent")));
+  const names = ACCENT_NAMES[scheme];
+  const change = (value: string) => {
+    const next = readPrimaryAccent(value);
+    setAccent(next);
+    localStorage.setItem("dorothy-ann-primary-accent", next);
+    applyPrimaryAccent(scheme, next);
+  };
+  useEffect(() => {
+    const onSchemeChange = () => setScheme(readColorScheme(localStorage.getItem("dorothy-ann-color-scheme")));
+    window.addEventListener("dorothy-ann-color-scheme-change", onSchemeChange);
+    return () => window.removeEventListener("dorothy-ann-color-scheme-change", onSchemeChange);
+  }, []);
+  useEffect(() => { applyPrimaryAccent(scheme, accent); }, [accent, scheme]);
+  return (
+    <label className={styles.themeControl}>
+      Primary accent
+      <select aria-label="Primary accent" value={accent} onChange={(event) => change(event.target.value)}>
+        <option value="default">scheme default · {names[primaryAccentSlot(scheme, "default")]}</option>
+        {scheme !== "mono" && names.map((name, index) => <option key={name} value={index}>{name}</option>)}
       </select>
     </label>
   );
@@ -228,6 +271,7 @@ function Settings() {
       <h2 className={styles.pageTitle}><code>/settings</code></h2>
       <p><ThemeControl /></p>
       <p><ColorSchemeControl /></p>
+      <p><PrimaryAccentControl /></p>
       <BackupControls />
     </SecondaryLayout>
   );

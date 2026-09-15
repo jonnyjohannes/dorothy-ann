@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { headingAccentSlot, readColorScheme, sourceAccentSlot } from "../src/ui/color-scheme";
+import { defaultAccentSlot, headingAccentSlot, primaryAccentSlot, readColorScheme, readPrimaryAccent, sourceAccentSlot } from "../src/ui/color-scheme";
 
 describe("color scheme policy", () => {
   it("falls back to mono for missing or invalid values", () => {
@@ -14,6 +14,13 @@ describe("color scheme policy", () => {
     expect(slot).toBeGreaterThanOrEqual(0);
     expect(slot).toBeLessThan(8);
     expect(sourceAccentSlot("source-a", 0)).toBe(0);
+  });
+
+  it("selects scheme defaults and validates primary accents", () => {
+    expect(defaultAccentSlot("catppuccin")).toBe(5);
+    expect(primaryAccentSlot("rose-pine", "3")).toBe(3);
+    expect(readPrimaryAccent("9")).toBe("default");
+    expect(primaryAccentSlot("mono", "7")).toBe(0);
   });
 
   it("rotates heading slots by document order", () => {
