@@ -775,6 +775,16 @@ function Topic() {
         .then(setThread)
         .catch((error) => setState((current) => ({ ...current, stage: "failed", error: error instanceof Error ? error.message : "turn_persist_failed" })));
   }, [mode, query, threadId, state]);
+  useEffect(() => {
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !researchController.current) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      researchController.current.abort();
+    };
+    window.addEventListener("keydown", onEscape, true);
+    return () => window.removeEventListener("keydown", onEscape, true);
+  }, []);
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
@@ -808,7 +818,6 @@ function Topic() {
                 <span className={styles.loaderBars} aria-hidden="true"><i /><i /><i /></span>
                 <span>{state.stage === "loading" || state.stage === "starting" ? "researching" : state.stage}</span>
               </div>
-              <button onClick={() => researchController.current?.abort()}>Stop</button>
             </>
           )}
           {thread && <TurnTranscriptBox thread={thread} onEvidenceSelect={(sourceId) => { setSelectedSourceId(sourceId); window.setTimeout(() => document.getElementById(`source-${sourceId}`)?.focus(), 0); }} />}
