@@ -58,7 +58,7 @@ describe("research orchestration", () => {
     expect(searchCalled).toBe(false);
     expect(synthesisInput).toContain("wwdc 2026 apple news");
     expect(synthesisInput).toContain("what were the highlights");
-    expect(systemInstruction).toContain('Begin exactly with "According to my research..."');
+    expect(systemInstruction).toContain('Your response must begin exactly with "According to my research..."');
     expect(systemInstruction).toContain("Be complete but concise");
     expect(systemInstruction).toContain("Keep to supported facts");
     expect(systemInstruction).toContain("Answer directly and carefully");
@@ -106,7 +106,7 @@ describe("research orchestration", () => {
         yield { type: "content" as const, part: { type: "text" as const, markdown: "According to my research, sourdough chips are crunchy." } };
       } },
     })) if (event.type === "answer.delta") answers.push(event.markdown);
-    expect(answers.join("")).toBe("According to my research...According to my research, sourdough chips are crunchy.");
+    expect(answers.join("")).toBe("According to my research...\n\nsourdough chips are crunchy.");
   });
 
   it("lets the planner request up to three visible searches and synthesizes merged evidence", async () => {
