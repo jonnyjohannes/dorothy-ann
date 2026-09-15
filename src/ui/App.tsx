@@ -385,9 +385,9 @@ function Home() {
       {threads && <ThreadPicker onClose={() => setThreads(false)} />}
       <section className={styles.hero}>
         <div className={styles.commandList}>
-          <p><Link to="/new"><code>/new</code></Link> — <code>&lt;esc&gt;</code> <code>&lt;esc&gt;</code></p>
-          <p><Link to="/settings"><code>/settings</code></Link> — <code>&lt;alt&gt;</code> + <code>c</code></p>
-          <p><Link to="/threads"><code>/threads</code></Link> — <code>&lt;alt&gt;</code> + <code>s</code></p>
+          <p><Link to="/new"><code>/new</code></Link><span><code>&lt;esc&gt;&lt;esc&gt;</code></span></p>
+          <p><Link to="/settings"><code>/settings</code></Link><span><code>&lt;alt&gt;+c</code></span></p>
+          <p><Link to="/threads"><code>/threads</code></Link><span><code>&lt;alt&gt;+s</code></span></p>
         </div>
       </section>
       {message && <p role="status" className={styles.commandMessage}>{message}</p>}

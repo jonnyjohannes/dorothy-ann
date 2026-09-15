@@ -144,7 +144,12 @@
   line-height: 1.8;
 }
 .commandList p {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
   margin: 0;
+}
+.commandList p > span {
+  white-space: nowrap;
 }
 .commandList a {
   color: inherit;
