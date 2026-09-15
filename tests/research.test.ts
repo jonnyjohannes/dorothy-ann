@@ -112,6 +112,21 @@ describe("research orchestration", () => {
     expect(answers.join("")).toBe("According to my research...\n\nthe answer is here.");
   });
 
+  it("removes an opening repeated in a later streamed chunk", async () => {
+    const answers: string[] = [];
+    for await (const event of runResearch("question", "turn-opening-stream", {
+      fixture: false,
+      maxResults: 3,
+      seedSources: sources.slice(0, 1),
+      extractor: { extract: async (source) => ({ sourceId: source.sourceId, status: "viable" as const, page: { sourceId: source.sourceId, canonicalUrl: source.canonicalUrl, title: source.title, text: "evidence", extractedAt: new Date().toISOString() as never, characterCount: 8 } }) },
+      chat: { planResearch: async () => ({ status: "ready" as const, queries: [] as [] }), stream: async function* () {
+        yield { type: "content" as const, part: { type: "text" as const, markdown: "According to my research..." } };
+        yield { type: "content" as const, part: { type: "text" as const, markdown: "According to my research, sourdough chips are crunchy." } };
+      } },
+    })) if (event.type === "answer.delta") answers.push(event.markdown);
+    expect(answers.join("")).toBe("According to my research...\n\nsourdough chips are crunchy.");
+  });
+
   it("removes repeated or heading-formatted research openings", async () => {
     const answers: string[] = [];
     for await (const event of runResearch("question", "turn-opening-heading", {

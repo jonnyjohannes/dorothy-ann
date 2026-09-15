@@ -13,6 +13,12 @@ type MarkdownAnswerProps = {
   className?: string;
 };
 
+function normalizeAnswerHeadings(markdown: string): string {
+  // Treat provider-emitted bold labels such as **Sourdough Pita Chips:** as
+  // real Markdown headings so transcript sections receive the heading palette.
+  return markdown.replace(/^\*\*([^*\n]+)\*\*:[ \t]*/gm, "### $1\n\n");
+}
+
 function citationMarkdown(markdown: string, sources: SearchResult[]): string {
   const sourceNumbers = new Map(sources.map((source, index) => [String(source.sourceId), index + 1]));
   return markdown.replace(/\[\[cite:([^\]]+)\]\]/g, (marker, sourceId: string) => {
@@ -28,7 +34,7 @@ function relationalStyle(slot: number): React.CSSProperties {
 export function MarkdownAnswer({ markdown, sources, className }: MarkdownAnswerProps) {
   let headingIndex = 0;
   const sourceById = new Map(sources.map((source) => [String(source.sourceId), source]));
-  const answer = citationMarkdown(markdown, sources);
+  const answer = citationMarkdown(normalizeAnswerHeadings(markdown), sources);
   const heading = (Tag: "h1" | "h2" | "h3" | "h4" | "h5" | "h6") => ({ children, ...props }: React.ComponentPropsWithoutRef<typeof Tag>) => {
     const slot = headingAccentSlot(headingIndex, paletteSize);
     headingIndex += 1;

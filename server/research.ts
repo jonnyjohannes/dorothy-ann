@@ -65,14 +65,18 @@ async function* extractConcurrently(sources: SearchResult[], dependencies: Resea
 }
 
 const RESEARCH_OPENING = "According to my research...";
-function enforceResearchOpening(answer: string): string {
-  let normalized = answer.trimStart();
+function stripResearchOpenings(answer: string): string {
+  let normalized = answer;
   // Providers occasionally repeat the contract opening or format it as a heading.
-  // Strip up to two leading variants so the UI receives exactly one opening.
   for (let index = 0; index < 2; index += 1) {
-    normalized = normalized.replace(/^(?:#{1,6}\s*)?According to my research(?:\.\.\.|…|,)[ \t]*(?:\r?\n+)?/i, "");
+    const match = /^(?:\s*)(?:#{1,6}\s*)?According to my research(?:\.\.\.|…|,)[ \t]*(?:\r?\n+)?/i.exec(normalized);
+    if (!match) break;
+    normalized = normalized.slice(match[0].length);
   }
-  return `${RESEARCH_OPENING}\n\n${normalized}`;
+  return normalized;
+}
+function enforceResearchOpening(answer: string): string {
+  return `${RESEARCH_OPENING}\n\n${stripResearchOpenings(answer)}`;
 }
 
 async function* synthesize(chat: ChatProvider, input: NormalizedChatInput): AsyncGenerator<ResearchEvent> {
@@ -82,7 +86,7 @@ async function* synthesize(chat: ChatProvider, input: NormalizedChatInput): Asyn
     if (event.type !== "content") continue;
     receivedContent = true;
     const markdown = event.part.type === "text" ? event.part.markdown : `[[cite:${event.part.sourceId}]]`;
-    yield { type: "answer.delta", markdown: first ? enforceResearchOpening(markdown) : markdown };
+    yield { type: "answer.delta", markdown: first ? enforceResearchOpening(markdown) : stripResearchOpenings(markdown) };
     first = false;
   }
   if (!receivedContent) throw new Error("synthesis_empty");
