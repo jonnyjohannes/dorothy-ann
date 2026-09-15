@@ -4,14 +4,14 @@
 
 - Status: complete
 - Last updated: 2026-09-15
-- Current focus: initial color schemes plus primary-accent refinement implemented and verified
-- Next action: commit the refinement and review the resulting diff
+- Current focus: color schemes and primary accent options implemented
+- Next action: commit the fixed accent refinement
 
 ## Handoff
 
 The v1.0.0 launch is complete in [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md). This plan remains feature-scoped: color schemes affect the UI theme contract, browser persistence, accessibility, and transcript/source presentation, but not domain research orchestration.
 
-The initial color scheme implementation is complete and committed. This follow-up adds two scoped refinements: selected Evidence items use their source identity accent, and Settings exposes a Primary accent selector for decorations outside the rotating constellation. The primary accent remains UI-only and does not alter source/citation identity.
+The initial color scheme implementation is complete and committed. This follow-up adds two scoped refinements: selected Evidence items use their source identity accent, and Settings exposes a Primary accent selector for decorations outside the rotating constellation. The primary accent remains UI-only and does not alter source/citation identity. Settings also includes the fixed `#fbf719` option alongside the active scheme's default and named accents.
 
 The current design direction is a colorful hypertext constellation. Each source gets a deterministic accent keyed by stable `sourceId`; its Evidence-box link and every corresponding answer citation share that accent. Headings inside the synthesized Markdown answer use a separate deterministic rotation for reading rhythm, not semantic meaning. Route and application UI headings are out of scope. Color supplements visible source numbers, labels, links, and structure rather than replacing them. No animation or per-stream random recoloring.
 
@@ -230,6 +230,8 @@ Do not color every word or every paragraph. Use relational color where the reade
 
 Follow-up verification also passed after the primary-accent refinement: lint, typecheck, build, full unit tests, and all 4 Playwright smoke/accessibility tests.
 
+The fixed `#fbf719` option also passes the color-policy tests, lint, typecheck, and `git diff --check`.
+
 ## Acceptance Criteria
 
 - Users can choose `mono`, `catppuccin`, or `rose pine` in Settings.
@@ -249,7 +251,7 @@ Follow-up verification also passed after the primary-accent refinement: lint, ty
 
 - The stored choices are exactly `mono`, `catppuccin`, and `rose-pine`.
 - Catppuccin and Rosé Pine are curated, official-palette-inspired accent sets in the UI theme layer; no external theme package is added.
-- Primary accent is a separate browser-local preference. `mono` exposes only yellow; themed schemes expose their named accent slots plus a scheme-default option. The selected primary accent controls `--accent` for focus, finder, and non-relational decoration only.
+- Primary accent is a separate browser-local preference. `mono` exposes only yellow; themed schemes expose their named accent slots plus a scheme-default option. Every scheme also exposes fixed `#fbf719`. The selected primary accent controls `--accent` for focus, finder, and non-relational decoration only.
 - Each inspired scheme has separate light/dark accent values tested against the existing white/black surfaces.
 - Source/citation identity is keyed by stable `sourceId`; heading rotation is keyed by synthesized-document heading order.
 - The live and persisted synthesized answer share a sanitized Markdown renderer with custom `h1`–`h6` components.

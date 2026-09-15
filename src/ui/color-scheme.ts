@@ -1,6 +1,6 @@
 export const COLOR_SCHEMES = ["mono", "catppuccin", "rose-pine"] as const;
 export type ColorScheme = (typeof COLOR_SCHEMES)[number];
-export type PrimaryAccent = "default" | `${number}`;
+export type PrimaryAccent = "default" | "fbf719" | `${number}`;
 
 export const ACCENT_NAMES: Record<ColorScheme, readonly string[]> = {
   mono: ["yellow"],
@@ -13,12 +13,13 @@ export function defaultAccentSlot(scheme: ColorScheme): number {
 }
 
 export function readPrimaryAccent(value: string | null | undefined): PrimaryAccent {
-  if (value === "default") return value;
+  if (value === "default" || value === "fbf719") return value;
   return value !== undefined && value !== null && /^[0-7]$/.test(value) ? value as `${number}` : "default";
 }
 
 export function primaryAccentSlot(scheme: ColorScheme, accent: PrimaryAccent): number {
   if (accent === "default") return defaultAccentSlot(scheme);
+  if (accent === "fbf719") return 0;
   return scheme === "mono" ? 0 : Number(accent);
 }
 

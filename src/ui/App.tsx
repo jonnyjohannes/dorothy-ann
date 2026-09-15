@@ -149,8 +149,8 @@ function applyColorScheme(scheme: ColorScheme) {
 }
 
 function applyPrimaryAccent(scheme: ColorScheme, accent: PrimaryAccent) {
-  const slot = primaryAccentSlot(scheme, accent);
-  document.documentElement.style.setProperty("--accent", `var(--accent-${slot + 1})`);
+  const value = accent === "fbf719" ? "#fbf719" : `var(--accent-${primaryAccentSlot(scheme, accent) + 1})`;
+  document.documentElement.style.setProperty("--accent", value);
 }
 
 function ThemeBootstrap() {
@@ -239,6 +239,7 @@ function PrimaryAccentControl() {
       Primary accent
       <select aria-label="Primary accent" value={accent} onChange={(event) => change(event.target.value)}>
         <option value="default">scheme default · {names[primaryAccentSlot(scheme, "default")]}</option>
+        <option value="fbf719">#fbf719</option>
         {scheme !== "mono" && names.map((name, index) => <option key={name} value={index}>{name}</option>)}
       </select>
     </label>

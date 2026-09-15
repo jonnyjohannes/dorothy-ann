@@ -20,7 +20,9 @@ describe("color scheme policy", () => {
     expect(defaultAccentSlot("catppuccin")).toBe(5);
     expect(primaryAccentSlot("rose-pine", "3")).toBe(3);
     expect(readPrimaryAccent("9")).toBe("default");
+    expect(readPrimaryAccent("fbf719")).toBe("fbf719");
     expect(primaryAccentSlot("mono", "7")).toBe(0);
+    expect(primaryAccentSlot("rose-pine", "fbf719")).toBe(0);
   });
 
   it("rotates heading slots by document order", () => {
