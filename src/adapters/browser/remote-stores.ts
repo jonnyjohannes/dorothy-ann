@@ -26,7 +26,12 @@ export class RemoteThreadStore implements ThreadStore {
     if (!response.ok) throw new Error(typeof body === "object" && body && "error" in body && typeof body.error === "object" && body.error && "code" in body.error ? String(body.error.code) : "storage_error");
     return body;
   }
-  async list(): Promise<ThreadSummary[]> { const body = await this.request("/api/threads") as { summaries?: unknown }; if (!body || !Array.isArray(body.summaries)) throw new Error("malformed_response"); return body.summaries as ThreadSummary[]; }
+  async list(): Promise<ThreadSummary[]> {
+    const body = await this.request("/api/threads") as { summaries?: unknown; threads?: unknown } | unknown[];
+    const summaries = Array.isArray(body) ? body : body && typeof body === "object" ? (body as { summaries?: unknown; threads?: unknown }).summaries ?? (body as { threads?: unknown }).threads : undefined;
+    if (!Array.isArray(summaries)) throw new Error("malformed_response");
+    return summaries as ThreadSummary[];
+  }
   async load(threadId: string): Promise<Thread | null> { const response = await fetch(`/api/threads/${encodeURIComponent(threadId)}`, { credentials: "same-origin", cache: "no-store" }); const body = await jsonResponse(response) as { thread?: unknown; revision?: unknown }; if (response.status === 404) return null; if (!response.ok) throw new Error("storage_error"); if (!body || !threadSchema.safeParse(body.thread).success || typeof body.revision !== "number") throw new Error("malformed_response"); this.revisions.set(threadId, body.revision); return body.thread as Thread; }
   async save(thread: Thread, activityAt?: string): Promise<void> { await this.commit({ thread, reason: "created", committedAt: (activityAt ?? new Date().toISOString()) as ThreadCommit["committedAt"] }); }
   async commit(input: ThreadCommit): Promise<Thread> { if (!isDurableThread(input.thread)) throw new Error("invalid_completed_thread"); const expectedRevision = this.revisions.get(input.thread.id) ?? 0; const body = await this.request(`/api/threads/${encodeURIComponent(input.thread.id)}`, { method: "PUT", body: JSON.stringify({ ...input, expectedRevision }) }) as { thread?: unknown; revision?: unknown }; if (!body || !isValidThread(body.thread) || typeof body.revision !== "number") throw new Error("malformed_response"); this.revisions.set(input.thread.id, body.revision); return body.thread; }
