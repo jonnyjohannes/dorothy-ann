@@ -14,12 +14,6 @@ type MarkdownAnswerProps = {
   threadSeed?: string;
 };
 
-function normalizeAnswerHeadings(markdown: string): string {
-  // Treat provider-emitted bold labels such as **Sourdough Pita Chips:** as
-  // real Markdown headings so transcript sections receive the heading palette.
-  return markdown.replace(/^\*\*([^*\n]+)\*\*:[ \t]*/gm, "### $1\n\n");
-}
-
 function citationMarkdown(markdown: string, sources: SearchResult[]): string {
   const sourceNumbers = new Map(sources.map((source, index) => [String(source.sourceId), index + 1]));
   return markdown.replace(/\[\[cite:([^\]]+)\]\]/g, (marker, sourceId: string) => {
@@ -34,8 +28,14 @@ function relationalStyle(slot: number): React.CSSProperties {
 
 export function MarkdownAnswer({ markdown, sources, className, threadSeed = "" }: MarkdownAnswerProps) {
   let headingIndex = 0;
+  let inlineIndex = 0;
   const sourceById = new Map(sources.map((source) => [String(source.sourceId), source]));
-  const answer = citationMarkdown(normalizeAnswerHeadings(markdown), sources);
+  const answer = citationMarkdown(markdown, sources);
+  const inline = (Tag: "strong" | "em" | "code") => ({ children, ...props }: React.ComponentPropsWithoutRef<typeof Tag>) => {
+    const slot = headingAccentSlot(inlineIndex, paletteSize, threadSeed);
+    inlineIndex += 1;
+    return <Tag {...props} className={styles.answerInlineAccent} style={relationalStyle(slot)}>{children}</Tag>;
+  };
   const heading = (Tag: "h1" | "h2" | "h3" | "h4" | "h5" | "h6") => ({ children, ...props }: React.ComponentPropsWithoutRef<typeof Tag>) => {
     const slot = headingAccentSlot(headingIndex, paletteSize, threadSeed);
     headingIndex += 1;
@@ -54,6 +54,9 @@ export function MarkdownAnswer({ markdown, sources, className, threadSeed = "" }
           h4: heading("h4"),
           h5: heading("h5"),
           h6: heading("h6"),
+          strong: inline("strong"),
+          em: inline("em"),
+          code: inline("code"),
           a: ({ href, children, ...props }) => {
             const sourceId = href?.startsWith("#source-") ? href.slice("#source-".length) : undefined;
             const source = sourceId ? sourceById.get(sourceId) : undefined;

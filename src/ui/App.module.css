@@ -428,8 +428,12 @@
 .answerMarkdown {
   min-width: 0;
 }
-.answerHeading {
+.answerHeading,
+.answerInlineAccent {
   color: var(--relational-accent, var(--ink));
+}
+.answerInlineAccent {
+  text-decoration-color: var(--relational-accent, var(--accent));
 }
 .answerMarkdown h1,
 .answerMarkdown h2,

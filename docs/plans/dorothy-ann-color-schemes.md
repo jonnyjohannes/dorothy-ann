@@ -4,8 +4,8 @@
 
 - Status: complete
 - Last updated: 2026-09-15
-- Current focus: color schemes complete with per-thread relational rotation
-- Next action: commit the per-thread rotation refinement
+- Current focus: color schemes complete with LLM-authored constellation formatting
+- Next action: review or merge the strategy refinement commit
 
 ## Handoff
 
@@ -233,7 +233,7 @@ Follow-up verification also passed after the primary-accent refinement: lint, ty
 
 The fixed `#e068a5` option also passes the color-policy tests, lint, typecheck, and `git diff --check`.
 
-The relational rotation now derives source and heading slots from the stable thread ID. A spread order intentionally separates neighboring palette hues instead of walking the palette declaration order. Color-policy, full unit, lint, typecheck, and diff checks pass.
+The relational rotation now derives source and heading slots from the stable thread ID. A spread order intentionally separates neighboring palette hues instead of walking the palette declaration order. The renderer now preserves LLM-authored Markdown structure and applies rotating accents to headings, bold, italic, and inline code instead of promoting bold labels into headings.
 
 ## Acceptance Criteria
 
@@ -260,5 +260,6 @@ The relational rotation now derives source and heading slots from the stable thr
 - Source/citation identity is keyed by stable `sourceId` within a thread; source slots hash `threadId + sourceId` so different threads can have different constellations while remaining stable on reload.
 - Heading rotation uses a thread offset over a hue-spread palette order, rather than adjacent palette declaration order.
 - The live and persisted synthesized answer share a sanitized Markdown renderer with custom `h1`–`h6` components.
+- LLM-authored `strong`, `em`, and inline `code` spans receive the same thread-seeded rotating accent treatment; the renderer does not rewrite bold labels into headings.
 - Route and application UI headings are unchanged and out of scope.
 - Colors remain presentation-only: exports, backups, persisted thread contracts, SSE payloads, and provider inputs remain unchanged.
