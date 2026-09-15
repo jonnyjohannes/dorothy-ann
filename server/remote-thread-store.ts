@@ -68,6 +68,8 @@ export class RemoteThreadStore implements ThreadStore {
   }
   private async deleteRecord(threadId: string): Promise<void> { await this.redis.del(this.recordKey(threadId)); await this.redis.zrem(this.indexKey(), threadId); }
 
+  async health(): Promise<boolean> { try { return (await this.redis.eval<number>("return 1", [], [])) === 1; } catch { return false; } }
+
   async list(): Promise<ThreadSummary[]> {
     const ids = await this.redis.zrange<string[]>(this.indexKey(), 0, -1, { rev: true });
     const summaries: ThreadSummary[] = [];

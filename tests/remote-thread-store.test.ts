@@ -9,7 +9,8 @@ class FakeRedis implements RemoteRedis {
   async zrange<T extends unknown[]>(key: string, _min: number, _max: number, options?: { rev?: boolean }) { const entries = [...(this.scores.get(key)?.entries() ?? [])].sort((a, b) => options?.rev ? b[1] - a[1] : a[1] - b[1]); return entries.map(([member]) => member) as T; }
   async zrem(key: string, ...members: string[]) { const index = this.scores.get(key); let removed = 0; for (const member of members) if (index?.delete(member)) removed += 1; return removed; }
   async del(...keys: string[]) { let removed = 0; for (const key of keys) if (this.values.delete(key)) removed += 1; return removed; }
-  async eval<T>(_script: string, keys: string[], args: string[]) {
+  async eval<T>(script: string, keys: string[], args: string[]) {
+    if (script === "return 1") return 1 as T;
     const current = this.values.get(keys[0]) as { revision?: number } | undefined;
     const expected = Number(args[0]);
     if ((current && (expected === 0 || current.revision !== expected)) || (!current && expected !== 0)) return [0, current?.revision ?? 0] as T;
@@ -41,6 +42,10 @@ const completedThread = (id: string): Thread => ({
 });
 
 describe("RemoteThreadStore", () => {
+  it("reports Redis script availability", async () => {
+    expect(await new RemoteThreadStore(new FakeRedis()).health()).toBe(true);
+  });
+
   it("commits, lists, loads, and rejects stale revisions", async () => {
     const redis = new FakeRedis();
     const store = new RemoteThreadStore(redis, "test", () => new Date("2026-01-02T00:00:00.000Z"));
