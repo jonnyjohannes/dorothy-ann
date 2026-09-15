@@ -19,7 +19,7 @@ class FakeRedis implements RemoteRedis {
     const index = this.scores.get(keys[1]) ?? new Map<string, number>();
     index.set(args[4], Number(args[3]));
     this.scores.set(keys[1], index);
-    return [1, record.revision, JSON.stringify(record)] as T;
+    return [1, record.revision, record] as T;
   }
 }
 

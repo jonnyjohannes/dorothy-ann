@@ -18,6 +18,7 @@ import { canPromoteToResearch, parseSlashCommand, resolveQueryMode } from "../do
 import styles from "./App.module.css";
 import { TurnTranscriptBox } from "./TurnTranscriptBox";
 import { EvidenceBox } from "./EvidenceBox";
+import { MarkdownAnswer } from "./MarkdownAnswer";
 import {
   ACCENT_NAMES,
   primaryAccentSlot,
@@ -525,19 +526,6 @@ async function saveTopic(
   return store.commit({ thread, reason, committedAt: timestamp });
 }
 
-function renderCitations(answer: string, sources: Result[]) {
-  return answer.split(/(\[\[cite:[^\]]+\]\])/g).map((part, index) => {
-    const match = /^\[\[cite:(.+)\]\]$/.exec(part);
-    if (!match) return <span key={index}>{part}</span>;
-    const sourceIndex = sources.findIndex((source) => source.sourceId === match[1]);
-    return sourceIndex >= 0 ? (
-      <a className={styles.citation} key={index} href={`#source-${match[1]}`} title={sources[sourceIndex].title} onClick={() => window.setTimeout(() => document.getElementById(`source-${match[1]}`)?.focus(), 0)}>
-        [{sourceIndex + 1}]
-      </a>
-    ) : <span key={index}>{part}</span>;
-  });
-}
-
 function sourcesForThread(thread: Thread): Result[] {
   return Array.from(new Map(thread.turns.flatMap((turn) => turn.researchRun?.sources ?? turn.lookupResults ?? []).map((source) => [source.sourceId, source])).values());
 }
@@ -733,7 +721,7 @@ function Topic() {
           {thread && <TurnTranscriptBox thread={thread} onEvidenceSelect={(sourceId) => { setSelectedSourceId(sourceId); window.setTimeout(() => document.getElementById(`source-${sourceId}`)?.focus(), 0); }} />}
           {state.answer && !thread && (
             <article className={styles.answer}>
-              {renderCitations(state.answer, state.sources)}
+              <MarkdownAnswer markdown={state.answer} sources={state.sources} threadSeed={threadId} />
             </article>
           )}
           <PromptBox value={chatInput} onChange={setChatInput} onCommand={(input) => { const command = parseSlashCommand(input); if (command === "/settings") navigate("/settings"); else if (command === "/new") navigate("/", { replace: true }); else if (command === "/threads") navigate("/threads"); else setCommandMessage(`Unknown command: ${input}`); }} onSubmit={async (prompt) => {
@@ -762,7 +750,7 @@ function Topic() {
           {commandMessage && <p className={styles.commandMessage} role="status">{commandMessage}</p>}
           {chatStage && <p className={styles.muted} aria-live="polite">{chatStage}</p>}
           {chatSave && <button onClick={async () => { try { const committed = await appendChatTurn(threadId, chatSave.prompt, chatSave.answer); if (!committed) throw new Error("not_saved"); setThread(committed); setChatSave(null); setChatStage(""); } catch { setChatStage("not saved — retry"); } }}>Retry save</button>}
-          {chatAnswer && <article className={styles.chatAnswer}>{renderCitations(chatAnswer, state.sources)}</article>}
+          {chatAnswer && <MarkdownAnswer className={styles.chatAnswer} markdown={chatAnswer} sources={state.sources} threadSeed={threadId} />}
           {mode === "lookup" && canPromoteToResearch(query) && (
             <Link
               className={styles.promotion}
