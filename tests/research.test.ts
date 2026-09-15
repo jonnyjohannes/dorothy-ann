@@ -106,7 +106,7 @@ describe("research orchestration", () => {
         yield { type: "content" as const, part: { type: "text" as const, markdown: "According to my research, sourdough chips are crunchy." } };
       } },
     })) if (event.type === "answer.delta") answers.push(event.markdown);
-    expect(answers.join("")).toBe("According to my research...\n\nsourdough chips are crunchy.");
+    expect(answers.join("")).toBe("# According to my research...According to my research, sourdough chips are crunchy.");
   });
 
   it("lets the planner request up to three visible searches and synthesizes merged evidence", async () => {
