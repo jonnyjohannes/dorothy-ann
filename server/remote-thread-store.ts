@@ -71,7 +71,7 @@ export class RemoteThreadStore implements ThreadStore {
   async health(): Promise<boolean> { try { return (await this.redis.eval<number>("return 1", [], [])) === 1; } catch { return false; } }
 
   async list(): Promise<ThreadSummary[]> {
-    const ids = await this.redis.zrange<string[]>(this.indexKey(), 0, -1, { rev: true });
+    const ids = (await this.redis.zrange<string[]>(this.indexKey(), 0, -1)).reverse();
     const summaries: ThreadSummary[] = [];
     for (const id of ids) {
       try {
