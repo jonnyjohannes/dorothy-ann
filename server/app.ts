@@ -70,7 +70,7 @@ export function createApp({ config, remoteThreads: injectedRemoteThreads }: AppD
   const storageUnavailable = (context: Parameters<Parameters<typeof app.use>[1]>[0]) => context.json({ error: { code: "service_unavailable", message: "remote storage is unavailable" } }, 503);
   app.get("/api/threads", async (context) => {
     if (!remoteThreads) return storageUnavailable(context);
-    try { return context.json({ summaries: await remoteThreads.list() }); }
+    try { const summaries = await remoteThreads.list(); return context.json({ summaries, threads: summaries }); }
     catch { return context.json({ error: { code: "storage_error", message: "threads could not be loaded" } }, 503); }
   });
   app.get("/api/threads/export", async (context) => remoteThreads ? context.json(await remoteThreads.exportData()) : storageUnavailable(context));
