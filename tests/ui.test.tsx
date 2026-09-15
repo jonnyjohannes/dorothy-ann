@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "../src/ui/App";
+import { openDorothyAnnDb } from "../src/adapters/browser/local-stores";
 
 afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); });
 
@@ -43,5 +44,6 @@ describe("browser shell", () => {
     render(<MemoryRouter initialEntries={["/?q=life%20alive"]}><App /></MemoryRouter>);
     expect(await screen.findByText("External result")).toBeInTheDocument();
     expect(fetcher.mock.calls.filter(([input]) => input === "/api/lookup")).toHaveLength(1);
+    expect(await (await openDorothyAnnDb()).getAllKeys("threads")).toEqual([]);
   });
 });

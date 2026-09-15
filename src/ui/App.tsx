@@ -8,7 +8,9 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { LocalArtifactDraftStore, LocalThreadStore } from "../adapters/browser/local-stores";
+import { LocalThreadStore } from "../adapters/browser/local-stores";
+import { RemoteThreadStore } from "../adapters/browser/remote-stores";
+import type { ThreadStore } from "../ports/storage";
 import { ThreadStateOwner } from "../application/thread-owner";
 import type { ResearchDecision, ResearchQuery, SearchResult, Thread, ThreadSummary } from "../domain/types";
 import { renderThreadScrollback } from "../domain/thread-state";
@@ -35,11 +37,12 @@ type StreamState = {
   guidance?: string;
   generatedQueries?: ResearchQuery[];
   plan?: ResearchDecision;
+  storageError?: boolean;
 };
-const store = new LocalThreadStore();
-const draftStore = new LocalArtifactDraftStore();
+let store: ThreadStore = new LocalThreadStore();
+const configureStore = (fixtureMode: boolean) => { store = fixtureMode ? new LocalThreadStore() : new RemoteThreadStore(); };
 const rotatingTaglines = ["take chances", "make mistakes", "get messy"] as const;
-const threadOwner = new ThreadStateOwner(store);
+const threadOwner = new ThreadStateOwner({ commit: (input) => store.commit(input) });
 const now = () => new Date().toISOString() as Thread["createdAt"];
 const id = () => crypto.randomUUID();
 
@@ -433,14 +436,6 @@ async function readResearchStream(
   if (buffer.trim()) process(buffer);
 }
 
-async function startChatTurn(threadId: string, prompt: string): Promise<Thread | null> {
-  const thread = await store.load(threadId);
-  if (!thread) return null;
-  const timestamp = now();
-  const next: Thread = { ...thread, updatedAt: timestamp, turns: [...thread.turns, { id: id() as Thread["turns"][number]["id"], mode: "chat", status: "running", createdAt: timestamp, updatedAt: timestamp, userMessage: { id: id() as never, role: "user", content: prompt, createdAt: timestamp } }] };
-  return store.commit({ thread: next, reason: "query_started", committedAt: timestamp });
-}
-
 async function appendChatTurn(threadId: string, prompt: string, answer: string): Promise<Thread | null> {
   const thread = await store.load(threadId);
   if (!thread) return null;
@@ -458,7 +453,7 @@ async function saveTopic(
   query: string,
   mode: string,
   state: StreamState,
-  reason: "created" | "query_started" | "lookup_completed" | "research_stage" | "turn_completed" | "turn_failed" | "turn_interrupted" | "renamed" = "lookup_completed",
+  reason: "created" | "turn_completed" | "renamed" = "turn_completed",
 ): Promise<Thread> {
   const timestamp = now();
   const sources = state.sources.map((source, index) => ({
@@ -531,9 +526,6 @@ async function saveTopic(
   return store.commit({ thread, reason, committedAt: timestamp });
 }
 
-function transcriptMarkdown(thread: Thread): string {
-  return renderThreadScrollback(thread).markdown;
-}
 function sourcesForThread(thread: Thread): Result[] {
   return Array.from(new Map(thread.turns.flatMap((turn) => turn.researchRun?.sources ?? turn.lookupResults ?? []).map((source) => [source.sourceId, source])).values());
 }
@@ -547,100 +539,6 @@ function downloadMarkdown(markdown: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-function ExportWorkbench() {
-  const route = useParams();
-  const [params] = useSearchParams();
-  const [markdown, setMarkdown] = useState(
-    `# Dorothy Ann report: ${params.get("title") ?? "Untitled topic"}\n\n## Conclusion\n\n${params.get("answer") ?? ""}\n\n> This is research context, not executed or independently verified work.\n`,
-  );
-  const [preview, setPreview] = useState(false);
-  const [artifactId] = useState(() => id());
-  const [draftLoaded, setDraftLoaded] = useState(false);
-  const [savedMarkdown, setSavedMarkdown] = useState("");
-  const [message, setMessage] = useState("");
-  const sourceKey = `${route.threadId ?? "new"}:${route.draftId ?? "report"}`;
-  const initialMarkdown = `# Dorothy Ann report: ${params.get("title") ?? "Untitled topic"}\n\n## Conclusion\n\n${params.get("answer") ?? ""}\n\n> This is research context, not executed or independently verified work.\n`;
-  useEffect(() => {
-    let cancelled = false;
-    setDraftLoaded(false);
-    void (async () => {
-      const draft = await draftStore.loadBySourceKey(sourceKey);
-      if (draft) { if (!cancelled) { setMarkdown(draft.markdown); setSavedMarkdown(draft.markdown); } }
-      else if (route.draftId === "transcript" && route.threadId) {
-        const thread = await store.load(route.threadId);
-        if (thread && !cancelled) { const transcript = transcriptMarkdown(thread); setMarkdown(transcript); setSavedMarkdown(transcript); }
-      } else if (!cancelled) setSavedMarkdown(initialMarkdown);
-      if (!cancelled) setDraftLoaded(true);
-    })();
-    return () => { cancelled = true; };
-  }, [route.draftId, route.threadId, sourceKey]);
-  useEffect(() => {
-    if (!draftLoaded) return;
-    const timer = window.setTimeout(() => {
-      void draftStore.save({ schemaVersion: 1, id: artifactId as never, threadId: (route.threadId ?? "new") as never, sourceKey, format: route.draftId === "transcript" ? "transcript" : "dorothy_ann_report", scope: route.draftId === "transcript" ? "topic" : "answer", markdown, sourceUpdatedAt: now(), dirty: false, createdAt: now(), updatedAt: now() }).then(() => setSavedMarkdown(markdown));
-    }, 400);
-    return () => window.clearTimeout(timer);
-  }, [draftLoaded, markdown, route.draftId, route.threadId, sourceKey]);
-  const copy = async () => {
-    if (navigator.clipboard) { await navigator.clipboard.writeText(markdown); setMessage("Markdown copied."); }
-    else setMessage("Clipboard is unavailable; select the Markdown manually.");
-  };
-  const share = async () => {
-    if (navigator.share) await navigator.share({ title: params.get("title") ?? "Dorothy Ann report", text: markdown });
-    else setMessage("Native sharing is unavailable; use Copy Markdown or Download .md.");
-  };
-  const startOver = async () => {
-    const draft = await draftStore.loadBySourceKey(sourceKey);
-    if (draft) await draftStore.remove(draft.id);
-    setMarkdown(initialMarkdown);
-    setMessage("Draft cleared.");
-  };
-  const download = () => {
-    const url = URL.createObjectURL(
-      new Blob([markdown], { type: "text/markdown" }),
-    );
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "dorothy-ann-report.md";
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
-  return (
-    <main className={styles.shell}>
-      <header className={styles.header}>
-        <RotatingBrand to="/" />
-        <span className={styles.kicker}>report workbench</span>
-      </header>
-      <section className={styles.workbench}>
-        <div className={styles.workbenchActions}>
-          <button onClick={() => setPreview(false)} aria-pressed={!preview}>
-            Edit
-          </button>
-          <button onClick={() => setPreview(true)} aria-pressed={preview}>
-            Preview
-          </button>
-          <button onClick={() => void copy()}>Copy Markdown</button>
-          <button onClick={download}>Download .md</button>
-          <button onClick={() => void share()}>Share</button>
-          <button onClick={() => void startOver()}>Start over</button>
-        </div>
-        {draftLoaded && markdown !== savedMarkdown && <p role="status">Saving draft…</p>}
-        {message && <p role="status">{message}</p>}
-        {preview ? (
-          <article className={styles.preview}>
-            <pre>{markdown}</pre>
-          </article>
-        ) : (
-          <textarea
-            aria-label="Report Markdown"
-            value={markdown}
-            onChange={(event) => setMarkdown(event.target.value)}
-          />
-        )}
-      </section>
-    </main>
-  );
-}
 function Topic() {
   const [params] = useSearchParams();
   const route = useParams();
@@ -657,6 +555,7 @@ function Topic() {
   const [chatInput, setChatInput] = useState("");
   const [chatAnswer, setChatAnswer] = useState("");
   const [chatStage, setChatStage] = useState("");
+  const [chatSave, setChatSave] = useState<{ prompt: string; answer: string } | null>(null);
   const [thread, setThread] = useState<Thread | null>(null);
   const hasResearchHistory = Boolean(thread?.turns.some((turn) => turn.mode === "research" || turn.researchRun));
   const effectiveMode = mode === "research" || hasResearchHistory ? "research" : "lookup";
@@ -711,7 +610,6 @@ function Topic() {
           return;
         }
         setState({ stage: "starting", answer: "", sources: [] });
-        await saveTopic(threadId, query, mode, { stage: "starting", answer: "", sources: [] }, "query_started").then((committed) => { if (!cancelled) setThread(committed); });
         if (mode === "lookup") {
           const response = await fetch("/api/lookup", {
             method: "POST",
@@ -727,7 +625,6 @@ function Topic() {
               sources: data.results,
             };
             setState(next);
-            setThread(await saveTopic(threadId, query, mode, next));
           }
         } else {
           const controller = new AbortController();
@@ -759,7 +656,6 @@ function Topic() {
           const failure = interrupted ? "Research stopped." : error instanceof Error ? error.message : "request failed";
           const next = { ...state, stage: interrupted ? "interrupted" : "failed", error: failure };
           setState(next);
-          void saveTopic(threadId, query, mode, next, interrupted ? "turn_interrupted" : "turn_failed");
         }
       } finally { researchController.current = null; threadOwner.finish(`topic:${threadId}`, requestId); }
     };
@@ -770,10 +666,10 @@ function Topic() {
     };
   }, [mode, query, threadId]);
   useEffect(() => {
-    if (query && mode === "research" && state.stage === "complete")
-      void saveTopic(threadId, query, mode, state, state.error ? "turn_failed" : "turn_completed")
+    if (query && mode === "research" && state.stage === "complete" && !state.storageError)
+      void saveTopic(threadId, query, mode, state, "turn_completed")
         .then(setThread)
-        .catch((error) => setState((current) => ({ ...current, stage: "failed", error: error instanceof Error ? error.message : "turn_persist_failed" })));
+        .catch(() => setState((current) => ({ ...current, error: "not saved — retry", storageError: true })));
   }, [mode, query, threadId, state]);
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => {
@@ -803,7 +699,9 @@ function Topic() {
           {state.error && (
             <>
               <p role="alert">{state.error}</p>
-              <button onClick={() => window.location.reload()}>Retry</button>
+              {state.storageError ? (
+                <button onClick={async () => { try { const saved = await saveTopic(threadId, query, mode, { ...state, error: undefined, storageError: false }, "turn_completed"); setThread(saved); setState((current) => ({ ...current, error: undefined, storageError: false })); } catch { setState((current) => ({ ...current, error: "not saved — retry" })); } }}>Retry save</button>
+              ) : <button onClick={() => window.location.reload()}>Retry</button>}
             </>
           )}
           {isResearchMode && state.stage !== "complete" && Boolean(state.guidance || state.generatedQueries?.length) && (
@@ -828,20 +726,30 @@ function Topic() {
           )}
           <PromptBox value={chatInput} onChange={setChatInput} onCommand={(input) => { const command = parseSlashCommand(input); if (command === "/settings") navigate("/settings"); else if (command === "/new") navigate("/", { replace: true }); else if (command === "/threads") navigate("/threads"); else setCommandMessage(`Unknown command: ${input}`); }} onSubmit={async (prompt) => {
             setChatInput("");
+            setChatSave(null);
             if (effectiveMode === "lookup") {
               navigate(`/topics/${threadId}?mode=research&q=${encodeURIComponent(prompt)}`);
               return;
             }
             setChatAnswer(""); setChatStage("thinking");
-            const pending = await startChatTurn(threadId, prompt); if (pending) setThread(pending);
             const response = await fetch("/api/turn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: prompt, mode: "chat", context: `${state.answer}\n\nSources:\n${state.sources.map((source) => `${source.title}: ${source.snippet ?? source.url}`).join("\n")}` }) });
             if (!response.ok) { setChatStage("chat unavailable"); return; }
             let finalAnswer = "";
             await readResearchStream(response, (next) => { finalAnswer = next.answer; setChatAnswer(next.answer); setChatStage(next.stage); });
-            if (finalAnswer) { const committed = await appendChatTurn(threadId, prompt, finalAnswer); if (committed) setThread(committed); }
+            if (finalAnswer) {
+              try {
+                const committed = await appendChatTurn(threadId, prompt, finalAnswer);
+                if (!committed) throw new Error("not_saved");
+                setThread(committed);
+              } catch {
+                setChatSave({ prompt, answer: finalAnswer });
+                setChatStage("not saved — retry");
+              }
+            }
           }} />
           {commandMessage && <p className={styles.commandMessage} role="status">{commandMessage}</p>}
           {chatStage && <p className={styles.muted} aria-live="polite">{chatStage}</p>}
+          {chatSave && <button onClick={async () => { try { const committed = await appendChatTurn(threadId, chatSave.prompt, chatSave.answer); if (!committed) throw new Error("not_saved"); setThread(committed); setChatSave(null); setChatStage(""); } catch { setChatStage("not saved — retry"); } }}>Retry save</button>}
           {chatAnswer && <MarkdownAnswer className={styles.chatAnswer} markdown={chatAnswer} sources={state.sources} threadSeed={threadId} />}
           {mode === "lookup" && canPromoteToResearch(query) && (
             <Link
@@ -869,6 +777,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     void (async () => {
       try {
         const status = await fetch("/api/providers/status").then((response) => response.json()) as { fixtureMode?: boolean };
+        configureStore(status.fixtureMode !== false);
         if (!status.fixtureMode) {
           const session = await fetch("/api/auth/session").then((response) => response.json()) as { authenticated?: boolean };
           if (!session.authenticated) {
@@ -897,10 +806,6 @@ export function App() {
       <Route path="/unlock" element={<Unlock />} />
       <Route path="/settings" element={<Settings />} />
       <Route path="/threads" element={<ThreadsRoute />} />
-      <Route
-        path="/topics/:threadId/export/:draftId"
-        element={<ExportWorkbench />}
-      />
       <Route path="/topics/:threadId" element={<Topic />} />
       <Route path="*" element={<Home />} />
     </Routes>

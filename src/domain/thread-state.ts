@@ -1,10 +1,14 @@
-import { threadEnvelopeV2Schema, threadSchema } from "./schemas";
-import type { IsoTimestamp, StoredThreadEnvelopeV2, Thread } from "./types";
+import { threadEnvelopeV2Schema, threadSchema } from "./schemas.js";
+import type { IsoTimestamp, StoredThreadEnvelopeV2, Thread } from "./types.js";
 
 export const THREAD_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function isValidThread(value: unknown): value is Thread {
   return threadSchema.safeParse(value).success;
+}
+
+export function isDurableThread(value: unknown): value is Thread {
+  return isValidThread(value) && value.turns.length > 0 && value.turns.every((turn) => turn.status === "completed");
 }
 
 export function isValidEnvelope(value: unknown): value is StoredThreadEnvelopeV2 {

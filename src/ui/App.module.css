@@ -222,8 +222,7 @@
   white-space: nowrap;
   border: 0;
 }
-.card button,
-.workbenchActions button {
+.card button {
   border: 1px solid var(--ink);
   border-radius: 999px;
   background: var(--ink);
@@ -643,38 +642,6 @@
   display: block;
   margin: 2rem 0;
   font-weight: 700;
-}
-.workbench {
-  max-width: 900px;
-  margin: 8vh auto;
-}
-.workbenchActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  margin-bottom: 1rem;
-}
-.workbench textarea,
-.preview {
-  width: 100%;
-  min-height: 60vh;
-  padding: 1rem;
-  border: 1px solid var(--line);
-  border-radius: 0.7rem;
-  background: var(--paper);
-  color: var(--ink);
-  font:
-    1rem/1.6 "Helvetica Neue",
-    Helvetica,
-    Arial,
-    sans-serif;
-}
-.preview {
-  overflow: auto;
-}
-.preview pre {
-  white-space: pre-wrap;
-  margin: 0;
 }
 .muted {
   color: var(--muted);

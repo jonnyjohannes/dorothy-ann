@@ -10,8 +10,8 @@ describe("ThreadStateOwner", () => {
     const owner = new ThreadStateOwner({ commit });
     owner.begin("topic:1", "first");
     owner.begin("topic:1", "second");
-    const stale = await owner.commit("topic:1", "first", { thread, reason: "research_stage", committedAt: thread.updatedAt });
-    const current = await owner.commit("topic:1", "second", { thread, reason: "research_stage", committedAt: thread.updatedAt });
+    const stale = await owner.commit("topic:1", "first", { thread, reason: "turn_completed", committedAt: thread.updatedAt });
+    const current = await owner.commit("topic:1", "second", { thread, reason: "turn_completed", committedAt: thread.updatedAt });
     expect(stale).toBeNull();
     expect(current).toEqual(thread);
     expect(commit).toHaveBeenCalledTimes(1);

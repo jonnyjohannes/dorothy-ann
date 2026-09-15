@@ -1,5 +1,5 @@
 export type Brand<T, Name extends string> = T & { readonly __brand: Name };
-export type ThreadId = Brand<string, "ThreadId">; export type TurnId = Brand<string, "TurnId">; export type MessageId = Brand<string, "MessageId">; export type ResearchRunId = Brand<string, "ResearchRunId">; export type SourceId = Brand<string, "SourceId">; export type ArtifactDraftId = Brand<string, "ArtifactDraftId">; export type IsoTimestamp = Brand<string, "IsoTimestamp">;
+export type ThreadId = Brand<string, "ThreadId">; export type TurnId = Brand<string, "TurnId">; export type MessageId = Brand<string, "MessageId">; export type ResearchRunId = Brand<string, "ResearchRunId">; export type SourceId = Brand<string, "SourceId">; export type IsoTimestamp = Brand<string, "IsoTimestamp">;
 export type TurnStatus = "pending" | "running" | "completed" | "failed" | "interrupted";
 export type TurnMode = "chat" | "research";
 export type AssistantContentPart = { type: "text"; markdown: string } | { type: "citation"; sourceId: SourceId };
@@ -19,9 +19,7 @@ export interface ResearchRun { id: ResearchRunId; origin: "search" | "promoted_l
 export interface TurnFailure { stage: "search" | "extraction" | "synthesis" | "chat" | "report"; code: string; message: string; retryable: boolean; occurredAt: IsoTimestamp }
 export interface Turn { id: TurnId; mode: TurnMode; status: TurnStatus; createdAt: IsoTimestamp; updatedAt: IsoTimestamp; userMessage: UserMessage; assistantMessage?: AssistantMessage; lookupResults?: SearchResult[]; researchRun?: ResearchRun; failure?: TurnFailure }
 export interface Thread { schemaVersion: 1 | 2; id: ThreadId; title: string; createdAt: IsoTimestamp; updatedAt: IsoTimestamp; modelRef: string; searchRef: string; turns: Turn[] }
-export type ThreadSaveReason = "created" | "query_started" | "lookup_completed" | "research_stage" | "turn_completed" | "turn_failed" | "turn_interrupted" | "renamed";
+export type ThreadSaveReason = "created" | "turn_completed" | "renamed";
 export interface ThreadCommit { thread: Thread; reason: ThreadSaveReason; requestId?: string; committedAt: IsoTimestamp }
 export interface StoredThreadEnvelopeV2 { schemaVersion: 2; thread: Thread; lastMeaningfulActivityAt: IsoTimestamp; expiresAt: IsoTimestamp }
 export interface ThreadSummary { id: ThreadId; title: string; createdAt: IsoTimestamp; updatedAt: IsoTimestamp; lastTurnPreview?: string }
-export interface ArtifactDraft { schemaVersion: 1; id: ArtifactDraftId; threadId: ThreadId; sourceKey: string; format: "dorothy_ann_report" | "transcript"; scope: "answer" | "topic"; turnId?: TurnId; markdown: string; sourceUpdatedAt: IsoTimestamp; dirty: boolean; createdAt: IsoTimestamp; updatedAt: IsoTimestamp }
-export interface ExportArtifact { format: "dorothy_ann_report" | "transcript"; scope: "answer" | "topic"; filename: string; mimeType: "text/markdown"; markdown: string; generatedAt: IsoTimestamp; sourceUpdatedAt: IsoTimestamp }
