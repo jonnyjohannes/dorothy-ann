@@ -305,7 +305,7 @@ function ThreadPicker({ onClose, embedded = false }: { onClose: () => void; embe
       setTopics((current) => current.filter((candidate) => candidate.id !== topic.id));
       if (activeThreadId === topic.id) navigate("/", { replace: true });
       refresh();
-    }).catch(() => setDeleteError("That topic could not be deleted."));
+    }).catch((error) => setDeleteError(`That topic could not be deleted: ${error instanceof Error ? error.message : "storage_error"}`));
   };
   useEffect(refresh, []);
   useEffect(() => {
@@ -324,7 +324,7 @@ function ThreadPicker({ onClose, embedded = false }: { onClose: () => void; embe
   const picker = <section className={`${styles.threadPicker} ${embedded ? styles.threadPickerInline : ""}`} role={embedded ? undefined : "dialog"} aria-modal={embedded ? undefined : "true"} aria-label="Saved threads">
       <h2 className={styles.pageTitle}><code>/threads</code></h2>
       <input className={styles.threadSearch} aria-label="Find threads" placeholder="find threads" value={filter} autoFocus onChange={(event) => { setFilter(event.target.value); setActive(0); }} />
-      {loadError ? <p role="alert" className={styles.muted}>Could not load threads: {loadError}</p> : visibleTopics.length ? <ul>{visibleTopics.map((topic, index) => <li key={topic.id} className={`${styles.threadRow} ${index === selectedIndex ? styles.threadSelected : ""}`}><button autoFocus={false} aria-current={index === selectedIndex ? "true" : undefined} onKeyDown={(event) => { if ((event.key === "Delete" || event.key === "Backspace") && index === selectedIndex) { event.preventDefault(); event.stopPropagation(); deleteTopic(topic); } }} onClick={() => navigate(`/topics/${topic.id}`, { replace: true })}>{topic.title}<small>{topic.lastTurnPreview ?? ""}</small></button><button className={styles.threadDelete} aria-label={`Delete ${topic.title}`} onKeyDown={(event) => { if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); event.stopPropagation(); deleteTopic(topic); } }} onClick={() => deleteTopic(topic)}>×</button></li>)}</ul> : <p className={styles.muted}>{filter ? "No matching threads." : "No saved threads yet."}</p>}
+      {loadError ? <p role="alert" className={styles.muted}>Could not load threads: {loadError}</p> : visibleTopics.length ? <ul>{visibleTopics.map((topic, index) => <li key={topic.id} className={`${styles.threadRow} ${index === selectedIndex ? styles.threadSelected : ""}`}><button type="button" autoFocus={false} aria-current={index === selectedIndex ? "true" : undefined} onKeyDown={(event) => { if ((event.key === "Delete" || event.key === "Backspace") && index === selectedIndex) { event.preventDefault(); event.stopPropagation(); deleteTopic(topic); } }} onClick={() => navigate(`/topics/${topic.id}`, { replace: true })}>{topic.title}<small>{topic.lastTurnPreview ?? ""}</small></button><button type="button" className={styles.threadDelete} aria-label={`Delete ${topic.title}`} onKeyDown={(event) => { if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); event.stopPropagation(); deleteTopic(topic); } }} onClick={(event) => { event.preventDefault(); event.stopPropagation(); deleteTopic(topic); }}>×</button></li>)}</ul> : <p className={styles.muted}>{filter ? "No matching threads." : "No saved threads yet."}</p>}
       {deleteError && <p role="alert" className={styles.muted}>{deleteError}</p>}
       <p className={styles.muted}>↑/↓ select · Enter open · Delete remove · Escape close</p>
     </section>;
