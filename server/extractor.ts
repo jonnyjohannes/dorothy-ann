@@ -164,7 +164,16 @@ export class SafeContentExtractor implements ContentExtractor {
     private readonly fetcher: FetchWithDispatcher = fetchWithDispatcher,
   ) {}
 
-  async extract(
+  async extract(source: SearchResult, limits: ExtractionLimits): Promise<ExtractionOutcome> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<ExtractionOutcome>((resolve) => {
+      timer = setTimeout(() => resolve({ sourceId: source.sourceId, status: "failed", code: "timeout", retryable: true }), limits.timeoutMs);
+    });
+    try { return await Promise.race([this.extractInternal(source, limits), timeout]); }
+    finally { if (timer) clearTimeout(timer); }
+  }
+
+  private async extractInternal(
     source: SearchResult,
     limits: ExtractionLimits,
   ): Promise<ExtractionOutcome> {

@@ -16,11 +16,11 @@ Ask a quick question. Open the evidence. Go deeper when it matters. Keep the sou
 - 🔐 **small private research desk** with passphrase access
 - 🧪 **fixture mode** so the app can be developed without live provider credentials
 
-The alpha keeps the architecture deliberately portable: Brave handles discovery, the application owns extraction and evidence handling, Anthropic handles synthesis, and the core application stays behind provider-neutral interfaces.
+The architecture stays deliberately portable: Brave handles discovery, the application owns extraction and evidence handling, Anthropic handles synthesis, and the core application stays behind provider-neutral interfaces.
 
 ## project status
 
-This repository currently contains the implementation plan and repository guide. The app is being built in small, verifiable steps from the [Dorothy Ann v1.0.0-alpha plan](docs/plans/dorothy-ann-v1.0.0-alpha.md).
+Dorothy Ann v1.0.0 is launched and serving as a real browser default search engine. The completed [v1.0.0 plan](docs/plans/dorothy-ann-v1.0.0.md) records the adaptive research behavior, verification, and release state; focused patches can follow real-world use.
 
 ## screenshots
 
@@ -28,7 +28,9 @@ The visual tour will land here once the first browser build has something photog
 
 ## documentation
 
-- [Implementation plan](docs/plans/dorothy-ann-v1.0.0-alpha.md) — product behavior, architecture, contracts, UX states, and build ledger
+- [v1.0.0 plan](docs/plans/dorothy-ann-v1.0.0.md) — adaptive research behavior, architecture, verification, and release record
+- [v1.0.0-alpha2 plan](docs/plans/dorothy-ann-v1.0.0-alpha2.md) — persistent workspace and browser shell milestone
+- [v1.0.0-alpha1 plan](docs/plans/dorothy-ann-v1.0.0-alpha1.md) — foundational product and implementation specification
 - [Repository guide](AGENTS.md) — working boundaries, verification habits, and agent instructions
 
 ## the north star

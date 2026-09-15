@@ -2,7 +2,7 @@
 
 ## Source of truth
 
-- The active specification is [`docs/plans/dorothy-ann-v1.0.0-alpha.md`](docs/plans/dorothy-ann-v1.0.0-alpha.md).
+- The active specification is [`docs/plans/dorothy-ann-v1.0.0.md`](docs/plans/dorothy-ann-v1.0.0.md).
 - Read its `Current State`, `Handoff`, `Implementation Plan`, and `Plan Ledger` before changing code.
 - Keep product behavior, UX states, contracts, provider rationale, and deferred scope in the plan; do not duplicate them here.
 - During implementation, update the plan's Current State, Handoff, and ledger status as work progresses.
@@ -14,7 +14,7 @@
 - Keep provider, runtime, persistence, authentication, and extraction implementations behind their documented ports.
 - Vercel is the deployment target, but platform-specific code belongs only in thin runtime/configuration adapters.
 - Keep ordinary UI state local to React. Use XState only for the workflows named in the plan.
-- Do not add deferred features while implementing alpha. If scope appears necessary, stop and amend the plan before coding it.
+- Do not add deferred features while implementing a milestone or patch. If scope appears necessary, stop and amend the active plan before coding it.
 
 ## Expected directory roles
 

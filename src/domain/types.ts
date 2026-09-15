@@ -13,7 +13,9 @@ export type ExtractionOutcome = { sourceId: SourceId; status: "viable"; page: Ex
 export interface ContextEvidence { source: SearchResult; page: ExtractedPage }
 export interface EvidencePack { query: string; sources: ContextEvidence[]; createdAt: IsoTimestamp }
 export type ResearchRunStatus = "searching" | "extracting" | "ready" | "partial" | "insufficient_evidence" | "synthesizing" | "completed" | "failed" | "interrupted";
-export interface ResearchRun { id: ResearchRunId; origin: "search" | "promoted_lookup"; status: ResearchRunStatus; queries: string[]; lookupId?: string; targetViablePages: number; sources: SearchResult[]; extractions: ExtractionOutcome[]; evidenceSourceIds: SourceId[]; startedAt: IsoTimestamp; updatedAt: IsoTimestamp; completedAt?: IsoTimestamp; failure?: TurnFailure }
+export interface ResearchQuery { query: string; purpose: string; priority: 1 | 2 | 3 }
+export type ResearchDecision = { status: "ready"; queries: [] } | { status: "needs_more_research"; guidance: string; queries: ResearchQuery[] }
+export interface ResearchRun { id: ResearchRunId; origin: "search" | "promoted_lookup"; status: ResearchRunStatus; queries: string[]; generatedQueries?: ResearchQuery[]; planner?: ResearchDecision; guidance?: string; lookupId?: string; targetViablePages: number; sources: SearchResult[]; extractions: ExtractionOutcome[]; evidenceSourceIds: SourceId[]; startedAt: IsoTimestamp; updatedAt: IsoTimestamp; completedAt?: IsoTimestamp; failure?: TurnFailure }
 export interface TurnFailure { stage: "search" | "extraction" | "synthesis" | "chat" | "report"; code: string; message: string; retryable: boolean; occurredAt: IsoTimestamp }
 export interface Turn { id: TurnId; mode: TurnMode; status: TurnStatus; createdAt: IsoTimestamp; updatedAt: IsoTimestamp; userMessage: UserMessage; assistantMessage?: AssistantMessage; lookupResults?: SearchResult[]; researchRun?: ResearchRun; failure?: TurnFailure }
 export interface Thread { schemaVersion: 1 | 2; id: ThreadId; title: string; createdAt: IsoTimestamp; updatedAt: IsoTimestamp; modelRef: string; searchRef: string; turns: Turn[] }

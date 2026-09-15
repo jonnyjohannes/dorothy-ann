@@ -1,9 +1,9 @@
-# Dorothy Ann v1.0.0-alpha
+# Dorothy Ann v1.0.0-alpha1 — foundational specification
 
 ## Current State
 
 - Status: alpha2 implementation complete
-- Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha.md`
+- Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha1.md`
 - Last updated: 2026-09-06
 - Current focus: alpha2 browser `q` entry verified locally; optional lookup thumbnails deferred after UI review
 - Handoff lives in: [`## Handoff`](#handoff)

@@ -39,6 +39,8 @@ describe("portable Hono API", () => {
     const body = await response.text();
     expect(response.status).toBe(200);
     expect(body).toContain("event: research.extraction");
+    expect(body).toContain("event: research.planning");
+    expect(body).toContain("event: research.plan");
     expect(body).toContain("event: turn.completed");
   });
   it("requires an owner session outside fixture mode", async () => {

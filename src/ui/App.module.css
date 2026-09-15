@@ -54,16 +54,31 @@
 }
 .hero {
   width: min(100%, 1100px);
-  margin: 14vh auto 0;
+  margin: calc(10vh + 2.5rem) auto 0;
 }
 .hero h1,
-.topic h1 {
+.topic h1,
+.pageTitle {
   font-family: var(--display);
   font-size: clamp(2rem, 5vw, 3.5rem);
   font-weight: 700;
   line-height: 0.98;
   letter-spacing: -0.06em;
   margin: 0.4rem 0 2rem;
+}
+.pageTitle {
+  font-family: inherit;
+  font-size: 1.35rem;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: normal;
+  margin: 0.4rem 0 2rem;
+}
+.pageTitle code {
+  color: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.95em;
+  font-weight: 500;
 }
 .kicker {
   color: var(--ink);
@@ -487,6 +502,27 @@
 .promptBox > input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); padding: 0.85rem 0.7rem; }
 .promptHint { align-self: center; color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
 .commandMessage { width: min(100%, 72rem); margin: 1rem auto; color: var(--muted); }
+.researchPlanLive {
+  margin: 2rem 0;
+  padding: 1rem 1.25rem;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--muted);
+}
+.researchPlanLabel {
+  display: block;
+  margin-top: 0.75rem;
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+}
+.researchPlanLabel:first-child { margin-top: 0; }
+.researchPlanLive p { margin: 0.35rem 0; }
+.researchPlanLive ol { margin: 0.35rem 0 0; padding-left: 1.5rem; }
+.researchPlanLive li { margin: 0.45rem 0; }
+.researchPlanLive code { color: inherit; font: inherit; }
+.researchPlanLive small { display: block; color: var(--muted); }
 .researchLoader { display: flex; align-items: center; gap: 0.75rem; margin: 3rem 0 1rem; color: var(--muted); }
 .loaderBars { display: inline-flex; align-items: end; gap: 0.18rem; height: 1.5rem; border-left: 3px solid var(--accent); padding-left: 0.6rem; }
 .loaderBars i { display: block; width: 0.22rem; height: 0.6rem; background: var(--accent); animation: loaderPulse 0.9s ease-in-out infinite alternate; }
@@ -503,6 +539,16 @@
   box-shadow: none;
   background: transparent;
 }
+.threadSearch {
+  width: 100%;
+  margin: 1rem 0;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--ink);
+  padding: 0.75rem 0.8rem;
+  font: inherit;
+}
 .threadPicker ul { max-height: 55vh; overflow: auto; margin: 1rem 0; padding: 0; list-style: none; }
 .threadRow {
   display: flex;
@@ -516,6 +562,7 @@
 .threadPicker li button small { color: var(--muted); margin-top: 0.25rem; }
 .threadPicker .threadSelected button { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .threadPicker li button:focus-visible { outline: none; }
+.threadPicker .threadSearch:focus-visible { border-color: var(--accent); outline: 0; }
 .chatForm {
   position: sticky;
   bottom: 0;
@@ -639,6 +686,6 @@
   }
   .hero,
   .topic {
-    margin-top: 8vh;
+    margin-top: calc(8vh + 2.5rem);
   }
 }

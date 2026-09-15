@@ -1,4 +1,4 @@
-# Dorothy Ann post-alpha / alpha2
+# Dorothy Ann v1.0.0-alpha2 — persistent research workspace
 
 ## Current State
 
@@ -58,7 +58,7 @@ The post-alpha user should be able to open Dorothy Ann, ask one thing, inspect w
 
 ## Context
 
-The alpha plan is the current behavioral baseline: [`dorothy-ann-v1.0.0-alpha.md`](./dorothy-ann-v1.0.0-alpha.md). The current implementation already has:
+The alpha1 plan is the behavioral baseline: [`dorothy-ann-v1.0.0-alpha1.md`](./dorothy-ann-v1.0.0-alpha1.md). The current implementation already has:
 
 - a React/Vite shell with home, topic, settings, drawer, evidence, and export routes;
 - lookup and research result rendering;

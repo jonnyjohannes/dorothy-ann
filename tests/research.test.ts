@@ -53,12 +53,106 @@ describe("research orchestration", () => {
       context: "wwdc 2026 apple news",
       search: { search: async () => { searchCalled = true; return sources; } },
       extractor: { extract: async (source) => ({ sourceId: source.sourceId, status: "viable" as const, page: { sourceId: source.sourceId, canonicalUrl: source.canonicalUrl, title: source.title, text: "evidence", extractedAt: new Date().toISOString() as never, characterCount: 8 } }) },
-      chat: { stream: async function* (input) { synthesisInput = input.currentUserContent; systemInstruction = input.systemInstruction; yield { type: "completed" as const }; } },
+      chat: { stream: async function* (input) { synthesisInput = input.currentUserContent; systemInstruction = input.systemInstruction; yield { type: "content" as const, part: { type: "text" as const, markdown: "answer" } }; } },
     })) { void event; }
     expect(searchCalled).toBe(false);
     expect(synthesisInput).toContain("wwdc 2026 apple news");
     expect(synthesisInput).toContain("what were the highlights");
     expect(systemInstruction).toContain('must begin exactly with "According to my research..."');
+  });
+
+  it("fails instead of completing a turn with empty synthesis", async () => {
+    await expect(async () => {
+      for await (const event of runResearch("question", "turn-empty-synthesis", {
+        fixture: false,
+        maxResults: 3,
+        seedSources: sources.slice(0, 1),
+        extractor: { extract: async (source) => ({ sourceId: source.sourceId, status: "viable" as const, page: { sourceId: source.sourceId, canonicalUrl: source.canonicalUrl, title: source.title, text: "evidence", extractedAt: new Date().toISOString() as never, characterCount: 8 } }) },
+        chat: { planResearch: async () => ({ status: "ready" as const, queries: [] as [] }), stream: async function* () { yield { type: "completed" as const }; } },
+      })) { void event; }
+    }).rejects.toThrow("synthesis_empty");
+  });
+
+  it("fails visibly instead of silently bypassing fan-out when planning is invalid", async () => {
+    const events = [];
+    await expect(async () => {
+      for await (const event of runResearch("question", "turn-planner-fallback", {
+        fixture: false,
+        maxResults: 3,
+        seedSources: sources.slice(0, 1),
+        extractor: { extract: async (source) => ({ sourceId: source.sourceId, status: "viable" as const, page: { sourceId: source.sourceId, canonicalUrl: source.canonicalUrl, title: source.title, text: "evidence", extractedAt: new Date().toISOString() as never, characterCount: 8 } }) },
+        chat: { planResearch: async () => { throw new Error("planner_invalid_schema"); }, stream: async function* () { yield { type: "completed" as const }; } },
+      })) events.push(event);
+    }).rejects.toThrow("planner_invalid_schema");
+    expect(events).toContainEqual({ type: "research.planner.failed", code: "planner_invalid_schema" });
+    expect(events.some((event) => event.type === "answer.delta")).toBe(false);
+  });
+
+  it("enforces the exact research opening for a planner-ready answer", async () => {
+    const answers: string[] = [];
+    for await (const event of runResearch("question", "turn-opening", {
+      fixture: false,
+      maxResults: 3,
+      seedSources: sources.slice(0, 1),
+      extractor: { extract: async (source) => ({ sourceId: source.sourceId, status: "viable" as const, page: { sourceId: source.sourceId, canonicalUrl: source.canonicalUrl, title: source.title, text: "evidence", extractedAt: new Date().toISOString() as never, characterCount: 8 } }) },
+      chat: { planResearch: async () => ({ status: "ready" as const, queries: [] as [] }), stream: async function* () { yield { type: "content" as const, part: { type: "text" as const, markdown: "A synthesized answer." } }; } },
+    })) if (event.type === "answer.delta") answers.push(event.markdown);
+    expect(answers.join("" )).toMatch(/^According to my research\.\.\./);
+  });
+
+  it("normalizes a provider opening without duplicating the research preamble", async () => {
+    const answers: string[] = [];
+    for await (const event of runResearch("question", "turn-opening-duplicate", {
+      fixture: false,
+      maxResults: 3,
+      seedSources: sources.slice(0, 1),
+      extractor: { extract: async (source) => ({ sourceId: source.sourceId, status: "viable" as const, page: { sourceId: source.sourceId, canonicalUrl: source.canonicalUrl, title: source.title, text: "evidence", extractedAt: new Date().toISOString() as never, characterCount: 8 } }) },
+      chat: { planResearch: async () => ({ status: "ready" as const, queries: [] as [] }), stream: async function* () { yield { type: "content" as const, part: { type: "text" as const, markdown: "According to my research, the answer is here." } }; } },
+    })) if (event.type === "answer.delta") answers.push(event.markdown);
+    expect(answers.join("")).toBe("According to my research...\n\nthe answer is here.");
+  });
+
+  it("lets the planner request up to three visible searches and synthesizes merged evidence", async () => {
+    const planned: SearchResult[] = [{ ...sources[1], sourceId: "extra" as never, rank: 1 }];
+    const events = [];
+    let searchCalls = 0;
+    let synthesisInput = "";
+    for await (const event of runResearch("compare these options", "turn-4", {
+      fixture: false,
+      maxResults: 3,
+      search: { search: async (query) => { searchCalls += 1; return query === "check option one" ? planned : sources.slice(0, 1); } },
+      extractor: { extract: async (source) => ({ sourceId: source.sourceId, status: "viable" as const, page: { sourceId: source.sourceId, canonicalUrl: source.canonicalUrl, title: source.title, text: `evidence for ${source.title}`, extractedAt: new Date().toISOString() as never, characterCount: 20 } }) },
+      chat: {
+        planResearch: async () => ({ status: "needs_more_research" as const, guidance: "compare the two options", queries: [{ query: "check option one", purpose: "verify option one", priority: 1 as const }] }),
+        stream: async function* (input) { synthesisInput = input.currentUserContent; yield { type: "content" as const, part: { type: "text" as const, markdown: "According to my research..." } }; },
+      },
+    })) events.push(event);
+    expect(searchCalls).toBe(2);
+    expect(events.find((event) => event.type === "research.plan")).toMatchObject({ plan: { status: "needs_more_research" } });
+    expect(events.find((event) => event.type === "research.followup.query")).toMatchObject({ query: { query: "check option one" } });
+    expect(synthesisInput).toContain("compare the two options");
+    expect(events.filter((event) => event.type === "turn.completed")).toHaveLength(1);
+  });
+
+  it("extracts all generated-query sources in one bounded concurrent batch", async () => {
+    let active = 0;
+    let peak = 0;
+    const extra = (number: number): SearchResult => ({ sourceId: `extra-${number}` as never, rank: 1, title: `Extra ${number}`, url: `https://extra.example/${number}`, canonicalUrl: `https://extra.example/${number}`, displayUrl: `extra.example/${number}` });
+    const events = [];
+    for await (const event of runResearch("compare", "turn-5", {
+      fixture: false,
+      maxResults: 3,
+      maxConcurrent: 3,
+      seedSources: sources.slice(0, 1),
+      search: { search: async (query) => [extra(Number(query.slice(-1)))] },
+      extractor: { extract: async (source) => { active += 1; peak = Math.max(peak, active); await new Promise((resolve) => setTimeout(resolve, 10)); active -= 1; return { sourceId: source.sourceId, status: "viable" as const, page: { sourceId: source.sourceId, canonicalUrl: source.canonicalUrl, title: source.title, text: "evidence", extractedAt: new Date().toISOString() as never, characterCount: 8 } }; } },
+      chat: {
+        planResearch: async () => ({ status: "needs_more_research" as const, guidance: "compare", queries: [1, 2, 3].map((number) => ({ query: `query ${number}`, purpose: `angle ${number}`, priority: number as 1 | 2 | 3 })) }),
+        stream: async function* () { yield { type: "content" as const, part: { type: "text" as const, markdown: "answer" } }; },
+      },
+    })) events.push(event);
+    expect(peak).toBe(3);
+    expect(events.find((event) => event.type === "research.followup.extracting")).toMatchObject({ queryCount: 3, sourceCount: 3 });
   });
 
   it("does not synthesize without viable evidence", async () => {

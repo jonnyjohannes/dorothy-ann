@@ -10,7 +10,7 @@ import {
 } from "react-router-dom";
 import { LocalArtifactDraftStore, LocalThreadStore } from "../adapters/browser/local-stores";
 import { ThreadStateOwner } from "../application/thread-owner";
-import type { SearchResult, Thread, ThreadSummary } from "../domain/types";
+import type { ResearchDecision, ResearchQuery, SearchResult, Thread, ThreadSummary } from "../domain/types";
 import { renderThreadScrollback } from "../domain/thread-state";
 import { canPromoteToResearch, parseSlashCommand, resolveQueryMode } from "../domain/policies";
 import styles from "./App.module.css";
@@ -23,10 +23,13 @@ type StreamState = {
   answer: string;
   sources: Result[];
   error?: string;
+  guidance?: string;
+  generatedQueries?: ResearchQuery[];
+  plan?: ResearchDecision;
 };
 const store = new LocalThreadStore();
 const draftStore = new LocalArtifactDraftStore();
-const rotatingTaglines = ["dorothy ann", "take chances", "make mistakes", "get messy"] as const;
+const rotatingTaglines = ["take chances", "make mistakes", "get messy"] as const;
 const threadOwner = new ThreadStateOwner(store);
 const now = () => new Date().toISOString() as Thread["createdAt"];
 const id = () => crypto.randomUUID();
@@ -55,7 +58,7 @@ function BackupControls() {
     } catch { setMessage("That backup could not be imported."); }
   };
   return <section className={styles.backupControls} aria-label="Data backup">
-    <h2>Data</h2>
+    <p>threads have a 7 day ttl from last activity.</p>
     <button className={styles.textButton} onClick={() => void download()}>Export backup</button>
     <button className={styles.textButton} onClick={() => input.current?.click()}>Import backup</button>
     <input ref={input} type="file" accept="application/json" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void importBackup(file); event.target.value = ""; }} />
@@ -194,17 +197,9 @@ function Settings() {
   const navigate = useNavigate();
   return (
     <SecondaryLayout label="settings" onClose={() => navigate("/", { replace: true })}>
-      <h1>Settings</h1>
-      <section className={styles.settingsSection}>
-        <h2>Appearance</h2>
-        <p>Choose how dorothy-ann looks on this device.</p>
-        <p><ThemeControl /></p>
-      </section>
-      <section className={styles.settingsSection}>
-        <h2>Storage and retention</h2>
-        <p>Saved topics stay in this browser for 7 days after meaningful activity. Expired topics are removed automatically; backups preserve an unexpired topic’s original expiry.</p>
-        <BackupControls />
-      </section>
+      <h2 className={styles.pageTitle}><code>/settings</code></h2>
+      <p><ThemeControl /></p>
+      <BackupControls />
     </SecondaryLayout>
   );
 }
@@ -215,32 +210,43 @@ function ThreadPicker({ onClose, embedded = false }: { onClose: () => void; embe
   const activeThreadId = route.threadId;
   const [topics, setTopics] = useState<ThreadSummary[]>([]);
   const [active, setActive] = useState(0);
-  const selectedIndex = topics.length ? Math.min(active, topics.length - 1) : 0;
-  const focused = topics[selectedIndex];
+  const [filter, setFilter] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const visibleTopics = topics.filter((topic) => topic.title.toLocaleLowerCase().includes(filter.toLocaleLowerCase()));
+  const selectedIndex = visibleTopics.length ? Math.min(active, visibleTopics.length - 1) : 0;
+  const focused = visibleTopics[selectedIndex];
   const refresh = () => void store.list().then((next) => {
     setTopics(next);
     setActive((value) => Math.min(value, Math.max(0, next.length - 1)));
   });
   const deleteTopic = (topic: ThreadSummary) => {
     if (!window.confirm(`Delete “${topic.title}”?`)) return;
-    void store.remove(topic.id).then(() => { if (activeThreadId === topic.id) navigate("/", { replace: true }); refresh(); });
+    setDeleteError("");
+    void store.remove(topic.id).then(() => {
+      setTopics((current) => current.filter((candidate) => candidate.id !== topic.id));
+      if (activeThreadId === topic.id) navigate("/", { replace: true });
+      refresh();
+    }).catch(() => setDeleteError("That topic could not be deleted."));
   };
   useEffect(refresh, []);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!embedded && event.key === "Escape") { event.preventDefault(); onClose(); }
+      const editingFilter = event.target instanceof HTMLInputElement && event.target.classList.contains(styles.threadSearch);
+      if (editingFilter && (event.key === "Delete" || event.key === "Backspace")) return;
       if ((event.key === "Delete" || event.key === "Backspace") && focused) { event.preventDefault(); deleteTopic(focused); }
-      if (event.key === "ArrowDown") { event.preventDefault(); setActive((value) => Math.min(value + 1, Math.max(0, topics.length - 1))); }
+      if (event.key === "ArrowDown") { event.preventDefault(); setActive((value) => Math.min(value + 1, Math.max(0, visibleTopics.length - 1))); }
       if (event.key === "ArrowUp") { event.preventDefault(); setActive((value) => Math.max(0, value - 1)); }
       if (event.key === "Enter" && focused) { event.preventDefault(); navigate(`/topics/${focused.id}`, { replace: true }); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, focused, navigate, onClose, topics.length]);
+  }, [active, focused, navigate, onClose, visibleTopics.length]);
   const picker = <section className={`${styles.threadPicker} ${embedded ? styles.threadPickerInline : ""}`} role={embedded ? undefined : "dialog"} aria-modal={embedded ? undefined : "true"} aria-label="Saved threads">
-      <p className={styles.kicker}>/threads</p>
-      <h2>Saved threads</h2>
-      {topics.length ? <ul>{topics.map((topic, index) => <li key={topic.id} className={`${styles.threadRow} ${index === selectedIndex ? styles.threadSelected : ""}`}><button autoFocus={index === selectedIndex} aria-current={index === selectedIndex ? "true" : undefined} onKeyDown={(event) => { if ((event.key === "Delete" || event.key === "Backspace") && index === selectedIndex) { event.preventDefault(); deleteTopic(topic); } }} onClick={() => navigate(`/topics/${topic.id}`, { replace: true })}>{topic.title}<small>{topic.lastTurnPreview ?? ""}</small></button><button className={styles.threadDelete} aria-label={`Delete ${topic.title}`} onClick={() => deleteTopic(topic)}>Delete</button></li>)}</ul> : <p className={styles.muted}>No saved threads yet.</p>}
+      <h2 className={styles.pageTitle}><code>/threads</code></h2>
+      <input className={styles.threadSearch} aria-label="Find threads" placeholder="find threads" value={filter} autoFocus onChange={(event) => { setFilter(event.target.value); setActive(0); }} />
+      {visibleTopics.length ? <ul>{visibleTopics.map((topic, index) => <li key={topic.id} className={`${styles.threadRow} ${index === selectedIndex ? styles.threadSelected : ""}`}><button autoFocus={false} aria-current={index === selectedIndex ? "true" : undefined} onKeyDown={(event) => { if ((event.key === "Delete" || event.key === "Backspace") && index === selectedIndex) { event.preventDefault(); event.stopPropagation(); deleteTopic(topic); } }} onClick={() => navigate(`/topics/${topic.id}`, { replace: true })}>{topic.title}<small>{topic.lastTurnPreview ?? ""}</small></button><button className={styles.threadDelete} aria-label={`Delete ${topic.title}`} onClick={() => deleteTopic(topic)}>Delete</button></li>)}</ul> : <p className={styles.muted}>{filter ? "No matching threads." : "No saved threads yet."}</p>}
+      {deleteError && <p role="alert" className={styles.muted}>{deleteError}</p>}
       <p className={styles.muted}>↑/↓ select · Enter open · Delete remove · Escape close</p>
     </section>;
   return embedded ? picker : <div className={styles.commandOverlay} role="dialog" aria-modal="true" aria-label="Saved threads">{picker}</div>;
@@ -299,8 +305,7 @@ function Home() {
       </header>
       {threads && <ThreadPicker onClose={() => setThreads(false)} />}
       <section className={styles.hero}>
-        <h1>commands</h1>
-        <p className={styles.muted}>commands:</p>
+        <h2 className={styles.pageTitle}><code>according to my research...</code></h2>
         <div className={styles.commandList}>
           <p><code>/new</code> — <code>&lt;esc&gt;</code> <code>&lt;esc&gt;</code></p>
           <p><code>/settings</code> — <code>&lt;alt&gt;</code> + <code>c</code></p>
@@ -328,7 +333,16 @@ async function readResearchStream(
     if (!event || !data || event === "heartbeat") return;
     const payload = JSON.parse(data) as Record<string, unknown>;
     if (event === "research.sources") state = { ...state, stage: "sources found", sources: (payload.sources as Result[]) ?? [] };
+    else if (event === "research.extracting") state = { ...state, stage: "extracting evidence" };
     else if (event === "research.extraction") state = { ...state, stage: "extracting evidence" };
+    else if (event === "research.planning") state = { ...state, stage: "planning" };
+    else if (event === "research.planner.failed") state = { ...state, stage: "synthesizing" };
+    else if (event === "research.plan") { const plan = payload.plan as ResearchDecision; state = { ...state, stage: plan.status === "ready" ? "synthesizing" : "research direction", guidance: "guidance" in plan ? plan.guidance : undefined, generatedQueries: plan.queries, plan }; }
+    else if (event === "research.followup.query") { const planned = payload.query as ResearchQuery; state = { ...state, stage: "searching additional angles", generatedQueries: state.generatedQueries?.some((query) => query.query === planned.query) ? state.generatedQueries : [...(state.generatedQueries ?? []), planned] }; }
+    else if (event === "research.followup.searching") state = { ...state, stage: "searching additional angles" };
+    else if (event === "research.followup.sources") { const nextSources = (payload.sources as Result[]) ?? []; state = { ...state, stage: "additional sources found", sources: [...state.sources, ...nextSources.filter((source) => !state.sources.some((known) => known.canonicalUrl === source.canonicalUrl))] }; }
+    else if (event === "research.followup.extracting") state = { ...state, stage: "extracting additional evidence" };
+    else if (event === "research.followup.extraction") state = { ...state, stage: "extracting additional evidence" };
     else if (event === "research.evidence") state = { ...state, stage: "synthesizing" };
     else if (event === "answer.delta") state = { ...state, stage: "synthesizing", answer: state.answer + String(payload.markdown ?? "") };
     else if (event === "turn.completed") state = { ...state, stage: "complete" };
@@ -414,7 +428,7 @@ async function saveTopic(
       {
         id: id() as Thread["turns"][number]["id"],
         mode: mode === "research" ? "research" : "chat",
-        status: state.error ? (state.stage === "interrupted" ? "interrupted" : "failed") : ["starting", "loading", "sources found", "extracting evidence", "synthesizing"].includes(state.stage) ? "running" : "completed",
+        status: state.error ? (state.stage === "interrupted" ? "interrupted" : "failed") : ["starting", "loading", "sources found", "extracting evidence", "planning", "searching additional angles", "additional sources found", "extracting additional evidence", "synthesizing"].includes(state.stage) ? "running" : "completed",
         createdAt: timestamp,
         updatedAt: timestamp,
         userMessage: {
@@ -438,7 +452,10 @@ async function saveTopic(
                 id: id() as never,
                 origin: "search",
                 status: state.error ? "failed" : "completed",
-                queries: [query],
+                queries: [query, ...(state.generatedQueries ?? []).map((planned) => planned.query)],
+                generatedQueries: state.generatedQueries,
+                planner: state.plan,
+                guidance: state.guidance,
                 targetViablePages: 3,
                 sources,
                 extractions: [],
@@ -704,7 +721,9 @@ function Topic() {
   }, [mode, query, threadId]);
   useEffect(() => {
     if (query && mode === "research" && state.stage === "complete")
-      void saveTopic(threadId, query, mode, state, state.error ? "turn_failed" : "turn_completed").then(setThread);
+      void saveTopic(threadId, query, mode, state, state.error ? "turn_failed" : "turn_completed")
+        .then(setThread)
+        .catch((error) => setState((current) => ({ ...current, stage: "failed", error: error instanceof Error ? error.message : "turn_persist_failed" })));
   }, [mode, query, threadId, state]);
   return (
     <main className={styles.shell}>
@@ -727,7 +746,13 @@ function Topic() {
               <button onClick={() => window.location.reload()}>Retry</button>
             </>
           )}
-          {isResearchMode && ["loading", "starting", "sources found", "extracting evidence", "synthesizing"].includes(state.stage) && (
+          {isResearchMode && state.stage !== "complete" && (state.guidance || state.generatedQueries?.length) && (
+            <section className={styles.researchPlanLive} aria-live="polite">
+              {state.guidance && <><span className={styles.researchPlanLabel}>research direction</span><p>{state.guidance}</p></>}
+              {state.generatedQueries?.length ? <><span className={styles.researchPlanLabel}>searches</span><ol>{state.generatedQueries.map((planned) => <li key={`${planned.priority}-${planned.query}`}><code>{planned.query}</code><small>{planned.purpose}</small></li>)}</ol></> : null}
+            </section>
+          )}
+          {isResearchMode && ["loading", "starting", "sources found", "extracting evidence", "planning", "searching additional angles", "additional sources found", "extracting additional evidence", "synthesizing"].includes(state.stage) && (
             <>
               <div className={styles.researchLoader} role="status" aria-live="polite">
                 <span className={styles.loaderBars} aria-hidden="true"><i /><i /><i /></span>

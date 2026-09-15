@@ -60,6 +60,14 @@ describe("safe content extraction", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
+  it("returns a timeout when the extraction operation does not settle", async () => {
+    const started = Date.now();
+    const fetcher = vi.fn().mockImplementation(() => new Promise<Response>(() => undefined));
+    const result = await new SafeContentExtractor(config, fetcher).extract(source, { maxCharacters: 100, timeoutMs: 20 });
+    expect(result).toMatchObject({ status: "failed", code: "timeout", retryable: true });
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
   it("skips unsupported content", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response("pdf", { headers: { "content-type": "application/pdf" } }));
     const result = await new SafeContentExtractor({ ...config, maxFetchBytes: 100 }, fetcher)

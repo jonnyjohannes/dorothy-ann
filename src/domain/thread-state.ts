@@ -33,6 +33,11 @@ export function renderThreadScrollback(thread: Thread, options: { includeSources
     lines.push(`> ${turn.userMessage.content}`);
     const sources = turn.researchRun?.sources ?? turn.lookupResults ?? [];
     const sourceById = new Map<string, { number: number; url: string }>(sources.map((source, sourceIndex) => [source.sourceId, { number: sourceIndex + 1, url: source.url }]));
+    if (turn.researchRun?.guidance) lines.push("", "**research direction**", "", `- ${turn.researchRun.guidance}`);
+    if (turn.researchRun?.generatedQueries?.length) {
+      lines.push("", "**searches**");
+      for (const planned of turn.researchRun.generatedQueries) lines.push(`- \`${planned.query}\` — ${planned.purpose}`);
+    }
     if (includeSources && sources.length) {
       lines.push("");
       for (const source of sources) lines.push(`- [${source.title}](${source.url}) — ${source.snippet ?? source.displayUrl}`);
