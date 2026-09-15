@@ -21,9 +21,11 @@ export class RemoteThreadStore implements ThreadStore {
   private readonly revisions = new Map<string, number>();
   private async request(path: string, init?: RequestInit): Promise<unknown> {
     const response = await fetch(path, { ...init, credentials: "same-origin", cache: "no-store", headers: { "content-type": "application/json", ...(init?.headers ?? {}) } });
-    const body = response.status === 204 ? null : await jsonResponse(response);
+    let body: unknown = null;
+    try { body = response.status === 204 ? null : await jsonResponse(response); }
+    catch (error) { if (response.ok) throw error; }
     if (response.status === 409) throw new StorageConflictError();
-    if (!response.ok) throw new Error(typeof body === "object" && body && "error" in body && typeof body.error === "object" && body.error && "code" in body.error ? String(body.error.code) : "storage_error");
+    if (!response.ok) throw new Error(typeof body === "object" && body && "error" in body && typeof body.error === "object" && body.error && "code" in body.error ? String(body.error.code) : `http_${response.status}`);
     return body;
   }
   async list(): Promise<ThreadSummary[]> {

@@ -71,7 +71,7 @@ export function createApp({ config, remoteThreads: injectedRemoteThreads }: AppD
   app.get("/api/threads", async (context) => {
     if (!remoteThreads) return storageUnavailable(context);
     try { const summaries = await remoteThreads.list(); return context.json({ summaries, threads: summaries }); }
-    catch { return context.json({ error: { code: "storage_error", message: "threads could not be loaded" } }, 503); }
+    catch (error) { console.error("remote_thread_list_failed", error instanceof Error ? error.message : "unknown_error"); return context.json({ error: { code: "storage_error", message: "threads could not be loaded" } }, 503); }
   });
   app.get("/api/threads/export", async (context) => remoteThreads ? context.json(await remoteThreads.exportData()) : storageUnavailable(context));
   app.get("/api/threads/:threadId", async (context) => {
