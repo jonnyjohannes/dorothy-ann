@@ -13,6 +13,9 @@ describe("browser shell", () => {
     render(<MemoryRouter initialEntries={["/"]}><App /></MemoryRouter>);
     expect(await screen.findByLabelText("Search query")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("...? for research")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "/new" })).toHaveAttribute("href", "/new");
+    expect(screen.getByRole("link", { name: "/settings" })).toHaveAttribute("href", "/settings");
+    expect(screen.getByRole("link", { name: "/threads" })).toHaveAttribute("href", "/threads");
     expect(screen.queryByRole("button", { name: "Send" })).not.toBeInTheDocument();
   });
 

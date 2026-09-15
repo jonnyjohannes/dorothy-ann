@@ -146,6 +146,10 @@
 .commandList p {
   margin: 0;
 }
+.commandList a {
+  color: inherit;
+  text-decoration: none;
+}
 .center {
   display: grid;
   min-height: 100vh;
