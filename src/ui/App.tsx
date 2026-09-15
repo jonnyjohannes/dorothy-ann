@@ -471,12 +471,19 @@ function pendingTopic(threadId: string, query: string, mode: string): Thread {
   };
 }
 
+function lookupTopic(threadId: string, query: string, sources: Result[]): Thread {
+  const topic = pendingTopic(threadId, query, "lookup");
+  const turn = topic.turns[0];
+  return { ...topic, turns: [{ ...turn, status: "completed", lookupResults: sources }] };
+}
+
 async function saveTopic(
   threadId: string,
   query: string,
   mode: string,
   state: StreamState,
   reason: "created" | "turn_completed" | "renamed" = "turn_completed",
+  baseThread?: Thread | null,
 ): Promise<Thread> {
   const timestamp = now();
   const sources = state.sources.map((source, index) => ({
@@ -535,7 +542,7 @@ async function saveTopic(
       },
     ],
   };
-  const existing = await store.load(threadId);
+  const existing = await store.load(threadId) ?? baseThread ?? null;
   if (existing) {
     const previous = existing.turns.at(-1);
     const nextTurn = thread.turns[0];
@@ -581,6 +588,8 @@ function Topic() {
   const [chatStage, setChatStage] = useState("");
   const [chatSave, setChatSave] = useState<{ prompt: string; answer: string } | null>(null);
   const [thread, setThread] = useState<Thread | null>(null);
+  const threadRef = useRef<Thread | null>(null);
+  threadRef.current = thread;
   const hasResearchHistory = Boolean(thread?.turns.some((turn) => turn.mode === "research" || turn.researchRun));
   const effectiveMode = mode === "research" || hasResearchHistory ? "research" : "lookup";
   const [exportMessage, setExportMessage] = useState("");
@@ -623,7 +632,7 @@ function Topic() {
             });
           return;
         }
-        const existing = await store.load(threadId);
+        const existing = await store.load(threadId) ?? threadRef.current;
         if (existing && !cancelled) setThread(existing);
         const existingTurn = existing?.turns.at(-1);
         const sameQuery = existingTurn?.userMessage.content === query && existingTurn.mode === mode;
@@ -650,6 +659,7 @@ function Topic() {
               sources: data.results,
             };
             setState(next);
+            setThread(lookupTopic(threadId, query, data.results));
           }
         } else {
           const controller = new AbortController();
@@ -692,7 +702,7 @@ function Topic() {
   }, [mode, query, threadId]);
   useEffect(() => {
     if (query && mode === "research" && state.stage === "complete" && !state.storageError)
-      void saveTopic(threadId, query, mode, state, "turn_completed")
+      void saveTopic(threadId, query, mode, state, "turn_completed", threadRef.current)
         .then((saved) => { setThread(saved); if (startedFromNew.current) navigate(`/topics/${saved.id}?mode=research`, { replace: true }); })
         .catch((error) => setState((current) => ({ ...current, error: `not saved — ${error instanceof Error ? error.message : "retry"}`, storageError: true })));
   }, [mode, query, threadId, state]);
@@ -725,7 +735,7 @@ function Topic() {
             <>
               <p role="alert">{state.error}</p>
               {state.storageError ? (
-                <button onClick={async () => { try { const saved = await saveTopic(threadId, query, mode, { ...state, error: undefined, storageError: false }, "turn_completed"); setThread(saved); if (startedFromNew.current) navigate(`/topics/${saved.id}?mode=research`, { replace: true }); setState((current) => ({ ...current, error: undefined, storageError: false })); } catch (error) { setState((current) => ({ ...current, error: `not saved — ${error instanceof Error ? error.message : "retry"}` })); } }}>Retry save</button>
+                <button onClick={async () => { try { const saved = await saveTopic(threadId, query, mode, { ...state, error: undefined, storageError: false }, "turn_completed", threadRef.current); setThread(saved); if (startedFromNew.current) navigate(`/topics/${saved.id}?mode=research`, { replace: true }); setState((current) => ({ ...current, error: undefined, storageError: false })); } catch (error) { setState((current) => ({ ...current, error: `not saved — ${error instanceof Error ? error.message : "retry"}` })); } }}>Retry save</button>
               ) : <button onClick={() => window.location.reload()}>Retry</button>}
             </>
           )}
