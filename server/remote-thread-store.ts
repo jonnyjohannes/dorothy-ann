@@ -36,7 +36,7 @@ return { 1, revision, cjson.encode(record) }
 `;
 
 function summary(thread: Thread): ThreadSummary {
-  const last = thread.turns.at(-1);
+  const last = thread.turns[thread.turns.length - 1];
   return { id: thread.id, title: thread.title, createdAt: thread.createdAt, updatedAt: thread.updatedAt, lastTurnPreview: last?.userMessage.content.slice(0, 120) };
 }
 
