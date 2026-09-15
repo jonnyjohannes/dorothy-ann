@@ -26,6 +26,7 @@ describe("portable Hono API", () => {
     const response = await app.request("http://localhost/api/providers/status");
     expect(await response.json()).toEqual({
       fixtureMode: true,
+      storage: true,
       search: true,
       chat: true,
       extraction: true,

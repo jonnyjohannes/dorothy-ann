@@ -4,13 +4,13 @@
 
 - Status: blocked
 - Last updated: 2026-09-15
-- Current focus: final acceptance against a configured remote deployment
+- Current focus: diagnose remote-storage deployment failures and restore answer formatting
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: configure non-fixture Upstash credentials, verify two authenticated browser contexts, then close acceptance
+- Next action: deploy the storage-status/formatting patch, verify configured Upstash credentials, then close acceptance
 
 ## Handoff
 
-The remote-storage design is approved with the simplified no-draft model. Ledger steps 1–5 are implemented: draft persistence and UI autosave are removed, the legacy IndexedDB object store is deleted on upgrade, only completed turns can be committed, the injectable Upstash adapter uses an atomic compare-and-set script with contract coverage, owner-protected thread routes cover commit/load/list/delete/import/export, the browser adapter tracks revisions over same-origin fetch, and UI save retry preserves completed results after remote commit failure. Full unit, lint, typecheck, build, e2e, and diff checks pass. Operator setup is documented and `.env.example` already contains the required non-secret variables. Two-browser manual verification remains blocked until a configured non-fixture Upstash deployment is available.
+The remote-storage design is approved with the simplified no-draft model. Ledger steps 1–5 are implemented: draft persistence and UI autosave are removed, the legacy IndexedDB object store is deleted on upgrade, only completed turns can be committed, the injectable Upstash adapter uses an atomic compare-and-set script with contract coverage, owner-protected thread routes cover commit/load/list/delete/import/export, the browser adapter tracks revisions over same-origin fetch, and UI save retry preserves completed results after remote commit failure. Full unit, lint, typecheck, build, e2e, and diff checks pass. Operator setup is documented and `.env.example` already contains the required non-secret variables. Two-browser manual verification remains blocked until a configured non-fixture Upstash deployment is available. A follow-up patch now exposes storage readiness through `/api/providers/status`, fails closed before research when remote storage is unavailable, and prevents answer headings from inheriting route-title typography.
 
 The deployed authenticated app will share completed threads through Upstash Redis. Active requests, failed/interrupted turns, and export-editor changes remain transient browser state. Appearance settings remain device-local in `localStorage`. Remove `ArtifactDraftStore` and its API/storage implementation rather than building a remote draft system.
 

@@ -56,8 +56,8 @@
   width: min(100%, 1100px);
   margin: calc(10vh + 2.5rem) auto 0;
 }
-.hero h1,
-.topic h1,
+.hero > h1,
+.topic > h1,
 .pageTitle {
   font-family: var(--display);
   font-size: clamp(2rem, 5vw, 3.5rem);

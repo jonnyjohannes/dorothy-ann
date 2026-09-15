@@ -770,14 +770,15 @@ function Topic() {
 function AuthGate({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const [state, setState] = useState<"loading" | "ready" | "error" | "storage-error">("loading");
   useEffect(() => {
     if (location.pathname === "/unlock") { setState("ready"); return; }
     let cancelled = false;
     void (async () => {
       try {
-        const status = await fetch("/api/providers/status").then((response) => response.json()) as { fixtureMode?: boolean };
+        const status = await fetch("/api/providers/status").then((response) => response.json()) as { fixtureMode?: boolean; storage?: boolean };
         configureStore(status.fixtureMode !== false);
+        if (!status.fixtureMode && status.storage === false) { if (!cancelled) setState("storage-error"); return; }
         if (!status.fixtureMode) {
           const session = await fetch("/api/auth/session").then((response) => response.json()) as { authenticated?: boolean };
           if (!session.authenticated) {
@@ -793,6 +794,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   }, [location.pathname, navigate]);
   if (state === "loading") return <main className={styles.center}><p role="status">Checking access…</p></main>;
   if (state === "error") return <main className={styles.center}><p role="alert">Unable to check access.</p><button onClick={() => window.location.reload()}>Retry</button></main>;
+  if (state === "storage-error") return <main className={styles.center}><p role="alert">Remote storage is unavailable.</p><button onClick={() => window.location.reload()}>Retry</button></main>;
   return <>{children}</>;
 }
 
