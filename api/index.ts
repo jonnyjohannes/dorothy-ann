@@ -15,10 +15,10 @@ function requestHeaders(req: IncomingMessage) {
 }
 
 async function requestBody(req: VercelRequest): Promise<BodyInit | undefined> {
+  if (req.method === "GET" || req.method === "HEAD") return undefined;
   if (req.body !== undefined) {
     return typeof req.body === "string" ? req.body : JSON.stringify(req.body);
   }
-  if (req.method === "GET" || req.method === "HEAD") return undefined;
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   return Buffer.concat(chunks);
