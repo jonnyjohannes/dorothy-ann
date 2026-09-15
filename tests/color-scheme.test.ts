@@ -21,9 +21,9 @@ describe("color scheme policy", () => {
     expect(defaultAccentSlot("catppuccin")).toBe(5);
     expect(primaryAccentSlot("rose-pine", "3")).toBe(3);
     expect(readPrimaryAccent("9")).toBe("default");
-    expect(readPrimaryAccent("fbf719")).toBe("fbf719");
+    expect(readPrimaryAccent("e068a5")).toBe("e068a5");
     expect(primaryAccentSlot("mono", "7")).toBe(0);
-    expect(primaryAccentSlot("rose-pine", "fbf719")).toBe(0);
+    expect(primaryAccentSlot("rose-pine", "e068a5")).toBe(0);
   });
 
   it("uses a spread heading order and thread-specific offset", () => {
