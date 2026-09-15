@@ -4,8 +4,8 @@
 
 - Status: complete
 - Last updated: 2026-09-15
-- Current focus: color schemes and primary accent options implemented
-- Next action: commit the fixed accent refinement
+- Current focus: color schemes complete with per-thread relational rotation
+- Next action: commit the per-thread rotation refinement
 
 ## Handoff
 
@@ -218,6 +218,7 @@ Do not color every word or every paragraph. Use relational color where the reade
 - [x] 5. Accessibility and regression coverage
 - [x] 6. Acceptance
 - [x] 7. Primary accent and source-highlight refinement
+- [x] 8. Per-thread palette offset and hue-spread rotation
 
 ## Verification
 
@@ -232,6 +233,8 @@ Follow-up verification also passed after the primary-accent refinement: lint, ty
 
 The fixed `#fbf719` option also passes the color-policy tests, lint, typecheck, and `git diff --check`.
 
+The relational rotation now derives source and heading slots from the stable thread ID. A spread order intentionally separates neighboring palette hues instead of walking the palette declaration order. Color-policy, full unit, lint, typecheck, and diff checks pass.
+
 ## Acceptance Criteria
 
 - Users can choose `mono`, `catppuccin`, or `rose pine` in Settings.
@@ -239,7 +242,8 @@ The fixed `#fbf719` option also passes the color-policy tests, lint, typecheck, 
 - Existing appearance selection still works independently.
 - White/black foreground/background remain the base surfaces; accent colors do not turn long-form text into a low-contrast rainbow.
 - Multiple UI elements use a stable, playful accent rotation in each non-mono scheme.
-- Every visible source link and its corresponding citation share a stable accent derived from source identity.
+- Every visible source link and its corresponding citation share a stable accent derived from source identity and stable within its thread.
+- Different threads may begin at different palette offsets, and adjacent heading accents use a hue-spread order rather than palette declaration order.
 - Synthesized-answer Markdown headings use a separate deterministic color rhythm that improves scanning without pretending to encode heading semantics.
 - Research direction, generated searches, citations, sources, and transcript landmarks are quickly distinguishable without color being their only signal.
 - Route and application UI headings retain their existing styling.
@@ -253,7 +257,8 @@ The fixed `#fbf719` option also passes the color-policy tests, lint, typecheck, 
 - Catppuccin and Rosé Pine are curated, official-palette-inspired accent sets in the UI theme layer; no external theme package is added.
 - Primary accent is a separate browser-local preference. `mono` exposes only yellow; themed schemes expose their named accent slots plus a scheme-default option. Every scheme also exposes fixed `#fbf719`. The selected primary accent controls `--accent` for focus, finder, and non-relational decoration only.
 - Each inspired scheme has separate light/dark accent values tested against the existing white/black surfaces.
-- Source/citation identity is keyed by stable `sourceId`; heading rotation is keyed by synthesized-document heading order.
+- Source/citation identity is keyed by stable `sourceId` within a thread; source slots hash `threadId + sourceId` so different threads can have different constellations while remaining stable on reload.
+- Heading rotation uses a thread offset over a hue-spread palette order, rather than adjacent palette declaration order.
 - The live and persisted synthesized answer share a sanitized Markdown renderer with custom `h1`–`h6` components.
 - Route and application UI headings are unchanged and out of scope.
 - Colors remain presentation-only: exports, backups, persisted thread contracts, SSE payloads, and provider inputs remain unchanged.

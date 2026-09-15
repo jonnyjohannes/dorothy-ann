@@ -11,6 +11,7 @@ type MarkdownAnswerProps = {
   markdown: string;
   sources: SearchResult[];
   className?: string;
+  threadSeed?: string;
 };
 
 function normalizeAnswerHeadings(markdown: string): string {
@@ -31,12 +32,12 @@ function relationalStyle(slot: number): React.CSSProperties {
   return { "--relational-accent": `var(--accent-${slot + 1})` } as React.CSSProperties;
 }
 
-export function MarkdownAnswer({ markdown, sources, className }: MarkdownAnswerProps) {
+export function MarkdownAnswer({ markdown, sources, className, threadSeed = "" }: MarkdownAnswerProps) {
   let headingIndex = 0;
   const sourceById = new Map(sources.map((source) => [String(source.sourceId), source]));
   const answer = citationMarkdown(normalizeAnswerHeadings(markdown), sources);
   const heading = (Tag: "h1" | "h2" | "h3" | "h4" | "h5" | "h6") => ({ children, ...props }: React.ComponentPropsWithoutRef<typeof Tag>) => {
-    const slot = headingAccentSlot(headingIndex, paletteSize);
+    const slot = headingAccentSlot(headingIndex, paletteSize, threadSeed);
     headingIndex += 1;
     return <Tag {...props} className={styles.answerHeading} style={relationalStyle(slot)}>{children}</Tag>;
   };
@@ -56,7 +57,7 @@ export function MarkdownAnswer({ markdown, sources, className }: MarkdownAnswerP
           a: ({ href, children, ...props }) => {
             const sourceId = href?.startsWith("#source-") ? href.slice("#source-".length) : undefined;
             const source = sourceId ? sourceById.get(sourceId) : undefined;
-            const style = source ? relationalStyle(sourceAccentSlot(source.sourceId, paletteSize)) : undefined;
+            const style = source ? relationalStyle(sourceAccentSlot(source.sourceId, paletteSize, threadSeed)) : undefined;
             return <a {...props} href={href} title={source?.title} className={source ? styles.sourceAccent : undefined} style={style} onClick={source ? () => window.setTimeout(() => document.getElementById(`source-${source.sourceId}`)?.focus(), 0) : undefined}>{children}</a>;
           },
         }}

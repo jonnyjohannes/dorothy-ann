@@ -2,7 +2,7 @@ import type { SearchResult } from "../domain/types";
 import styles from "./App.module.css";
 import { sourceAccentSlot } from "./color-scheme";
 
-export function EvidenceBox({ sources, selectedSourceId, onSelect }: { sources: SearchResult[]; selectedSourceId: string | null; onSelect: (sourceId: string) => void }) {
+export function EvidenceBox({ sources, selectedSourceId, onSelect, threadSeed = "" }: { sources: SearchResult[]; selectedSourceId: string | null; onSelect: (sourceId: string) => void; threadSeed?: string }) {
   return (
     <aside className={styles.evidence} aria-label="Evidence">
       <h2 className={styles.srOnly}>Evidence</h2>
@@ -12,7 +12,7 @@ export function EvidenceBox({ sources, selectedSourceId, onSelect }: { sources: 
             id={`source-${source.sourceId}`}
             tabIndex={-1}
             className={`${styles.evidenceItem} ${selectedSourceId === source.sourceId ? styles.evidenceItemActive : ""}`}
-            style={{ "--relational-accent": `var(--accent-${sourceAccentSlot(source.sourceId, 8) + 1})` } as React.CSSProperties}
+            style={{ "--relational-accent": `var(--accent-${sourceAccentSlot(source.sourceId, 8, threadSeed) + 1})` } as React.CSSProperties}
             aria-current={selectedSourceId === source.sourceId ? "true" : undefined}
             onFocus={() => onSelect(source.sourceId)}
             onKeyDown={(event) => {

@@ -32,17 +32,29 @@ export function readColorScheme(value: string | null | undefined): ColorScheme {
 }
 
 /** Stable FNV-1a mapping; source identity must not depend on list position. */
-export function sourceAccentSlot(sourceId: string, paletteSize: number): number {
-  if (paletteSize <= 0) return 0;
+function stableHash(value: string): number {
   let hash = 0x811c9dc5;
-  for (const character of sourceId) {
+  for (const character of value) {
     hash ^= character.codePointAt(0) ?? 0;
     hash = Math.imul(hash, 0x01000193);
   }
-  return (hash >>> 0) % paletteSize;
+  return hash >>> 0;
 }
 
-export function headingAccentSlot(headingIndex: number, paletteSize: number): number {
+function spreadOrder(paletteSize: number): number[] {
+  const preferred = [0, 4, 2, 6, 1, 5, 3, 7];
+  return [...preferred.filter((slot) => slot < paletteSize), ...Array.from({ length: paletteSize }, (_, slot) => slot).filter((slot) => !preferred.includes(slot))];
+}
+
+export function sourceAccentSlot(sourceId: string, paletteSize: number, threadSeed = ""): number {
   if (paletteSize <= 0) return 0;
-  return Math.abs(headingIndex) % paletteSize;
+  const order = spreadOrder(paletteSize);
+  return order[stableHash(`${threadSeed}:${sourceId}`) % order.length] ?? 0;
+}
+
+export function headingAccentSlot(headingIndex: number, paletteSize: number, threadSeed = ""): number {
+  if (paletteSize <= 0) return 0;
+  const order = spreadOrder(paletteSize);
+  const offset = stableHash(threadSeed) % order.length;
+  return order[(headingIndex + offset) % order.length] ?? 0;
 }

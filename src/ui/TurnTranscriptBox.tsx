@@ -19,6 +19,7 @@ export function TurnTranscriptBox({ thread, onEvidenceSelect }: { thread: Thread
       <MarkdownAnswer
         markdown={renderThreadScrollback(thread, { includeSources: false, citationTarget: "evidence" }).markdown}
         sources={Array.from(new Map(thread.turns.flatMap((turn) => turn.researchRun?.sources ?? turn.lookupResults ?? []).map((source) => [source.sourceId, source])).values())}
+        threadSeed={thread.id}
       />
     </article>
   );

@@ -814,7 +814,7 @@ function Topic() {
           {thread && <TurnTranscriptBox thread={thread} onEvidenceSelect={(sourceId) => { setSelectedSourceId(sourceId); window.setTimeout(() => document.getElementById(`source-${sourceId}`)?.focus(), 0); }} />}
           {state.answer && !thread && (
             <article className={styles.answer}>
-              <MarkdownAnswer markdown={state.answer} sources={state.sources} />
+              <MarkdownAnswer markdown={state.answer} sources={state.sources} threadSeed={threadId} />
             </article>
           )}
           <PromptBox value={chatInput} onChange={setChatInput} onCommand={(input) => { const command = parseSlashCommand(input); if (command === "/settings") navigate("/settings"); else if (command === "/new") navigate("/", { replace: true }); else if (command === "/threads") navigate("/threads"); else setCommandMessage(`Unknown command: ${input}`); }} onSubmit={async (prompt) => {
@@ -833,7 +833,7 @@ function Topic() {
           }} />
           {commandMessage && <p className={styles.commandMessage} role="status">{commandMessage}</p>}
           {chatStage && <p className={styles.muted} aria-live="polite">{chatStage}</p>}
-          {chatAnswer && <MarkdownAnswer className={styles.chatAnswer} markdown={chatAnswer} sources={state.sources} />}
+          {chatAnswer && <MarkdownAnswer className={styles.chatAnswer} markdown={chatAnswer} sources={state.sources} threadSeed={threadId} />}
           {mode === "lookup" && canPromoteToResearch(query) && (
             <Link
               className={styles.promotion}
@@ -842,9 +842,9 @@ function Topic() {
               Research this with Dorothy Ann →
             </Link>
           )}
-          {!isResearchMode && state.sources.length > 0 && <EvidenceBox sources={state.sources} selectedSourceId={selectedSourceId} onSelect={setSelectedSourceId} />}
+          {!isResearchMode && state.sources.length > 0 && <EvidenceBox sources={state.sources} selectedSourceId={selectedSourceId} onSelect={setSelectedSourceId} threadSeed={threadId} />}
         </section>
-        {isResearchMode && state.sources.length > 0 && <EvidenceBox sources={state.sources} selectedSourceId={selectedSourceId} onSelect={setSelectedSourceId} />}
+        {isResearchMode && state.sources.length > 0 && <EvidenceBox sources={state.sources} selectedSourceId={selectedSourceId} onSelect={setSelectedSourceId} threadSeed={threadId} />}
       </div>
     </main>
   );
