@@ -66,7 +66,12 @@ async function* extractConcurrently(sources: SearchResult[], dependencies: Resea
 
 const RESEARCH_OPENING = "According to my research...";
 function enforceResearchOpening(answer: string): string {
-  const normalized = answer.trimStart().replace(/^According to my research(?:\.\.\.|…|,)\s*/i, "");
+  let normalized = answer.trimStart();
+  // Providers occasionally repeat the contract opening or format it as a heading.
+  // Strip up to two leading variants so the UI receives exactly one opening.
+  for (let index = 0; index < 2; index += 1) {
+    normalized = normalized.replace(/^(?:#{1,6}\s*)?According to my research(?:\.\.\.|…|,)[ \t]*(?:\r?\n+)?/i, "");
+  }
   return `${RESEARCH_OPENING}\n\n${normalized}`;
 }
 

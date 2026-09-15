@@ -797,7 +797,7 @@ function Topic() {
               <button onClick={() => window.location.reload()}>Retry</button>
             </>
           )}
-          {isResearchMode && state.stage !== "complete" && (state.guidance || state.generatedQueries?.length) && (
+          {isResearchMode && state.stage !== "complete" && Boolean(state.guidance || state.generatedQueries?.length) && (
             <section className={styles.researchPlanLive} aria-live="polite">
               {state.guidance && <><span className={styles.researchPlanLabel}>research direction</span><p>{state.guidance}</p></>}
               {state.generatedQueries?.length ? <><span className={styles.researchPlanLabel}>searches</span><ol>{state.generatedQueries.map((planned) => <li key={`${planned.priority}-${planned.query}`}><code>{planned.query}</code><small>{planned.purpose}</small></li>)}</ol></> : null}

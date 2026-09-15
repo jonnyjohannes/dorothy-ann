@@ -112,6 +112,18 @@ describe("research orchestration", () => {
     expect(answers.join("")).toBe("According to my research...\n\nthe answer is here.");
   });
 
+  it("removes repeated or heading-formatted research openings", async () => {
+    const answers: string[] = [];
+    for await (const event of runResearch("question", "turn-opening-heading", {
+      fixture: false,
+      maxResults: 3,
+      seedSources: sources.slice(0, 1),
+      extractor: { extract: async (source) => ({ sourceId: source.sourceId, status: "viable" as const, page: { sourceId: source.sourceId, canonicalUrl: source.canonicalUrl, title: source.title, text: "evidence", extractedAt: new Date().toISOString() as never, characterCount: 8 } }) },
+      chat: { planResearch: async () => ({ status: "ready" as const, queries: [] as [] }), stream: async function* () { yield { type: "content" as const, part: { type: "text" as const, markdown: "# According to my research...\n\nAccording to my research...\n\nThe answer." } }; } },
+    })) if (event.type === "answer.delta") answers.push(event.markdown);
+    expect(answers.join("")).toBe("According to my research...\n\nThe answer.");
+  });
+
   it("lets the planner request up to three visible searches and synthesizes merged evidence", async () => {
     const planned: SearchResult[] = [{ ...sources[1], sourceId: "extra" as never, rank: 1 }];
     const events = [];
