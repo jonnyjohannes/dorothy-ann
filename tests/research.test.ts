@@ -58,10 +58,13 @@ describe("research orchestration", () => {
     expect(searchCalled).toBe(false);
     expect(synthesisInput).toContain("wwdc 2026 apple news");
     expect(synthesisInput).toContain("what were the highlights");
-    expect(systemInstruction).not.toContain("According to my research");
+    expect(systemInstruction).toContain('Begin exactly with "According to my research..."');
     expect(systemInstruction).toContain("Be complete but concise");
     expect(systemInstruction).toContain("Keep to supported facts");
     expect(systemInstruction).toContain("Answer directly and carefully");
+    expect(systemInstruction).toContain("Use Markdown liberally");
+    expect(systemInstruction).toContain("bold and italics");
+    expect(systemInstruction).toContain("inline code");
   });
 
   it("fails instead of completing a turn with empty synthesis", async () => {
