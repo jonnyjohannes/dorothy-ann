@@ -4,9 +4,9 @@
 
 - Status: planning
 - Last updated: 2026-09-15
-- Current focus: close the remaining data/system contracts now that every agreed layout and layout-control box has an initial typed contract
+- Current focus: settle evidence persistence and remaining controller/transport contracts now that terminal `SearchTurn | ResearchTurn` unions and layout contracts are defined
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: settle the final discriminated `SearchTurn | ResearchTurn` status/result/failure shapes, then evidence persistence and controller/transport ownership
+- Next action: decide whether the canonical `EvidenceSet` is materialized at thread level or deterministically projected from per-turn source records
 
 ## Handoff
 
@@ -42,6 +42,7 @@ Decisions made so far:
 - Active turns are controller-only and never persisted; every observed terminal completed, insufficient, failed, or interrupted result becomes an immutable durable turn. Retry creates a new linked turn through `retryOfTurnId` rather than mutating terminal history.
 - A successfully executed zero-result search is a completed `SearchTurn` with `completion: "empty"`, while `completion: "results"` requires a non-empty source tuple; failure and interruption variants carry neither result nor partial sources.
 - Failed/interrupted research records never use an ambiguous optional resolution. They explicitly persist a validated full resolution, bounded checkpoint, or `unavailable` marker according to what the controller actually received; no state is fabricated.
+- Durable/public research failures use compact capability-level codes only. Provider and implementation details remain in sanitized server observability, never turn records, SSE payloads, or client messages.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
 
 Read this plan, then the completed [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md), `src/domain/types.ts`, `src/domain/schemas.ts`, `src/ports/`, `server/research.ts`, `server/app.ts`, and `src/ui/App.tsx` before implementation. Continue design in this file; do not begin implementation until the remaining box contracts and migration plan are approved.
@@ -298,7 +299,7 @@ current request + prior thread context + macro-selected turn kind
 - Every terminal durable turn passes runtime schema validation.
 - The discriminant determines which result fields are valid; search and research result shapes are not mixed through unrelated optional fields.
 
-The persistence/lifecycle axis and complete terminal `SearchTurn | ResearchTurn` structural unions are settled. Exact bounded public research failure code unions remain to be settled with the transport boundary.
+The persistence/lifecycle axis and complete terminal `SearchTurn | ResearchTurn` unions are settled, including compact capability-level research failure codes and fixed retryability. Transport events must map into these durable shapes without widening them.
 
 ### Persistence record
 
@@ -656,20 +657,56 @@ interface InsufficientEvidenceFailure {
   retryable: true;
 }
 
-interface SynthesisFailure {
-  kind: "synthesis_failure";
-  code: string;
-  message: string;
-  retryable: boolean;
-}
+type SynthesisFailure =
+  | {
+      kind: "synthesis_failure";
+      code: "unavailable" | "invalid_output";
+      message: string;
+      retryable: true;
+    }
+  | {
+      kind: "synthesis_failure";
+      code: "rate_limited";
+      message: string;
+      retryable: true;
+      retryAfterSeconds?: number;
+    }
+  | {
+      kind: "synthesis_failure";
+      code: "refused";
+      message: string;
+      retryable: false;
+    };
 
-interface ResearchExecutionFailure {
-  kind: "execution_failure";
-  stage: "assessment" | "acquisition" | "resolution" | "transport";
-  code: string;
-  message: string;
-  retryable: boolean;
-}
+type ResearchExecutionFailure =
+  | {
+      kind: "execution_failure";
+      stage: "assessment";
+      code: "assessment_failed";
+      message: string;
+      retryable: true;
+    }
+  | {
+      kind: "execution_failure";
+      stage: "acquisition";
+      code: "acquisition_failed";
+      message: string;
+      retryable: true;
+    }
+  | {
+      kind: "execution_failure";
+      stage: "resolution";
+      code: "resolution_invalid";
+      message: string;
+      retryable: false;
+    }
+  | {
+      kind: "execution_failure";
+      stage: "transport";
+      code: "transport_failed";
+      message: string;
+      retryable: true;
+    };
 
 type FailedResearchTurn =
   | (TerminalTurnBase<"research"> & {
@@ -719,6 +756,8 @@ type ResearchTurn =
 
 An insufficient failure always carries an `InsufficientResearchResolution`. A synthesis failure always carries the synthesis-eligible sufficient/best-effort resolution that existed before answer generation failed. Earlier execution failures carry a validated checkpoint or explicitly `unavailable`; they never fabricate an empty resolution. Interruption may retain a full resolution when cancellation occurs during synthesis, a checkpoint during recursive work, or `unavailable` when no validated state reached the controller. None of these non-completed variants carries an answer.
 
+Expected bounded assessor/search/extraction unavailability is interpreted through normal resolution: supported useful knowledge yields completed `best_effort`, while no useful support yields failed `insufficient`. `ResearchExecutionFailure` is reserved for the exceptional case where assessment, acquisition, resolution, or transport cannot produce that normal bounded outcome. Public/durable codes remain capability-level; provider status, SDK errors, malformed payload details, stack traces, and retry internals may appear only in sanitized server observability.
+
 **Invariants**
 
 - Every initial and follow-up research question uses this same protocol.
@@ -732,6 +771,7 @@ An insufficient failure always carries an `InsufficientResearchResolution`. A sy
 - Useful supported evidence at a bounded stop produces a best-effort answer with explicit uncertainty; no useful supported evidence produces an insufficient-evidence failure.
 - Lifecycle progress, resolution stop reason, and terminal state are observable.
 - Failed/interrupted persistence explicitly distinguishes full resolution, bounded checkpoint, and unavailable state; no optional field implies knowledge the controller did not receive.
+- Durable failure codes are compact capability-level discriminants with fixed retryability; provider/SDK details never cross the public boundary.
 - Partial sibling failures preserve successful evidence.
 
 **Current mapping:** `server/research.ts` currently performs a mandatory initial search/extraction before planning and may then conduct up to three generated searches in one non-recursive concurrent batch. Conversation is flattened rather than passed as typed bounded thread context. The target removes the special initial-search path and moves recursive knowledge resolution behind one standard initial/follow-up `ResearchTurn` contract.
@@ -1902,6 +1942,7 @@ The final implementation must prove at least:
 
 - `Turn` accepts only valid terminal search or research combinations; pending/running execution is represented only by non-persisted controller-owned `ActiveTurn`.
 - Insufficient research always carries an insufficient resolution; synthesis failure always carries a sufficient/best-effort resolution; earlier failure/interruption explicitly distinguishes a validated checkpoint from unavailable state and never carries an answer.
+- Research failure records/events expose only the approved capability-level synthesis and execution codes with their fixed retryability; adapter details remain sanitized server-only observability.
 - Every observed terminal outcome is committed immutably, and retry appends a same-request turn linked to an earlier same-thread terminal through `retryOfTurnId` rather than reopening it.
 - A macro-less submission creates a `SearchTurn`; a trailing-`?` submission creates a `ResearchTurn`; neither depends on persistent UI mode.
 - `SearchTurn` invokes one search and never invokes extraction or an LLM.
@@ -1938,7 +1979,6 @@ The final implementation must prove at least:
 
 ## Open Questions
 
-- Which exact bounded public codes and retryability rules refine `SynthesisFailure` and `ResearchExecutionFailure` when the turn and transport contracts are finalized?
 - Is the canonical `EvidenceSet` materialized once at thread level, or are source records retained per turn and deterministically projected into the same set for display and future research context?
 - How are nine aggregate consumed sources allocated fairly and deterministically across up to three search result sets and recursive branches?
 - Beyond the approved assessment/synthesis model variables, what environment-variable names expose the explicit balanced `ResearchLimits` while keeping typed names canonical?
