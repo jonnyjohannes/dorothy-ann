@@ -36,6 +36,7 @@ Decisions made so far:
 - `TranscriptBox` renders durable history and the one active turn through one ordered presentation model. Live progress and streamed answer content occupy the active turn's position and are replaced, not duplicated, when that turn becomes durable.
 - `EvidenceBox` renders one thread-wide append-stable `EvidenceSet`. Canonical sources are deduplicated, durable support uses `SourceId`, display citations use derived one-based ordinals, and role occurrences allow one source to be promoted from search destination to research evidence without duplication.
 - `BrandBox` is one identity/control surface: activating anywhere on it emits only `new_thread_requested`. `StickyHeader` composes that brand with typed route-contextual actions and feedback but performs no navigation, export, clipboard, or cancellation effects itself.
+- `SettingsBox` applies each visual preference immediately through emitted intent, has no Save/Cancel transaction, and reports persistence independently. The settings controller applies document state and persists through a browser preference adapter; failed persistence leaves the choice active for the session and visibly unsaved.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
 
 Read this plan, then the completed [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md), `src/domain/types.ts`, `src/domain/schemas.ts`, `src/ports/`, `server/research.ts`, `server/app.ts`, and `src/ui/App.tsx` before implementation. Continue design in this file; do not begin implementation until the remaining box contracts and migration plan are approved.
@@ -1356,6 +1357,72 @@ The dependency is intentionally used instead of maintaining a home-rolled approx
 
 **Current mapping:** `ThreadPicker` in `src/ui/App.tsx` directly loads/removes through `ThreadStore`, uses case-insensitive title substring filtering, owns a `window.confirm`, and navigates itself; it also supports both inline and overlay rendering. The target `ThreadsBox` receives state and emits intent on canonical `/threads`, uses inline terminal-style confirmation, and leaves controller effects and `rankThreads` matching behind separate explicit boundaries.
 
+### `SettingsBox`
+
+**Capability:** present preferences and data-management controls while applying each preference independently and immediately through controller intent.
+
+```ts
+type Appearance = "auto" | "light" | "dark";
+type PreferenceKey = "appearance" | "color_scheme" | "primary_accent";
+type PreferencePersistence =
+  | { status: "saved" }
+  | { status: "saving" }
+  | { status: "session_only"; message: string };
+
+interface SettingsBoxViewState {
+  preferences: {
+    appearance: Appearance;
+    colorScheme: ColorScheme;
+    primaryAccent: PrimaryAccent;
+  };
+  persistence: Record<PreferenceKey, PreferencePersistence>;
+  backup: BackupControlsViewState;
+  retentionNotice: string;
+}
+
+type SettingsBoxIntent =
+  | { type: "appearance_changed"; value: Appearance }
+  | { type: "color_scheme_changed"; value: ColorScheme }
+  | { type: "primary_accent_changed"; value: PrimaryAccent }
+  | { type: "preference_save_retry_requested"; key: PreferenceKey }
+  | { type: "backup_export_requested" }
+  | { type: "backup_import_selected"; file: File };
+```
+
+`BackupControlsViewState` and import-conflict intents remain to be finalized with the backup interaction. Preference flow is settled:
+
+```text
+preference changed
+       |
+       v
+   SettingsBox intent
+       |
+       v
+settings controller
+       ├── apply immediately to document/session
+       `── persist through browser preference adapter
+                  |
+                  ├── success -> saved
+                  `── failure -> session_only + retry
+```
+
+**Invariants**
+
+- There is no aggregate Save or Cancel action. Each validated preference change applies immediately and persists independently.
+- The controller applies the selected value before persistence completes, so the visible setting and document never intentionally diverge during `saving`.
+- Persistence failure does not roll back the session. The affected preference becomes `session_only` with bounded status and an applicable retry intent.
+- One preference's save/failure state does not block or overwrite another preference.
+- Invalid persisted values are normalized to documented defaults before reaching the box; the box never renders an invalid selection.
+- Color-scheme changes deterministically normalize or reinterpret the selected accent through the shared color policy rather than leaving an unavailable option.
+- `SettingsBox` does not access `document`, media queries, `localStorage`, `ThreadStore`, clipboard, downloads, or network APIs directly.
+- Form labels, current values, save status, errors, and keyboard/focus behavior remain perceivable across themes and responsive layouts.
+
+**Failure contract:** adapter unavailability leaves validated preferences active for the current session and identifies only affected values as unsaved. Backup failures remain independent from preference state and cannot make visual settings unusable.
+
+**Implementation boundary:** native select versus custom controls, section layout, and status placement may vary. Immediate application, independent persistence, normalization, no aggregate save transaction, accessibility, and controller-effect boundaries remain fixed.
+
+**Current mapping:** `ThemeControl`, `ColorSchemeControl`, and `PrimaryAccentControl` in `src/ui/App.tsx` each read/write `localStorage` and mutate document theme state directly. `BackupControls` calls `ThreadStore` and browser file/download APIs directly. The target `SettingsBox` receives normalized state and emits intent; a settings controller owns application/persistence effects while the remaining backup flow is finalized separately.
+
 The detailed contracts for the remaining layout boxes and their current → target mappings remain to be settled.
 
 ## Current → Target Overview
@@ -1458,6 +1525,7 @@ The final implementation must prove at least:
 - `EvidenceBox` renders one thread-wide canonical set; duplicate sources retain one application-derived stable `SourceId` and display ordinal, citations resolve by ID, occurrences preserve turn/rank/role provenance, and destination-to-evidence promotion does not duplicate an entry.
 - `BrandBox` exposes one keyboard/pointer-equivalent activation target and emits only `new_thread_requested`; tagline rotation is non-live and respects reduced motion.
 - Every canonical page composes the same `StickyHeader`; its typed contextual actions and feedback remain accessible and never perform effects directly.
+- `SettingsBox` has no aggregate Save/Cancel action: each valid preference applies immediately, persists independently through the controller, and remains active but visibly `session_only` when persistence fails.
 - Normalizing the same canonical URL across providers, searches, retries, or ranks yields the same collision-safe `SourceId`; provider rank and result-array position never become durable identity.
 - `/threads` is the only `ThreadsBox` presentation; its pinned `fzf@0.5.2` wrapper produces fixture-locked deterministic rankings/highlights, its local keyboard behavior does not conflict with global hotkeys, and deletion requires inline `y`/Enter confirmation that Escape can cancel without closing the route.
 - `UnlockBox` participates in shared box styling while passphrase input remains ephemeral, unlogged, and unpersisted.
