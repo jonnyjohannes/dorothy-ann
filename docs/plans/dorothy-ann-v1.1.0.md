@@ -4,9 +4,9 @@
 
 - Status: planning
 - Last updated: 2026-09-15
-- Current focus: close remaining controller/transport and deterministic budget-allocation contracts now that terminal turns, evidence persistence, and layout boxes are defined
+- Current focus: settle turn-controller and HTTP/SSE ownership now that terminal turns, evidence persistence, deterministic source allocation, and layout boxes are defined
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: define fair deterministic allocation of the nine-source budget across ready evidence requests, then settle turn-controller and HTTP/SSE ownership
+- Next action: define the turn controller's typed inputs/state/intents and its ownership boundary with `SearchTurn`, `ResearchTurn`, `ThreadStore`, and `TurnStreamBoundary`
 
 ## Handoff
 
@@ -43,6 +43,7 @@ Decisions made so far:
 - A successfully executed zero-result search is a completed `SearchTurn` with `completion: "empty"`, while `completion: "results"` requires a non-empty destination-reference tuple; canonical source metadata is stored once on `Thread`, and failure/interruption carry neither result nor partial destinations.
 - Failed/interrupted research records never use an ambiguous optional resolution. They explicitly persist a validated full resolution, bounded checkpoint, or `unavailable` marker according to what the controller actually received; no state is fabricated.
 - `Thread` is the durable context/aggregate root, not a runtime god object. It materializes canonical source metadata once in an append-stable source catalog; terminal turns retain rank/role/support references, and `EvidenceSet`/`ThreadContext` are deterministic bounded projections. Active execution remains controller-owned.
+- Fair source allocation derives a three-selection ownership cap per evidence request from the approved nine-source/three-search ceilings. Concurrent requests receive rank-layer round-robin opportunities in priority/depth/creation order; shared canonical sources consume global budget once, and unused capacity is not released into earlier requests.
 - Durable/public research failures use compact capability-level codes only. Provider and implementation details remain in sanitized server observability, never turn records, SSE payloads, or client messages.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
 
@@ -667,7 +668,7 @@ interface ResearchLimits {
 }
 ```
 
-These balanced values are approved defaults and hard per-turn ceilings, not targets. Eight assessments permit the common complete path of root decomposition, three independently searched/reassessed children, and final root reassessment without batching semantically distinct problems into one assessor call. All recursive branches draw from the same explicit search, source, assessment, decomposition-branching, and depth limits. The separate controls are intentional: they independently constrain provider calls, evidence volume, semantic reductions, branching, and recursion shape rather than hiding those costs behind one fuel number. The nine-source limit applies across the whole resolution tree, not independently to each search or node. `SearchTurn` may retain a separate visible-result limit.
+These balanced values are approved defaults and hard per-turn ceilings, not targets. Eight assessments permit the common complete path of root decomposition, three independently searched/reassessed children, and final root reassessment without batching semantically distinct problems into one assessor call. All recursive branches draw from the same explicit search, source, assessment, decomposition-branching, and depth limits. The separate controls are intentional: they independently constrain provider calls, evidence volume, semantic reductions, branching, and recursion shape rather than hiding those costs behind one fuel number. The nine-source limit applies across the whole resolution tree, not independently to each search or node. Fair allocation derives `floor(maxConsumedSources / maxSearches) = 3` as the per-evidence-request new-source selection ownership cap; it is policy derived from approved limits, not another configurable fuel value. `SearchTurn` retains its separate visible-result limit.
 
 Output:
 
@@ -1144,11 +1145,14 @@ interface EvidenceRequest {
   purpose: string;
   successCriterion: string;
   priority: 1 | 2 | 3;
+  problemDepth: number;
+  createdOrder: number;
 }
 
 interface EvidenceAcquisitionInput {
   requests: EvidenceRequest[];
   knownSources: CanonicalSource[];
+  availableEvidenceSourceIds: SourceId[];
   budget: ResearchBudget;
   limits: ResearchLimits;
 }
@@ -1162,26 +1166,47 @@ interface EvidenceAcquisitionResult {
   budget: ResearchBudget;
 }
 
+type EvidenceRequestFailure =
+  | {
+      code: "search_unavailable" | "invalid_response" | "extraction_failed";
+      retryable: true;
+    }
+  | {
+      code: "rate_limited";
+      retryable: true;
+      retryAfterSeconds?: number;
+    };
+
 interface EvidenceRequestResult {
   request: EvidenceRequest;
   candidates: SearchResult[];
-  consumedSources: SearchResult[];
+  ownedConsumedSources: SearchResult[];
   evidenceSourceIds: SourceId[];
-  failure?: {
-    code: string;
-    retryable: boolean;
-  };
+  failure?: EvidenceRequestFailure;
 }
 ```
 
 `ResearchAssessor` emits one `search` directive for one problem. `ResearchResolver` converts it to an `EvidenceRequest` and may batch up to three independent ready requests discovered across recursive branches into one `EvidenceAcquirer` call; each result remains associated with its originating `problemId`.
+
+**Deterministic source allocation**
+
+Each evidence request may own selection of at most three new canonical sources, derived from the approved `9 / 3` source/search ceilings. For one concurrent batch, requests are ordered by priority, shallower problem depth, then gap creation order. Eligible candidates are canonicalized and locally rank-ordered, then selection proceeds in rank layers:
+
+```text
+request order: A, B, C
+selection:     A1, B1, C1, A2, B2, C2, A3, B3, C3
+```
+
+A candidate already present as viable available evidence is reused without source-budget consumption. A known destination without viable extracted evidence still consumes one source when selected for extraction. The same canonical source selected or encountered across sibling requests consumes global budget and extraction capacity once, may be associated with every relevant request, and does not consume another request's ownership opportunity; that request advances to its next unique eligible candidate. Global search/source counters are reserved in this deterministic order before concurrent extraction starts, so promise completion order cannot affect allocation.
+
+Unused ownership or global capacity is not released back to earlier requests. A lone evidence request therefore selects at most three even when the turn later uses fewer than three searches. This deliberate under-use prevents an early branch from starving unknown later recursive work; explicit limits are ceilings, not utilization targets. Candidates four/five may fill an ownership opportunity when higher-ranked candidates are duplicate or otherwise ineligible; any candidates remaining after three unique selections stay unconsumed. Once a selected source consumes budget, failed/non-viable extraction is not backfilled.
 
 **Invariants**
 
 - Accepts no more than the remaining search budget and never more than three independent ready requests.
 - Invokes `SearchProvider` at most once per request; independent requests run concurrently up to three.
 - Requests at most five candidates per search.
-- Selection consumes no more than the remaining shared source budget and never more than nine aggregate additional sources per turn. A source is consumed when selected for extraction/research context, whether extraction succeeds or fails; unselected candidates do not consume this budget.
+- Each request owns at most three unique new-source selections; all requests together consume no more than the remaining shared budget and never more than nine aggregate additional sources per turn. A source is consumed when selected for extraction/research context, whether extraction succeeds or fails; unselected candidates do not consume this budget.
 - Results and known sources are canonicalized and deduplicated before consumption.
 - Each unique source is extracted at most once through one globally bounded three-worker pool.
 - Evidence-request-to-candidate-to-consumed-source association is preserved.
@@ -2029,7 +2054,7 @@ The final implementation must prove at least:
 - A `resolved` assessor directive performs zero new searches; only a completed root with `sufficient | best_effort` synthesizes, exactly once.
 - Decomposition produces one to three prioritized material children with explicit `all | any` semantics.
 - Resolution converges to a useful fixed point with zero material gaps when the explicit limits permit.
-- No research turn invokes more than three searches, consumes/extracts more than nine additional sources, descends beyond depth two, performs more than eight assessments, or emits more than three child problems per decomposition.
+- No research turn invokes more than three searches, consumes/extracts more than nine additional sources, descends beyond depth two, performs more than eight assessments, or emits more than three child problems per decomposition; each evidence request owns at most three deterministic new-source selections.
 - Each search returns at most five candidates; leaf searches and extraction each use a global concurrency bound of three.
 - EvidenceAcquirer never assesses, recurses, joins knowledge, or synthesizes; ResearchResolver never emits a user-facing answer or child turn.
 - No-new-knowledge, duplicate-problem, exhausted explicit limit/depth, interruption, and provider-unavailable stops are typed and observable.
@@ -2055,7 +2080,6 @@ The final implementation must prove at least:
 
 ## Open Questions
 
-- How are nine aggregate consumed sources allocated fairly and deterministically across up to three search result sets and recursive branches?
 - Beyond the approved assessment/synthesis model variables, what environment-variable names expose the explicit balanced `ResearchLimits` while keeping typed names canonical?
 - Should the migration fallback from `ANTHROPIC_ASSESSMENT_MODEL` and `ANTHROPIC_SYNTHESIS_MODEL` to legacy `ANTHROPIC_MODEL` remain permanently or be removed after deployment?
 - Does `modelRef`/`searchRef` remain on `Thread`, move to turns, or become derived execution metadata?
