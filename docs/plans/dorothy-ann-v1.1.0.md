@@ -30,6 +30,7 @@ Decisions made so far:
 - `Thread` and `Turn` remain the central data-model components. The target `Turn` should become a discriminated `SearchTurn | ResearchTurn` union.
 - The persistence wrapper currently named `StoredThreadEnvelopeV2` is not a top-level architecture box. Its naming and exact storage contract remain open.
 - The agreed visual regions are `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, and `UnlockBox`. Boxes receive typed view state and emit intent; route/workspace controllers coordinate application and system capabilities.
+- `Hotkeys` is an explicit layout-control box, not a visible region. It translates unhandled global keyboard events and current layout context into semantic intents without navigating, focusing DOM nodes, cancelling work, or invoking system capabilities directly.
 - `ThreadsBox` has one canonical `/threads` route with aggressive fzf-like filtering and keyboard behavior, not separate route and overlay presentations.
 - `UnlockBox` is part of the shared box vocabulary so global visual-system changes include authentication. It owns only ephemeral passphrase entry and emits authentication intent without persisting or logging the passphrase.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
@@ -881,18 +882,25 @@ The agreed layout vocabulary is:
 - `ThreadsBox` with fzf-like filtering and keyboard behavior (currently `ThreadPicker`)
 - `UnlockBox`
 
+`Hotkeys` is also an explicit layout-control box, but it is not a visible region and does not receive shared visual styling.
+
 `Box` identifies a visually coherent product region with one presentation capability, a typed state input, and typed user intents. All boxes participate in shared typography, spacing, border, focus, responsive, and color-scheme styling. `UnlockBox` is explicitly included so global box-level visual changes apply to the authentication screen rather than leaving it as unrelated boundary markup.
 
-Layout boxes receive state and emit user intent. They do not directly own navigation, durable persistence, network requests, turn routing, or research orchestration. Ordinary ephemeral interaction state—draft text, fuzzy query, active row, focus, disclosure, and `BrandBox` tagline rotation—may remain local to React. Route/workspace controllers translate intents into application/system calls and project resulting state back into boxes.
+Layout boxes receive state and emit user intent. They do not directly own navigation, durable persistence, network requests, turn routing, or research orchestration. Ordinary ephemeral interaction state—draft text, fuzzy query, active row, focus, disclosure, and `BrandBox` tagline rotation—may remain local to React. Route/workspace controllers translate intents into application/system calls and project resulting state back into boxes. `Hotkeys` follows the same intent boundary for global keyboard input while box-local keyboard behavior remains with the owning visible box.
 
 ```text
-application/system state
-          |
-          v
-route/workspace controller
-          |
-          | typed view state
-          v
+KeyboardEvent + route/focus/turn context
+                  |
+                  v
+              [ Hotkeys ] ------ semantic intent ------+
+                                                       |
+application/system state                               |
+          |                                            |
+          v                                            v
+                 route/workspace controller <----------+
+                            |
+                            | typed view state
+                            v
 +-------------------------- page ---------------------------+
 | StickyHeader                                             |
 |   +-- BrandBox                                           |
@@ -905,15 +913,15 @@ route/workspace controller
 |                                                  v       |
 |                                            EvidenceBox   |
 +----------------------------------------------------------+
-| PromptBox ----------------------- submit/cancel intent   |
+| PromptBox ---------------------------- raw submit intent |
 +----------------------------------------------------------+
-          |
-          | typed user intent
-          v
-route/workspace controller
-          |
-          v
-application/system capability
+                            |
+                            | typed user intent
+                            v
+                 route/workspace controller
+                            |
+                            v
+              application/system capability
 ```
 
 The canonical page compositions are:
@@ -934,7 +942,8 @@ Cross-box coordination belongs to the route/workspace controller. In particular,
 Initial system relationships are:
 
 ```text
-PromptBox      -- submit/cancel intent --> Turn controller
+PromptBox      -- raw submit intent ------> Turn controller
+Hotkeys        -- focus/cancel/route intent -> route/workspace controller
 TranscriptBox  <-- durable/live turns --- route/workspace controller
 EvidenceBox    <-- reachable evidence ---- route/workspace controller
 ThreadsBox     <-- thread summaries ------ ThreadStore controller
@@ -946,7 +955,77 @@ StickyHeader   -- contextual intents -----> route/workspace controller
 
 `SettingsBox` may own temporary form and file-picker state but reaches browser preferences, backup operations, and `ThreadStore` only through intents. `UnlockBox` may own an in-memory passphrase draft but never logs, persists, exports, or exposes that value outside its submit intent. `StickyHeader` owns sticky presentation, safe-area behavior, and action placement; `BrandBox` owns identity presentation and its local rotation timer, not navigation.
 
-The detailed per-box inputs, outputs, invariants, failure contracts, implementation boundaries, and current → target mappings remain to be settled.
+### `PromptBox`
+
+**Capability:** capture one raw user submission while preserving an editable terminal-like draft during active work.
+
+```ts
+interface PromptBoxViewState {
+  initialDraft?: string;
+  submission: "available" | "blocked_by_active_turn";
+  focusRequestKey: number;
+}
+
+type PromptBoxIntent = {
+  type: "prompt_submitted";
+  rawInput: string;
+};
+```
+
+`PromptBox` owns its ephemeral draft, text composition, and focus state. The controller interprets submitted text as a slash command, trailing-`?` `ResearchTurn`, or macro-less `SearchTurn`; the box does not know those semantics.
+
+**Invariants**
+
+- The prompt has no submit or stop button; Enter submits when available.
+- While a turn is active, the draft remains editable but submission is blocked. There is no hidden queue.
+- `Ctrl+C` with focus in the prompt and a collapsed selection clears the draft. Selected text retains native copy behavior; `Cmd+C` and copying outside the prompt are never intercepted.
+- A changed `focusRequestKey` focuses the prompt without a controller querying its DOM.
+- Empty or composition-in-progress input is not submitted.
+
+**Failure contract:** blocked or invalid submission remains local and non-destructive; a failed turn does not become a prompt-rendering failure.
+
+**Implementation boundary:** controlled versus locally owned draft representation, input versus textarea rendering, and concrete focus-ref mechanics may vary while keyboard, composition, submission, and accessibility behavior remain intact.
+
+**Current mapping:** `PromptBox`, draft state, macro/command handling, and submission callbacks are interleaved in `src/ui/App.tsx`. The target keeps draft interaction in `PromptBox` and moves interpretation and effects to the controller.
+
+### `Hotkeys`
+
+**Capability:** translate one unhandled global keyboard gesture plus current route/focus/turn context into a semantic layout intent.
+
+```ts
+interface HotkeysContext {
+  route: "home" | "thread" | "threads" | "settings" | "unlock";
+  promptAvailable: boolean;
+  turnActive: boolean;
+  focus: "editable" | "interactive" | "passive";
+  composing: boolean;
+}
+
+type HotkeyIntent =
+  | { type: "prompt_focus_requested" }
+  | { type: "turn_cancellation_requested" }
+  | { type: "new_thread_requested" }
+  | { type: "threads_requested" }
+  | { type: "settings_requested" };
+```
+
+**Invariants**
+
+- Unmodified `:` emits `prompt_focus_requested` only when a `PromptBox` is mounted, focus is passive, and composition is inactive. It is a no-op on `/threads`, `/settings`, and `/unlock`.
+- Escape during an active turn emits only `turn_cancellation_requested` and does not count toward the idle double-Escape shortcut.
+- Two unhandled Escapes within the retained bounded interval request a new thread only while no turn is active.
+- Retained global thread/settings shortcuts emit route intents; `Hotkeys` does not navigate.
+- Box-local bindings remain local: `PromptBox` owns `Ctrl+C` and submission; `ThreadsBox` owns filtering, arrows, Enter, Delete, and route-close Escape.
+- Editable or interactive targets, modifier combinations, composition, and already-handled events are not stolen unless a documented binding explicitly requires them.
+- `Hotkeys` never queries/focuses box DOM, aborts a request, accesses storage, or invokes application/system capabilities.
+
+**Failure contract:** unavailable targets and unsupported gestures are safe no-ops; the controller may ignore stale or inapplicable intents without creating a user-facing failure.
+
+**Implementation boundary:** hook, provider, event-delegation strategy, and key-normalization mechanics may vary. There must be one global installation, deterministic conflict priority, and no duplicated route-level listeners for global bindings.
+
+**Current mapping:** global shortcuts live in `GlobalShortcuts`, research cancellation has a separate capture listener in `Topic`, and local picker behavior lives in `ThreadPicker` in `src/ui/App.tsx`. The target centralizes only global/cross-box gestures in `Hotkeys`; box-local behavior stays with the owning box.
+
+The detailed contracts for the remaining layout boxes and their current → target mappings remain to be settled.
 
 ## Current → Target Overview
 
@@ -1042,6 +1121,10 @@ The final implementation must prove at least:
 - Partial sibling failures preserve viable evidence and provenance.
 - Synthesis receives typed bounded thread context and the final root knowledge unit, emits only citations reachable through that unit, and fails on empty output.
 - Search and research failures cross boxes as bounded typed failures without provider payloads.
+- `PromptBox` remains buttonless, keeps its draft editable while one active turn blocks submission, has no queue, clears a collapsed-selection draft with focused `Ctrl+C`, and preserves native copy for selected text and all `Cmd+C` use.
+- `Hotkeys` is installed once, emits semantic intents rather than effects, focuses a mounted prompt with passive unmodified `:`, emits cancellation for active-turn Escape, and never steals editable/composing input or invokes navigation/system capabilities directly.
+- `/threads` is the only `ThreadsBox` presentation; its fzf-like local keyboard behavior does not conflict with global hotkeys.
+- `UnlockBox` participates in shared box styling while passphrase input remains ephemeral, unlogged, and unpersisted.
 - Existing persistence, export, retention, auth, interruption, stale-request, keyboard, focus, responsive, and accessibility behavior remains green unless this plan explicitly changes it.
 - Fixture and live adapters preserve the same provider-neutral contracts.
 - `README.md` and `AGENTS.md` describe the code that actually ships.
