@@ -17,7 +17,7 @@ Decisions made so far:
 - Dorothy Ann is an information resolver and researcher. A request creates either a `SearchTurn` or `ResearchTurn`; these are turn contracts, not persistent application modes, and `chat` is not a third kind.
 - The existing input macro remains explicit and deterministic: a submission ending in `?` creates a `ResearchTurn`; a macro-less submission creates a `SearchTurn`.
 - A `SearchTurn` uses `SearchProvider` and returns normalized ranked sources without LLM synthesis.
-- Every `ResearchTurn` follows one standard recursive protocol: the high-reasoning assessor returns `resolved`, `search`, or `decompose`; the resolver interprets the directive, joins child knowledge into parent state, reassesses, and synthesizes exactly one user-facing answer at the root.
+- Every `ResearchTurn` follows one standard recursive protocol: the high-reasoning assessor returns `resolved`, `search`, or `decompose`; the resolver interprets the directive, joins child knowledge into parent state, reassesses, and synthesizes exactly one user-facing answer at the root. `resolved` is a recursive node directive; root research outcome uses `sufficient | best_effort | insufficient`.
 - Decomposition expresses `all` versus `any` child semantics. Recursive children return supported `KnowledgeUnit` values, never user-facing answers.
 - The convergence target is a useful fixed point where zero material evidence gaps remain. Resolution also stops safely on exhausted explicit budget/depth, no new knowledge, a duplicate/cyclic problem, interruption, or total provider unavailability.
 - The approved balanced tuning remains explicit: three searches, nine consumed additional sources, recursion depth two, eight assessment calls, and three child problems per decomposition. Search and extraction concurrency are both capped at three; these distinct controls are intentionally not collapsed into one fuel value.
@@ -297,7 +297,7 @@ current request + prior thread context + macro-selected turn kind
 - Every terminal durable turn passes runtime schema validation.
 - The discriminant determines which result fields are valid; search and research result shapes are not mixed through unrelated optional fields.
 
-The persistence/lifecycle axis and complete `SearchTurn` terminal union are settled. Detailed `ResearchTurn` success/result/failure payload variants remain to be settled.
+The persistence/lifecycle axis, complete `SearchTurn` terminal union, and completed `ResearchTurnResult` variants are settled. Failed and interrupted `ResearchTurn` payload variants remain to be settled.
 
 ### Persistence record
 
@@ -613,21 +613,36 @@ These balanced values are approved defaults and hard per-turn ceilings, not targ
 Output:
 
 ```ts
-interface ResearchTurnSuccess {
-  answer: AssistantContent;
-  resolution: ResearchResolution;
-  usage?: UsageMetadata;
-}
+type ResearchTurnResult =
+  | {
+      completion: "sufficient";
+      answer: AssistantContent;
+      resolution: SufficientResearchResolution;
+      usage?: UsageMetadata;
+    }
+  | {
+      completion: "best_effort";
+      answer: AssistantContent;
+      resolution: BestEffortResearchResolution;
+      usage?: UsageMetadata;
+    };
+
+type CompletedResearchTurn = TerminalTurnBase<"research"> & {
+  status: "completed";
+  result: ResearchTurnResult;
+};
 ```
 
-This is the successful form only. The final turn union must represent best-effort success separately from terminal insufficient-evidence, interruption, and provider failures without requiring an `answer` where none exists.
+This is the completed form only. `resolved` is reserved for the recursive assessor directive: it says one current problem can return supported knowledge without another reduction. `sufficient` is the root research outcome: after joined child knowledge and root reassessment, zero material gaps remain for the user's question. Several child problems may be `resolved` while the root remains `best_effort` or `insufficient`.
+
+The final turn union must represent terminal insufficient-evidence, interruption, and provider failures without requiring an `answer` where none exists.
 
 **Invariants**
 
 - Every initial and follow-up research question uses this same protocol.
 - `Thread` owns conversation; bounded `ThreadContext` and evidence are explicit inputs.
 - Resolution recursively joins supported child knowledge and converges toward zero material evidence gaps required by the current question.
-- A sufficient/resolved assessment conducts no additional search.
+- A `resolved` assessor directive conducts no additional search; root `sufficient` is evaluated only after joined knowledge satisfies the root success criterion.
 - Recursive branches share one turn-level set of explicit limits and cannot multiply the approved ceilings.
 - No research turn invokes more than three searches, consumes more than nine additional sources, descends beyond depth two, performs more than eight assessments, or emits more than three child problems from one decomposition.
 - A turn requests at most five candidates per search and selects at most nine aggregate sources for consumption.
@@ -808,14 +823,45 @@ type ResolutionStopReason =
   | "interrupted"
   | "provider_unavailable";
 
-interface ResearchResolution {
-  status: "sufficient" | "best_effort" | "insufficient";
+interface ResearchResolutionBase {
   knowledge: KnowledgeUnit;
   ledger: GapLedger;
   tasks: ResearchTaskRecord[];
-  stopReason: ResolutionStopReason;
 }
+
+interface SufficientResearchResolution extends ResearchResolutionBase {
+  status: "sufficient";
+  stopReason: "sufficient";
+}
+
+interface BestEffortResearchResolution extends ResearchResolutionBase {
+  status: "best_effort";
+  stopReason: Exclude<
+    ResolutionStopReason,
+    "sufficient" | "interrupted"
+  >;
+}
+
+interface InsufficientResearchResolution extends ResearchResolutionBase {
+  status: "insufficient";
+  stopReason: Exclude<ResolutionStopReason, "sufficient">;
+}
+
+type ResearchResolution =
+  | SufficientResearchResolution
+  | BestEffortResearchResolution
+  | InsufficientResearchResolution;
 ```
+
+The vocabulary is intentionally layered:
+
+```text
+recursive node control   resolved | search | decompose
+root epistemic outcome   sufficient | best_effort | insufficient
+user-facing transcript   resolved | best effort | insufficient
+```
+
+`resolved` never becomes a root resolution status, and `sufficient` is never an assessor directive.
 
 **Recursive semantics**
 
@@ -1175,7 +1221,7 @@ interface TranscriptTurnView {
     | {
         kind: "answer";
         markdown: string;
-        completion: "resolved" | "best_effort";
+        completion: "resolved" | "best_effort"; // presents root sufficient as "resolved"
       }
     | {
         kind: "terminal";
@@ -1779,7 +1825,7 @@ The final implementation must prove at least:
 - Recursive children return supported `KnowledgeUnit` values and never create child turns or user-facing answers.
 - `joinKnowledge` is associative, commutative, and idempotent; concurrent ordering and duplicate/retried knowledge produce equivalent state, while contradictory supported observations are preserved as contested rather than overwritten.
 - The application-owned GapLedger gives problems stable IDs, validates support and transitions, selects by priority/depth/creation order, and prevents silent omission or cycles.
-- A resolved assessment performs zero new searches; only the root synthesizes, exactly once.
+- A `resolved` assessor directive performs zero new searches; only a completed root with `sufficient | best_effort` synthesizes, exactly once.
 - Decomposition produces one to three prioritized material children with explicit `all | any` semantics.
 - Resolution converges to a useful fixed point with zero material gaps when the explicit limits permit.
 - No research turn invokes more than three searches, consumes/extracts more than nine additional sources, descends beyond depth two, performs more than eight assessments, or emits more than three child problems per decomposition.
@@ -1807,7 +1853,7 @@ The final implementation must prove at least:
 
 ## Open Questions
 
-- What are the final discriminated `ResearchTurn` success/result/failure payload variants now that lifecycle persistence and `SearchTurn` are settled?
+- What are the final failed/interrupted `ResearchTurn` payload variants now that completed `sufficient | best_effort` results, lifecycle persistence, and `SearchTurn` are settled?
 - Is the canonical `EvidenceSet` materialized once at thread level, or are source records retained per turn and deterministically projected into the same set for display and future research context?
 - How are nine aggregate consumed sources allocated fairly and deterministically across up to three search result sets and recursive branches?
 - Beyond the approved assessment/synthesis model variables, what environment-variable names expose the explicit balanced `ResearchLimits` while keeping typed names canonical?
