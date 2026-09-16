@@ -31,7 +31,7 @@ Decisions made so far:
 - The persistence wrapper currently named `StoredThreadEnvelopeV2` is not a top-level architecture box. Its naming and exact storage contract remain open.
 - The agreed visual regions are `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, and `UnlockBox`. Boxes receive typed view state and emit intent; route/workspace controllers coordinate application and system capabilities.
 - `Hotkeys` is an explicit layout-control box, not a visible region. It translates unhandled global keyboard events and current layout context into semantic intents without navigating, focusing DOM nodes, cancelling work, or invoking system capabilities directly.
-- `ThreadsBox` has one canonical `/threads` route with aggressive `fzf@0.5.2`-backed filtering and keyboard behavior, not separate route and overlay presentations. The exact package version is pinned behind a pure `rankThreads` policy with fixture-locked ordering.
+- `ThreadsBox` has one canonical `/threads` route with aggressive `fzf@0.5.2`-backed filtering and keyboard behavior, not separate route and overlay presentations. The exact package version is pinned behind a pure `rankThreads` policy with fixture-locked ordering. Deletion uses an inline terminal-style confirmation, never `window.confirm`.
 - `UnlockBox` is part of the shared box vocabulary so global visual-system changes include authentication. It owns only ephemeral passphrase entry and emits authentication intent without persisting or logging the passphrase.
 - `TranscriptBox` renders durable history and the one active turn through one ordered presentation model. Live progress and streamed answer content occupy the active turn's position and are replaced, not duplicated, when that turn becomes durable.
 - `EvidenceBox` renders one thread-wide append-stable `EvidenceSet`. Canonical sources are deduplicated, durable support uses `SourceId`, display citations use derived one-based ordinals, and role occurrences allow one source to be promoted from search destination to research evidence without duplication.
@@ -1274,23 +1274,24 @@ unlock   -> BrandBox
 **Capability:** rapidly find and act on one durable thread through the canonical `/threads` route.
 
 ```ts
-type ThreadsBoxViewState =
-  | {
-      status: "loading";
-      threads: [];
-      pendingDeletionIds: ThreadId[];
-    }
-  | {
-      status: "ready";
-      threads: ThreadSummary[];
-      pendingDeletionIds: ThreadId[];
-    }
-  | {
-      status: "failed";
-      threads: ThreadSummary[];
-      loadFailure: string;
-      pendingDeletionIds: ThreadId[];
-    };
+interface ThreadsBoxOperationState {
+  pendingDeletionIds: ThreadId[];
+  deletionFailures: Array<{
+    threadId: ThreadId;
+    message: string;
+  }>;
+}
+
+type ThreadsBoxViewState = ThreadsBoxOperationState &
+  (
+    | { status: "loading"; threads: [] }
+    | { status: "ready"; threads: ThreadSummary[] }
+    | {
+        status: "failed";
+        threads: ThreadSummary[];
+        loadFailure: string;
+      }
+  );
 
 interface RankedThreadSummary {
   thread: ThreadSummary;
@@ -1339,18 +1340,21 @@ The dependency is intentionally used instead of maintaining a home-rolled approx
 - `/threads` is the only presentation; slash command, global shortcut, and navigation intent converge on that route.
 - Query, ranked results, active row, and match highlighting are ephemeral local UI state. Loading, deletion-in-progress, and bounded failures are controller-supplied state.
 - Typing updates ranking synchronously. Arrow keys and `Ctrl+P`/`Ctrl+N` move one active row; movement is bounded and keeps that row visible.
-- Enter requests opening the active thread. Delete/Backspace requests deletion under the separately settled confirmation contract only when it is not editing filter text; Escape requests closing the route when no box-local operation consumes it first.
+- Enter requests opening the active thread. Delete/Backspace enters inline confirmation for the active row only when it is not editing filter text; no deletion intent is emitted yet.
+- Inline confirmation is terminal-style and local: `y` or Enter emits `thread_delete_requested`; `n` or Escape cancels confirmation. The confirmation names the thread and keeps query/selection intact.
+- Confirmation consumes its Escape. A later unhandled Escape emits `threads_close_requested`.
+- While the confirmed deletion is pending in controller state, its row cannot be reopened or deleted again. Success removes it from supplied state; failure restores normal actions with bounded feedback and preserves the closest viable active row.
 - `Ctrl+C` with a collapsed selection clears a non-empty filter; native copy is preserved for selected text and all `Cmd+C` use.
 - Empty-query and equal-score order are deterministic and do not depend on storage return order or sort stability.
 - Match highlighting renders text nodes, never matcher-produced HTML. Query syntax and Unicode/diacritic behavior are covered by fixtures.
-- The box emits semantic intents but never calls `ThreadStore`, confirms/removes data, reloads records, or navigates.
+- The box owns only ephemeral confirmation presentation and emits semantic intents after confirmation; it never calls `ThreadStore`, removes data, reloads records, or navigates.
 - Loading, empty, no-match, deletion-in-progress, and load/delete failure states remain distinct, perceivable, and keyboard safe.
 
 **Failure contract:** matcher failure falls back to deterministic empty-query ordering with bounded non-blocking feedback rather than making threads inaccessible. Storage load/delete failures arrive as view state, preserve the current query/selection where possible, and expose only applicable retry intent.
 
 **Implementation boundary:** row rendering, list virtualization, highlight styling, and exact local state representation may vary. The pinned matcher configuration, wrapper result contract, keyboard semantics, deterministic tie-breaks, and accessibility behavior may not drift without amending this plan.
 
-**Current mapping:** `ThreadPicker` in `src/ui/App.tsx` directly loads/removes through `ThreadStore`, uses case-insensitive title substring filtering, owns a browser confirmation, and navigates itself; it also supports both inline and overlay rendering. The target `ThreadsBox` receives state and emits intent on canonical `/threads`, while controller effects and `rankThreads` matching remain separate explicit boundaries.
+**Current mapping:** `ThreadPicker` in `src/ui/App.tsx` directly loads/removes through `ThreadStore`, uses case-insensitive title substring filtering, owns a `window.confirm`, and navigates itself; it also supports both inline and overlay rendering. The target `ThreadsBox` receives state and emits intent on canonical `/threads`, uses inline terminal-style confirmation, and leaves controller effects and `rankThreads` matching behind separate explicit boundaries.
 
 The detailed contracts for the remaining layout boxes and their current → target mappings remain to be settled.
 
@@ -1455,7 +1459,7 @@ The final implementation must prove at least:
 - `BrandBox` exposes one keyboard/pointer-equivalent activation target and emits only `new_thread_requested`; tagline rotation is non-live and respects reduced motion.
 - Every canonical page composes the same `StickyHeader`; its typed contextual actions and feedback remain accessible and never perform effects directly.
 - Normalizing the same canonical URL across providers, searches, retries, or ranks yields the same collision-safe `SourceId`; provider rank and result-array position never become durable identity.
-- `/threads` is the only `ThreadsBox` presentation; its pinned `fzf@0.5.2` wrapper produces fixture-locked deterministic rankings/highlights, and its local keyboard behavior does not conflict with global hotkeys.
+- `/threads` is the only `ThreadsBox` presentation; its pinned `fzf@0.5.2` wrapper produces fixture-locked deterministic rankings/highlights, its local keyboard behavior does not conflict with global hotkeys, and deletion requires inline `y`/Enter confirmation that Escape can cancel without closing the route.
 - `UnlockBox` participates in shared box styling while passphrase input remains ephemeral, unlogged, and unpersisted.
 - Existing persistence, export, retention, auth, interruption, stale-request, keyboard, focus, responsive, and accessibility behavior remains green unless this plan explicitly changes it.
 - Fixture and live adapters preserve the same provider-neutral contracts.
