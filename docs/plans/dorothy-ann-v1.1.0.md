@@ -4,9 +4,9 @@
 
 - Status: planning
 - Last updated: 2026-09-15
-- Current focus: define the detailed contracts and relationships for the agreed layout boxes, then close the remaining data/system contracts
+- Current focus: close the remaining data/system contracts now that every agreed layout and layout-control box has an initial typed contract
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: settle each layout box's typed view state, emitted intents, invariants, failure behavior, implementation boundary, and current mapping
+- Next action: settle the final discriminated `SearchTurn | ResearchTurn` status/result/failure shapes, then evidence persistence and controller/transport ownership
 
 ## Handoff
 
