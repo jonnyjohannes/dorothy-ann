@@ -21,7 +21,7 @@ Decisions made so far:
 - Decomposition expresses `all` versus `any` child semantics. Recursive children return supported `KnowledgeUnit` values, never user-facing answers.
 - The convergence target is a useful fixed point where zero material evidence gaps remain. Resolution also stops safely on exhausted explicit budget/depth, no new knowledge, a duplicate/cyclic problem, interruption, or total provider unavailability.
 - The approved balanced tuning remains explicit: three searches, nine consumed additional sources, recursion depth two, eight assessment calls, and three child problems per decomposition. Search and extraction concurrency are both capped at three; these distinct controls are intentionally not collapsed into one fuel value.
-- `ResearchAssessor`, recursive `ResearchResolver`, and leaf `FanOutSearch` are explicit boxes. The assessor chooses semantic reductions but never answers the user; the resolver owns recursion and knowledge joining; fan-out never assesses or synthesizes.
+- `ResearchAssessor`, recursive `ResearchResolver`, and `EvidenceAcquirer` are explicit boxes. The assessor chooses semantic reductions but never answers the user; the resolver owns recursion and knowledge joining; acquisition owns bounded search, selection, and extraction but never assesses or synthesizes.
 - An application-owned turn-local `GapLedger` assigns stable identity, validates support, records decomposition and progress, enforces legal transitions, and determines mechanical convergence.
 - `joinKnowledge` is associative, commutative, and idempotent; it preserves contradictory supported observations as contested rather than overwriting them. v1.1 keeps flat support references while leaving recursive `Evidence | All | Any` proof expressions deferred.
 - `LLMProvider` exposes separate assessment and synthesis capabilities. The Anthropic adapter routes assessment to a dedicated high-reasoning model and synthesis to a separately configurable balanced generation model.
@@ -39,7 +39,7 @@ Dorothy Ann is an information resolver and researcher. v1.1.0 will represent eac
 
 ## Problem Statement
 
-The application works, but important capabilities are currently distributed across UI components, HTTP routes, provider adapters, and `server/research.ts`. Some product concepts are also represented ambiguously: lookup is encoded as a chat-shaped turn, chat is named as a mode despite research being the conversational capability, and the research planner/fan-out directives are visible mainly by reading implementation prompts.
+The application works, but important capabilities are currently distributed across UI components, HTTP routes, provider adapters, and `server/research.ts`. Some product concepts are also represented ambiguously: lookup is encoded as a chat-shaped turn, chat is named as a mode despite research being the conversational capability, and the research planner and generated-search orchestration are visible mainly by reading implementation prompts.
 
 This makes meaningful discussion and safe refactoring harder than necessary. We need boxes large enough to represent complete capabilities, small enough to have one responsibility, and precise enough that their implementations may change without changing their observable contracts.
 
@@ -259,7 +259,7 @@ interface EvidencePack {
 }
 ```
 
-The target evidence model must support evidence already at hand across turns, newly consumed fan-out sources, stable citation IDs, and bounded context. Its final ownership and persistence shape remain to be settled.
+The target evidence model must support evidence already at hand across turns, newly acquired sources, stable citation IDs, and bounded context. Its final ownership and persistence shape remain to be settled.
 
 ## System Components
 
@@ -444,7 +444,7 @@ question + ThreadContext + shared explicit limits
 │       [ ResearchAssessor ]                     │
 │          |                                     │
 │          ├── resolved ───────> KnowledgeUnit   │
-│          ├── search ─────────> FanOutSearch    │
+│          ├── search ───────> EvidenceAcquirer  │
 │          │                         |            │
 │          │                    new evidence      │
 │          `── decompose(all|any)                 │
@@ -519,7 +519,7 @@ This is the successful form only. The final turn union must represent best-effor
 - Lifecycle progress, resolution stop reason, and terminal state are observable.
 - Partial sibling failures preserve successful evidence.
 
-**Current mapping:** `server/research.ts` currently performs a mandatory initial search/extraction before planning and may then conduct up to three generated searches in one non-recursive fan-out. Conversation is flattened rather than passed as typed bounded thread context. The target removes the special initial-search path and moves recursive knowledge resolution behind one standard initial/follow-up `ResearchTurn` contract.
+**Current mapping:** `server/research.ts` currently performs a mandatory initial search/extraction before planning and may then conduct up to three generated searches in one non-recursive concurrent batch. Conversation is flattened rather than passed as typed bounded thread context. The target removes the special initial-search path and moves recursive knowledge resolution behind one standard initial/follow-up `ResearchTurn` contract.
 
 ### `ResearchAssessor`
 
@@ -761,22 +761,22 @@ The v1.1 persisted form may retain flat `SupportRef[]` provenance while leaving 
 
 **Implementation boundary:** traversal order, immutable versus stateful limit bookkeeping, internal scheduling, and concrete join representation may vary if recursive grammar, algebraic laws, explicit bounds, provenance, and stop semantics remain intact.
 
-### `FanOutSearch`
+### `EvidenceAcquirer`
 
-**Capability:** execute one bounded batch of leaf searches and extraction selected by `ResearchResolver`.
+**Capability:** execute one bounded set of evidence requests by searching, selecting sources, and extracting usable evidence for `ResearchResolver`. Concurrency is an internal scheduling tactic, not the box's identity.
 
 ```text
-1–3 ResearchSearch instructions + known sources + remaining budget
-                              |
-                              v
-                     [ FanOutSearch ]
-                              |
-                              v
-                     FanOutSearchResult
+1–3 EvidenceRequest values + known sources + remaining budget
+                           |
+                           v
+                 [ EvidenceAcquirer ]
+                           |
+                           v
+              EvidenceAcquisitionResult
 ```
 
 ```ts
-interface ResearchSearch {
+interface EvidenceRequest {
   problemId: ResearchProblemId;
   query: string;
   purpose: string;
@@ -784,24 +784,24 @@ interface ResearchSearch {
   priority: 1 | 2 | 3;
 }
 
-interface FanOutSearchInput {
-  searches: ResearchSearch[];
+interface EvidenceAcquisitionInput {
+  requests: EvidenceRequest[];
   knownSources: SearchResult[];
   budget: ResearchBudget;
   limits: ResearchLimits;
 }
 
-interface FanOutSearchResult {
-  searches: ResearchSearch[];
-  results: ResearchSearchResult[];
+interface EvidenceAcquisitionResult {
+  requests: EvidenceRequest[];
+  results: EvidenceRequestResult[];
   sources: SearchResult[];
   extractions: ExtractionOutcome[];
   evidence: EvidencePack;
   budget: ResearchBudget;
 }
 
-interface ResearchSearchResult {
-  search: ResearchSearch;
+interface EvidenceRequestResult {
+  request: EvidenceRequest;
   candidates: SearchResult[];
   consumedSources: SearchResult[];
   evidenceSourceIds: SourceId[];
@@ -812,21 +812,21 @@ interface ResearchSearchResult {
 }
 ```
 
-`ResearchAssessor` emits one `search` directive for one problem. `ResearchResolver` may batch up to three independent ready search directives discovered across recursive branches into one `FanOutSearch` call; each result remains associated with its originating `problemId`.
+`ResearchAssessor` emits one `search` directive for one problem. `ResearchResolver` converts it to an `EvidenceRequest` and may batch up to three independent ready requests discovered across recursive branches into one `EvidenceAcquirer` call; each result remains associated with its originating `problemId`.
 
 **Invariants**
 
-- Accepts no more than the remaining search budget and never more than three independent ready instructions.
-- Invokes `SearchProvider` at most once per instruction; independent searches run concurrently up to three.
+- Accepts no more than the remaining search budget and never more than three independent ready requests.
+- Invokes `SearchProvider` at most once per request; independent requests run concurrently up to three.
 - Requests at most five candidates per search.
 - Selection consumes no more than the remaining shared source budget and never more than nine aggregate additional sources per turn. A source is consumed when selected for extraction/research context, whether extraction succeeds or fails; unselected candidates do not consume this budget.
 - Results and known sources are canonicalized and deduplicated before consumption.
 - Each unique source is extracted at most once through one globally bounded three-worker pool.
-- Search-to-candidate-to-consumed-source association is preserved.
+- Evidence-request-to-candidate-to-consumed-source association is preserved.
 - Successful siblings survive another search or extraction failing.
-- Fan-out does not assess, recurse, join knowledge, or synthesize.
+- Evidence acquisition does not assess, recurse, join knowledge, or synthesize.
 
-**Failure contract:** individual failures remain typed within the result where viable sibling evidence permits continuation; total unavailability or interruption leaves as a bounded fan-out failure.
+**Failure contract:** individual request failures remain typed within the result where viable sibling evidence permits continuation; total unavailability or interruption leaves as a bounded acquisition failure.
 
 **Current mapping:** generated-search concurrency, reconciliation, global extraction, and lifecycle events are currently interleaved in `runResearch` in `server/research.ts`.
 
@@ -898,7 +898,7 @@ server/research.ts
   ├── mandatory initial search
   ├── extraction
   ├── planner invocation
-  ├── optional one-round fan-out
+  ├── optional one-round concurrent search batch
   └── synthesis
 
 TARGET
@@ -910,7 +910,7 @@ Turn controller
         │     ├── ResearchAssessor ─> LLMProvider
         │     ├── recursive child KnowledgeUnits
         │     ├── joinKnowledge (⊔)
-        │     └── FanOutSearch
+        │     └── EvidenceAcquirer
         │           ├───────────────> SearchProvider
         │           └───────────────> ContentExtractor
         └── AnswerSynthesizer ──────> LLMProvider
@@ -929,7 +929,7 @@ The implementation plan is intentionally provisional until all boxes and migrati
 3. Finalize layout-box contracts and state/intent ownership.
 4. Record a precise file-level current → target mapping and migration sequence that preserves observable behavior.
 5. Introduce the canonical data model and runtime schemas with compatibility migration and focused domain tests.
-6. Extract provider-neutral `SearchTurn` and `ResearchTurn` application orchestration, including the recursive directive interpreter, assessor, knowledge join, leaf fan-out search, and synthesizer boxes.
+6. Extract provider-neutral `SearchTurn` and `ResearchTurn` application orchestration, including the recursive directive interpreter, assessor, knowledge join, evidence acquisition, and synthesizer boxes.
 7. Adapt HTTP/SSE, provider adapters, browser controller, persistence, and layout components to the new contracts.
 8. Remove obsolete lookup/chat vocabulary and compatibility paths after migration verification.
 9. Run full acceptance checks and update `README.md` and `AGENTS.md` to describe the implemented architecture as current state.
@@ -941,7 +941,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [~] 1. Architectural contracts — deliverable: approved named data/system/layout boxes with typed inputs, outputs/events, invariants, failure contracts, implementation boundaries, and diagrams; verify: no unresolved contract ambiguity required for implementation.
 - [ ] 2. Current → target mapping — deliverable: file-level responsibility and migration map; verify: every current orchestration/persistence/layout responsibility has one target owner.
 - [ ] 3. Data-model migration — deliverable: canonical `search | research` discriminated turns, schemas, and compatibility migration; verify: domain, schema, storage, and export tests.
-- [ ] 4. System-box refactor — deliverable: `SearchTurn` execution and standardized `ResearchTurn` composed from recursive resolver, typed assessor directives, algebraic knowledge join, leaf fan-out search, extraction, and synthesis boxes; verify: focused application/provider/orchestration tests across all explicit limits, algebraic laws, and stop conditions.
+- [ ] 4. System-box refactor — deliverable: `SearchTurn` execution and standardized `ResearchTurn` composed from recursive resolver, typed assessor directives, algebraic knowledge join, evidence acquisition, and synthesis boxes; verify: focused application/provider/orchestration tests across all explicit limits, algebraic laws, and stop conditions.
 - [ ] 5. Boundary adaptation — deliverable: HTTP/SSE, persistence, UI controller, and concrete provider adapters use the new contracts; verify: app, storage, UI, interruption, and fixture parity tests.
 - [ ] 6. Layout-box refactor — deliverable: agreed layout components consume state and emit intent through explicit interfaces; verify: component, keyboard, focus, responsive, and accessibility tests.
 - [ ] 7. Vocabulary cleanup — deliverable: obsolete `lookup`/`chat` mode names and accidental compatibility paths removed while preserving the trailing-`?` `ResearchTurn` macro; verify: repository search plus full typecheck/test/build.
@@ -965,7 +965,7 @@ The final implementation must prove at least:
 - Resolution converges to a useful fixed point with zero material gaps when the explicit limits permit.
 - No research turn invokes more than three searches, consumes/extracts more than nine additional sources, descends beyond depth two, performs more than eight assessments, or emits more than three child problems per decomposition.
 - Each search returns at most five candidates; leaf searches and extraction each use a global concurrency bound of three.
-- FanOutSearch never assesses, recurses, joins knowledge, or synthesizes; ResearchResolver never emits a user-facing answer or child turn.
+- EvidenceAcquirer never assesses, recurses, joins knowledge, or synthesizes; ResearchResolver never emits a user-facing answer or child turn.
 - No-new-knowledge, duplicate-problem, exhausted explicit limit/depth, interruption, and provider-unavailable stops are typed and observable.
 - Budget exhaustion with useful evidence produces best-effort synthesis with uncertainty; no useful evidence produces insufficient-evidence failure.
 - Partial sibling failures preserve viable evidence and provenance.
