@@ -27,7 +27,7 @@ Decisions made so far:
 - `LLMProvider` exposes separate assessment and synthesis capabilities. The Anthropic adapter routes assessment to a dedicated high-reasoning model and synthesis to a separately configurable balanced generation model.
 - Initial and follow-up research questions use the same protocol. An empty initial context is assessed through the same interface rather than routed through a separate mandatory-search path.
 - Budget exhaustion with useful supported evidence produces a bounded best-effort synthesis that identifies unresolved uncertainty; no useful supported evidence produces an insufficient-evidence failure.
-- `Thread` and `Turn` remain the central data-model components. The target `Turn` should become a discriminated `SearchTurn | ResearchTurn` union.
+- `Thread` and `Turn` remain the central data-model components. Durable `Turn` is a discriminated terminal `SearchTurn | ResearchTurn` union; pending/running execution exists only as controller-owned `ActiveTurn` state. Every observed terminal outcome is persisted, including failed, insufficient, and interrupted attempts.
 - The persistence wrapper currently named `StoredThreadEnvelopeV2` is not a top-level architecture box. Its naming and exact storage contract remain open.
 - The agreed visual regions are `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, and `UnlockBox`. Boxes receive typed view state and emit intent; route/workspace controllers coordinate application and system capabilities.
 - `Hotkeys` is an explicit layout-control box, not a visible region. It translates unhandled global keyboard events and current layout context into semantic intents without navigating, focusing DOM nodes, cancelling work, or invoking system capabilities directly.
@@ -39,6 +39,7 @@ Decisions made so far:
 - `SettingsBox` applies each visual preference immediately through emitted intent, has no Save/Cancel transaction, and reports persistence independently. The settings controller applies document state and persists through a browser preference adapter; failed persistence leaves the choice active for the session and visibly unsaved. Existing backup/import remains a compact secondary recovery utility with an inline validated preview and explicit keep/replace conflict policy; it never uses `window.confirm`.
 - `UnlockBox` is a buttonless auth-entry region. It owns only an ephemeral masked draft, emits one passphrase submission at a time, and clears/refocuses after rejection while the authentication controller owns validation, network calls, safe return navigation, and bounded public auth state.
 - `SystemStatusBox` is a narrowly scoped visible box for blocking application-boundary checking or unavailability (auth session, provider status, or thread storage). It emits retry intent but never absorbs turn, thread-row, settings, import, or ordinary route failures.
+- Active turns are controller-only and never persisted; every observed terminal completed, insufficient, failed, or interrupted result becomes an immutable durable turn. Retry creates a new linked turn through `retryOfTurnId` rather than mutating terminal history.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
 
 Read this plan, then the completed [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md), `src/domain/types.ts`, `src/domain/schemas.ts`, `src/ports/`, `server/research.ts`, `server/app.ts`, and `src/ui/App.tsx` before implementation. Continue design in this file; do not begin implementation until the remaining box contracts and migration plan are approved.
@@ -157,10 +158,10 @@ thread identity + metadata + ordered turns
 **Invariants**
 
 - Turns are chronologically ordered.
-- A durable thread contains only completed turns.
+- A durable thread contains only terminal turns; active/pending/running execution state is never serialized into it.
 - `updatedAt` reflects the latest meaningful activity.
 - Serialized thread data is provider-neutral.
-- Source references used by an answer resolve through the corresponding turn.
+- Source references used by an answer resolve by stable `SourceId` through the canonical `EvidenceSet` reconstructed from thread activity.
 - Schema changes are versioned and migration-safe.
 - A thread is the unit of storage, retention, selection, import, and export.
 
@@ -187,13 +188,41 @@ interface Turn {
 }
 ```
 
-Target direction:
+Target lifecycle:
 
 ```ts
 type Turn = SearchTurn | ResearchTurn;
-
 type TurnKind = "search" | "research";
+
+type ActiveTurn =
+  | ActiveSearchTurn
+  | ActiveResearchTurn;
+
+interface TerminalTurnBase {
+  id: TurnId;
+  kind: TurnKind;
+  retryOfTurnId?: TurnId;
+  createdAt: IsoTimestamp;
+  finishedAt: IsoTimestamp;
+  userMessage: UserMessage;
+}
 ```
+
+`ActiveTurn` is mutable controller state projected from request execution and lifecycle events; it is never part of a persisted `Thread`. `Turn` is immutable terminal history. Every terminal outcome observed by the controller is committed: completed search/research, insufficient evidence, bounded failure, and interruption. A failed or interrupted first request therefore creates a durable thread and appears in `ThreadsBox`; seven-day retention and explicit deletion bound that history.
+
+```text
+controller-owned ActiveTurn
+           |
+           +-- success -------> terminal completed Turn
+           +-- insufficient --> terminal failed Turn
+           +-- failure -------> terminal failed Turn
+           `-- interruption --> terminal interrupted Turn
+                                      |
+                                      v
+                                ThreadStore commit
+```
+
+Retry creates a new active turn and, if terminal, a new immutable turn with `retryOfTurnId` referencing the earlier same-thread terminal attempt. It never reopens or overwrites the original turn. The retried raw request must match the referenced turn; a materially edited request is a normal new turn. Abrupt process loss before a terminal event may lose controller-only active state, but it cannot leave a durable phantom `running` turn.
 
 The turn kind is selected per submission: trailing `?` creates research; otherwise the submission creates search. It is not durable global UI mode.
 
@@ -211,14 +240,15 @@ current request + prior thread context + macro-selected turn kind
 
 - Exactly one user request belongs to a turn.
 - At most one assistant answer is committed.
-- A turn reaches one terminal state: completed, failed, or interrupted.
-- Stale stream events and retries cannot overwrite a newer turn.
+- A durable turn represents exactly one terminal state: completed, failed, or interrupted; pending/running are `ActiveTurn` concerns.
+- Terminal turns are immutable after commit. Stale stream events and retries cannot overwrite a terminal or newer turn.
+- `retryOfTurnId`, when present, resolves to an earlier terminal turn in the same thread with the same raw request.
 - Provider-specific payloads are never persisted.
 - Citations reference only sources supplied to synthesis.
-- A completed durable turn passes runtime schema validation.
+- Every terminal durable turn passes runtime schema validation.
 - The discriminant determines which result fields are valid; search and research result shapes are not mixed through unrelated optional fields.
 
-Detailed `SearchTurn` and `ResearchTurn` status/result unions remain to be settled.
+The persistence/lifecycle axis is settled: all terminal outcomes are durable and all active execution is controller-only. Detailed `SearchTurn` and `ResearchTurn` success/result/failure payload unions remain to be settled.
 
 ### Persistence record
 
@@ -1690,7 +1720,8 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 
 The final implementation must prove at least:
 
-- `Turn` accepts only valid search or research state combinations.
+- `Turn` accepts only valid terminal search or research combinations; pending/running execution is represented only by non-persisted controller-owned `ActiveTurn`.
+- Every observed terminal outcome is committed immutably, and retry appends a same-request turn linked to an earlier same-thread terminal through `retryOfTurnId` rather than reopening it.
 - A macro-less submission creates a `SearchTurn`; a trailing-`?` submission creates a `ResearchTurn`; neither depends on persistent UI mode.
 - `SearchTurn` invokes one search and never invokes extraction or an LLM.
 - Every initial and follow-up research question enters the same recursive ResearchResolver and ResearchAssessor interfaces.
