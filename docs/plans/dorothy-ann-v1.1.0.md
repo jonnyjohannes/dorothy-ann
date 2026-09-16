@@ -34,6 +34,7 @@ Decisions made so far:
 - `ThreadsBox` has one canonical `/threads` route with aggressive fzf-like filtering and keyboard behavior, not separate route and overlay presentations.
 - `UnlockBox` is part of the shared box vocabulary so global visual-system changes include authentication. It owns only ephemeral passphrase entry and emits authentication intent without persisting or logging the passphrase.
 - `TranscriptBox` renders durable history and the one active turn through one ordered presentation model. Live progress and streamed answer content occupy the active turn's position and are replaced, not duplicated, when that turn becomes durable.
+- `EvidenceBox` renders one thread-wide append-stable `EvidenceSet`. Canonical sources are deduplicated, durable support uses `SourceId`, display citations use derived one-based ordinals, and role occurrences allow one source to be promoted from search destination to research evidence without duplication.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
 
 Read this plan, then the completed [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md), `src/domain/types.ts`, `src/domain/schemas.ts`, `src/ports/`, `server/research.ts`, `server/app.ts`, and `src/ui/App.tsx` before implementation. Continue design in this file; do not begin implementation until the remaining box contracts and migration plan are approved.
@@ -247,6 +248,8 @@ interface SearchResult {
 }
 ```
 
+`SourceId` is an application-derived stable identity for the canonical source, not provider rank or result-array position. The same canonical URL normalized from different searches must receive the same collision-safe ID before evidence, citations, or support references are admitted. Provider-local IDs may be retained only as adapter metadata and never become durable source identity.
+
 ### Evidence model
 
 Current evidence consists of a normalized `SearchResult` paired with an `ExtractedPage`, grouped in an `EvidencePack`:
@@ -264,7 +267,32 @@ interface EvidencePack {
 }
 ```
 
-The target evidence model must support evidence already at hand across turns, newly acquired sources, stable citation IDs, and bounded context. Its final ownership and persistence shape remain to be settled.
+The target exposes one thread-wide deduplicated `EvidenceSet`. Durable citations and support references use `SourceId`, never a mutable array index; the UI derives stable one-based ordinals for display. Each source retains turn/role occurrences so deduplication does not erase provider rank or provenance, and a search destination may be promoted to research evidence without creating another source entry.
+
+```ts
+type EvidenceRole = "search_destination" | "research_evidence";
+
+interface EvidenceOccurrence {
+  turnId: TurnId;
+  role: EvidenceRole;
+  rank?: number;
+}
+
+interface EvidenceSetEntry {
+  sourceId: SourceId;
+  ordinal: number;
+  source: Omit<SearchResult, "sourceId" | "rank">;
+  occurrences: EvidenceOccurrence[];
+}
+
+interface EvidenceSet {
+  entries: EvidenceSetEntry[];
+}
+```
+
+`EvidenceSet` is an append-stable ordered projection over a mathematical set: one entry exists per canonical source identity, while deterministic first admission supplies its display ordinal. Durable turn order, evidence-request priority, provider rank, and canonical identity—not concurrent completion order—determine admission order. A reused source retains its existing `SourceId` and ordinal. New role/turn occurrences are joined and deduplicated rather than replacing prior provenance.
+
+Only destinations actually returned by a completed `SearchTurn` receive `search_destination`; unselected research candidates do not enter the set. A research source receives `research_evidence` only when viable extracted content is admitted to research knowledge. Failed extraction does not promote a source. Exact ownership remains to be settled: source records may be materialized once at thread level or retained per turn and projected into the same canonical set, but either representation must reconstruct identical IDs, ordinals, roles, and occurrences.
 
 ## System Components
 
@@ -1113,6 +1141,51 @@ durable turns + active lifecycle/answer deltas
 
 **Current mapping:** `TurnTranscriptBox` currently receives a domain `Thread` and renders only `renderThreadScrollback(thread)`. `Topic` separately renders live research plans/loaders, a conditional initial streamed answer, and a separate follow-up answer in `src/ui/App.tsx`. The target replaces those fragmented paths with one controller-projected `TranscriptBoxViewState`; durable completion replaces the matching active view without duplicate output.
 
+### `EvidenceBox`
+
+**Capability:** render and navigate the complete thread-wide deduplicated evidence set.
+
+```ts
+interface EvidenceBoxViewState {
+  evidenceSet: EvidenceSet;
+  selectedSourceId?: SourceId;
+}
+
+type EvidenceBoxIntent =
+  | { type: "evidence_selected"; sourceId: SourceId }
+  | { type: "source_open_requested"; sourceId: SourceId };
+```
+
+```text
+all durable turns + active admitted sources
+                    |
+                    v
+        derive canonical EvidenceSet
+                    |
+                    v
+               EvidenceBox
+                    ^
+                    |
+ TranscriptBox citation selected by SourceId
+```
+
+**Invariants**
+
+- The box displays the complete set rather than switching scope by selected turn.
+- Each canonical source appears exactly once. Its one-based ordinal is append-stable and presentational; citations and intents retain durable `SourceId` identity.
+- A repeated source keeps its ordinal while occurrences preserve every relevant turn, role, and query-relative rank.
+- Promotion from `search_destination` to `research_evidence` adds a role occurrence to the existing entry; it never creates a duplicate card or rewrites prior provenance.
+- Deterministic admission order, not async completion order, controls ordinals. Existing visible ordinals are never renumbered when new evidence arrives.
+- Transcript citation selection highlights and focuses the matching source through controller-supplied `selectedSourceId`; neither box queries the other's DOM.
+- Selection and external-open behavior are emitted as intents. The box does not navigate, mutate turns, or resolve URLs itself.
+- Source titles, snippets, URLs, role labels, ordinals, and selection state remain keyboard and screen-reader perceivable; unsafe markup is never rendered.
+
+**Failure contract:** an empty set renders an intentional no-evidence state. A stale or unknown selected `SourceId` produces no selection rather than a rendering failure. Failed or non-viable extraction cannot promote an entry to `research_evidence`; successful siblings remain visible.
+
+**Implementation boundary:** list/grid layout, role badges, occurrence disclosure, and large-set rendering may vary while global deduplication, stable identity/ordinal behavior, provenance, focus, and accessibility contracts remain intact.
+
+**Current mapping:** `EvidenceBox` currently receives a flat `SearchResult[]`; `Topic` sometimes supplies current stream sources and sometimes derives a thread-wide deduplicated list with `sourcesForThread`, while citation rendering computes numbers separately per turn. The target controller derives one canonical `EvidenceSet` and supplies the same source ID-to-ordinal mapping to both `TranscriptBox` citation rendering and `EvidenceBox`.
+
 The detailed contracts for the remaining layout boxes and their current → target mappings remain to be settled.
 
 ## Current → Target Overview
@@ -1212,6 +1285,8 @@ The final implementation must prove at least:
 - `PromptBox` remains buttonless, keeps its draft editable while one active turn blocks submission, has no queue, clears a collapsed-selection draft with focused `Ctrl+C`, and preserves native copy for selected text and all `Cmd+C` use.
 - `Hotkeys` is installed once, emits semantic intents rather than effects, focuses a mounted prompt with passive unmodified `:`, emits cancellation for active-turn Escape, and never steals editable/composing input or invokes navigation/system capabilities directly.
 - `TranscriptBox` renders durable and active turns through one ordered view model; active progress/streaming is replaced by matching durable completion without duplicate requests or answers, and initial/follow-up requests use the same path.
+- `EvidenceBox` renders one thread-wide canonical set; duplicate sources retain one application-derived stable `SourceId` and display ordinal, citations resolve by ID, occurrences preserve turn/rank/role provenance, and destination-to-evidence promotion does not duplicate an entry.
+- Normalizing the same canonical URL across providers, searches, retries, or ranks yields the same collision-safe `SourceId`; provider rank and result-array position never become durable identity.
 - `/threads` is the only `ThreadsBox` presentation; its fzf-like local keyboard behavior does not conflict with global hotkeys.
 - `UnlockBox` participates in shared box styling while passphrase input remains ephemeral, unlogged, and unpersisted.
 - Existing persistence, export, retention, auth, interruption, stale-request, keyboard, focus, responsive, and accessibility behavior remains green unless this plan explicitly changes it.
@@ -1221,7 +1296,7 @@ The final implementation must prove at least:
 ## Open Questions
 
 - What are the final discriminated `SearchTurn` and `ResearchTurn` shapes, including valid status/result/failure combinations?
-- Is evidence persisted once per turn, referenced across turns, or derived from prior research/search records when constructing a request?
+- Is the canonical `EvidenceSet` materialized once at thread level, or are source records retained per turn and deterministically projected into the same set for display and future research context?
 - How are nine aggregate consumed sources allocated fairly and deterministically across up to three search result sets and recursive branches?
 - Beyond the approved assessment/synthesis model variables, what environment-variable names expose the explicit balanced `ResearchLimits` while keeping typed names canonical?
 - Should the migration fallback from `ANTHROPIC_ASSESSMENT_MODEL` and `ANTHROPIC_SYNTHESIS_MODEL` to legacy `ANTHROPIC_MODEL` remain permanently or be removed after deployment?
