@@ -37,6 +37,7 @@ Decisions made so far:
 - `EvidenceBox` renders one thread-wide append-stable `EvidenceSet`. Canonical sources are deduplicated, durable support uses `SourceId`, display citations use derived one-based ordinals, and role occurrences allow one source to be promoted from search destination to research evidence without duplication.
 - `BrandBox` is one identity/control surface: activating anywhere on it emits only `new_thread_requested`. `StickyHeader` composes that brand with typed route-contextual actions and feedback but performs no navigation, export, clipboard, or cancellation effects itself.
 - `SettingsBox` applies each visual preference immediately through emitted intent, has no Save/Cancel transaction, and reports persistence independently. The settings controller applies document state and persists through a browser preference adapter; failed persistence leaves the choice active for the session and visibly unsaved. Existing backup/import remains a compact secondary recovery utility with an inline validated preview and explicit keep/replace conflict policy; it never uses `window.confirm`.
+- `UnlockBox` is a buttonless auth-entry region. It owns only an ephemeral masked draft, emits one passphrase submission at a time, and clears/refocuses after rejection while the authentication controller owns validation, network calls, safe return navigation, and bounded public auth state.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
 
 Read this plan, then the completed [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md), `src/domain/types.ts`, `src/domain/schemas.ts`, `src/ports/`, `server/research.ts`, `server/app.ts`, and `src/ui/App.tsx` before implementation. Continue design in this file; do not begin implementation until the remaining box contracts and migration plan are approved.
@@ -1490,7 +1491,71 @@ Export is one explicit action. The controller obtains validated backup data from
 
 **Current mapping:** `ThemeControl`, `ColorSchemeControl`, and `PrimaryAccentControl` in `src/ui/App.tsx` each read/write `localStorage` and mutate document theme state directly. `BackupControls` calls `ThreadStore` and browser file/download APIs directly, then uses `window.confirm` for conflict policy; its current invalid-record message does not match its early-return behavior. The target `SettingsBox` receives normalized state and emits intent, while a settings controller owns application/persistence/download effects and presents validated import outcomes consistently.
 
-The detailed contracts for the remaining layout boxes and their current → target mappings remain to be settled.
+### `UnlockBox`
+
+**Capability:** collect one passphrase attempt through a consistent buttonless authentication region.
+
+```ts
+type UnlockBoxViewState =
+  | { status: "checking" }
+  | { status: "ready"; resetRequestKey: number }
+  | { status: "submitting"; resetRequestKey: number }
+  | {
+      status: "rejected";
+      resetRequestKey: number;
+      message: string;
+    }
+  | {
+      status: "unavailable";
+      resetRequestKey: number;
+      message: string;
+      retryable: boolean;
+    }
+  | {
+      status: "rate_limited";
+      resetRequestKey: number;
+      message: string;
+      retryAfterSeconds?: number;
+    };
+
+type UnlockBoxIntent = {
+  type: "passphrase_submitted";
+  passphrase: string;
+};
+```
+
+```text
+validated bounded auth state
+          |
+          v
+      UnlockBox
+          |
+          | passphrase_submitted
+          v
+authentication controller
+  + request/auth boundary
+  + safe returnTo validation
+  + success navigation
+```
+
+**Invariants**
+
+- The box uses one labelled masked input and no submit button. Enter submits one non-empty attempt only when another attempt is not active.
+- The passphrase exists only as an ephemeral input draft and immediate intent payload. It never enters view state, URLs, logs, persistence, export, analytics, or bounded public failure messages.
+- `submitting` prevents duplicate attempts while retaining a stable, perceivable busy state.
+- Rejection increments `resetRequestKey`; the box clears the rejected draft, announces the bounded message, and returns focus to the input. Unavailable/rate-limited terminal attempts follow the same secret-clearing rule.
+- Rate-limit state communicates bounded retry timing when supplied and cannot be bypassed by repeated Enter submissions.
+- The controller validates same-origin `returnTo`, performs authentication/network work, expires attempt material after the request, and navigates on success. `UnlockBox` never receives or interprets `returnTo`.
+- Native password-manager/autocomplete behavior remains available. `Hotkeys` does not steal `:`, Escape, or text-editing gestures from this editable region.
+- `StickyHeader(BrandBox)` and shared box styles remain present across checking, entry, rejection, unavailable, and rate-limited states.
+
+**Failure contract:** rejection, rate limiting, and provider/network unavailability remain distinct bounded states without exposing auth internals. Failure never persists the passphrase, strands focus, removes the shared header, or requires a page reload when retry is allowed.
+
+**Implementation boundary:** native password input details, status placement, focus-ref mechanics, and password-manager attributes may vary while buttonless submission, one-attempt serialization, clearing/refocus, secret handling, accessibility, and controller boundaries remain intact.
+
+**Current mapping:** `Unlock` in `src/ui/App.tsx` owns passphrase state, calls `/api/auth/passphrase`, interprets response, validates `returnTo` through `safeReturnTo`, and navigates directly; rejected input remains populated. `AuthGate` renders checking/unavailable states through separate unboxed markup. The target projects bounded auth state through `UnlockBox`, moves effects and return validation to the authentication controller, and uses the same `StickyHeader`/box visual system for all auth-entry states.
+
+All currently agreed layout and layout-control boxes now have initial typed contracts. A final layout consistency pass may still refine shared controller ownership and current → target sequencing after the remaining data/system contracts settle.
 
 ## Current → Target Overview
 
@@ -1593,6 +1658,7 @@ The final implementation must prove at least:
 - `BrandBox` exposes one keyboard/pointer-equivalent activation target and emits only `new_thread_requested`; tagline rotation is non-live and respects reduced motion.
 - Every canonical page composes the same `StickyHeader`; its typed contextual actions and feedback remain accessible and never perform effects directly.
 - `SettingsBox` has no aggregate Save/Cancel action: each valid preference applies immediately, persists independently through the controller, and remains active but visibly `session_only` when persistence fails. Backup import uses an inline validated preview, safe-default keep/replace policy, opaque stale-safe confirmation ID, and explicit partial report without `window.confirm`.
+- `UnlockBox` remains buttonless, serializes attempts, never externalizes passphrases beyond immediate submit intent, and clears/refocuses after bounded rejection/unavailability while preserving password-manager and accessibility behavior.
 - Normalizing the same canonical URL across providers, searches, retries, or ranks yields the same collision-safe `SourceId`; provider rank and result-array position never become durable identity.
 - `/threads` is the only `ThreadsBox` presentation; its pinned `fzf@0.5.2` wrapper produces fixture-locked deterministic rankings/highlights, its local keyboard behavior does not conflict with global hotkeys, and deletion requires inline `y`/Enter confirmation that Escape can cancel without closing the route.
 - `UnlockBox` participates in shared box styling while passphrase input remains ephemeral, unlogged, and unpersisted.
@@ -1611,4 +1677,4 @@ The final implementation must prove at least:
 - Should `StoredThreadEnvelopeV2` be retained as-is, renamed to `StoredThreadRecord`, or reshaped during the model migration?
 - What exact responsibilities belong to the turn controller versus `ResearchTurn` and the HTTP/SSE boundary?
 - What lifecycle event and failure unions form the public `ResearchTurn` contract?
-- What are the detailed contracts and controller boundaries for each layout box?
+- After data/system contracts settle, do any layout controller projections need refinement to preserve the agreed box contracts without duplicating state?
