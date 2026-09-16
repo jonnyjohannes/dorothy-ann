@@ -38,6 +38,7 @@ Decisions made so far:
 - `BrandBox` is one identity/control surface: activating anywhere on it emits only `new_thread_requested`. `StickyHeader` composes that brand with typed route-contextual actions and feedback but performs no navigation, export, clipboard, or cancellation effects itself.
 - `SettingsBox` applies each visual preference immediately through emitted intent, has no Save/Cancel transaction, and reports persistence independently. The settings controller applies document state and persists through a browser preference adapter; failed persistence leaves the choice active for the session and visibly unsaved. Existing backup/import remains a compact secondary recovery utility with an inline validated preview and explicit keep/replace conflict policy; it never uses `window.confirm`.
 - `UnlockBox` is a buttonless auth-entry region. It owns only an ephemeral masked draft, emits one passphrase submission at a time, and clears/refocuses after rejection while the authentication controller owns validation, network calls, safe return navigation, and bounded public auth state.
+- `SystemStatusBox` is a narrowly scoped visible box for blocking application-boundary checking or unavailability (auth session, provider status, or thread storage). It emits retry intent but never absorbs turn, thread-row, settings, import, or ordinary route failures.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
 
 Read this plan, then the completed [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md), `src/domain/types.ts`, `src/domain/schemas.ts`, `src/ports/`, `server/research.ts`, `server/app.ts`, and `src/ui/App.tsx` before implementation. Continue design in this file; do not begin implementation until the remaining box contracts and migration plan are approved.
@@ -913,6 +914,7 @@ The agreed layout vocabulary is:
 - `SettingsBox`
 - `ThreadsBox` with `fzf@0.5.2`-backed filtering and keyboard behavior (currently `ThreadPicker`)
 - `UnlockBox`
+- `SystemStatusBox`
 
 `Hotkeys` is also an explicit layout-control box, but it is not a visible region and does not receive shared visual styling.
 
@@ -965,6 +967,7 @@ THREAD     StickyHeader(BrandBox, thread actions)
 THREADS    StickyHeader(BrandBox, close) + ThreadsBox
 SETTINGS   StickyHeader(BrandBox, close) + SettingsBox
 UNLOCK     StickyHeader(BrandBox) + UnlockBox
+BOUNDARY   StickyHeader(BrandBox) + SystemStatusBox
 ```
 
 Cross-box coordination belongs to the route/workspace controller. In particular, `TranscriptBox` emits a source selection intent; the controller updates `selectedSourceId`, supplies it to `EvidenceBox`, and coordinates focus without either box querying or mutating the other's DOM.
@@ -981,6 +984,7 @@ EvidenceBox    <-- reachable evidence ---- route/workspace controller
 ThreadsBox     <-- thread summaries ------ ThreadStore controller
 SettingsBox    <-- settings/backup state - settings controller
 UnlockBox      <-- auth state ------------ authentication boundary
+SystemStatusBox<-- startup/boundary state - application controller
 BrandBox       -- new-thread intent ------> navigation controller
 StickyHeader   -- contextual intents -----> route/workspace controller
 ```
@@ -1497,7 +1501,6 @@ Export is one explicit action. The controller obtains validated backup data from
 
 ```ts
 type UnlockBoxViewState =
-  | { status: "checking" }
   | { status: "ready"; resetRequestKey: number }
   | { status: "submitting"; resetRequestKey: number }
   | {
@@ -1547,13 +1550,68 @@ authentication controller
 - Rate-limit state communicates bounded retry timing when supplied and cannot be bypassed by repeated Enter submissions.
 - The controller validates same-origin `returnTo`, performs authentication/network work, expires attempt material after the request, and navigates on success. `UnlockBox` never receives or interprets `returnTo`.
 - Native password-manager/autocomplete behavior remains available. `Hotkeys` does not steal `:`, Escape, or text-editing gestures from this editable region.
-- `StickyHeader(BrandBox)` and shared box styles remain present across checking, entry, rejection, unavailable, and rate-limited states.
+- `StickyHeader(BrandBox)` and shared box styles remain present across entry, rejection, unavailable, and rate-limited states.
 
 **Failure contract:** rejection, rate limiting, and provider/network unavailability remain distinct bounded states without exposing auth internals. Failure never persists the passphrase, strands focus, removes the shared header, or requires a page reload when retry is allowed.
 
 **Implementation boundary:** native password input details, status placement, focus-ref mechanics, and password-manager attributes may vary while buttonless submission, one-attempt serialization, clearing/refocus, secret handling, accessibility, and controller boundaries remain intact.
 
-**Current mapping:** `Unlock` in `src/ui/App.tsx` owns passphrase state, calls `/api/auth/passphrase`, interprets response, validates `returnTo` through `safeReturnTo`, and navigates directly; rejected input remains populated. `AuthGate` renders checking/unavailable states through separate unboxed markup. The target projects bounded auth state through `UnlockBox`, moves effects and return validation to the authentication controller, and uses the same `StickyHeader`/box visual system for all auth-entry states.
+**Current mapping:** `Unlock` in `src/ui/App.tsx` owns passphrase state, calls `/api/auth/passphrase`, interprets response, validates `returnTo` through `safeReturnTo`, and navigates directly; rejected input remains populated. The target projects bounded auth-entry state through `UnlockBox`, moves effects and return validation to the authentication controller, and uses the same `StickyHeader`/box visual system for all auth-entry states.
+
+### `SystemStatusBox`
+
+**Capability:** present one blocking application-boundary check or bounded unavailability state with an applicable retry intent.
+
+```ts
+type SystemBoundary =
+  | "auth_session"
+  | "provider_status"
+  | "thread_storage";
+
+type SystemStatusBoxViewState =
+  | {
+      status: "checking";
+      boundary: SystemBoundary;
+      message: string;
+    }
+  | {
+      status: "unavailable";
+      boundary: SystemBoundary;
+      message: string;
+      retryable: boolean;
+    };
+
+type SystemStatusBoxIntent = {
+  type: "system_boundary_retry_requested";
+  boundary: SystemBoundary;
+};
+```
+
+```text
+application startup/boundary state
+                 |
+                 v
+          SystemStatusBox
+                 |
+                 | retry intent
+                 v
+       application controller
+```
+
+**Invariants**
+
+- The box is used only when an auth-session, provider-status, or thread-storage boundary blocks the requested application route. It never absorbs turn failures, individual thread load/delete failures, settings persistence, backup/import, or ordinary empty states.
+- Checking state is non-interactive and politely announced. Unavailable state exposes bounded public copy and a retry control only when `retryable`.
+- Retry emits intent; the box never reloads the page, calls a provider/storage/auth API, navigates, or changes the retained destination itself.
+- The application controller preserves the originally requested safe route across checks/retries and selects the next page only after the boundary resolves.
+- Provider payloads, storage internals, auth details, secrets, and stack traces never enter view state.
+- `StickyHeader(BrandBox)` and shared box styling remain present. Status, alert, retry focus, zoom, reduced motion, narrow layout, and screen-reader behavior remain consistent with the other visible boxes.
+
+**Failure contract:** repeated or non-retryable unavailability remains a stable bounded state rather than a reload loop or blank page. A stale retry result cannot replace a newer boundary check or navigate away from the current request.
+
+**Implementation boundary:** progress treatment, retry-control styling, and status copy may vary while narrow boundary scope, retained destination, no-effects behavior, shared visual composition, and accessibility remain fixed.
+
+**Current mapping:** `AuthGate` in `src/ui/App.tsx` currently renders checking, provider-status failure, and remote-storage failure through standalone centered markup whose retry button calls `window.location.reload()`. The target application controller projects those blocking states into `SystemStatusBox`; non-blocking failures stay with their owning box.
 
 All currently agreed layout and layout-control boxes now have initial typed contracts. A final layout consistency pass may still refine shared controller ownership and current → target sequencing after the remaining data/system contracts settle.
 
@@ -1659,9 +1717,9 @@ The final implementation must prove at least:
 - Every canonical page composes the same `StickyHeader`; its typed contextual actions and feedback remain accessible and never perform effects directly.
 - `SettingsBox` has no aggregate Save/Cancel action: each valid preference applies immediately, persists independently through the controller, and remains active but visibly `session_only` when persistence fails. Backup import uses an inline validated preview, safe-default keep/replace policy, opaque stale-safe confirmation ID, and explicit partial report without `window.confirm`.
 - `UnlockBox` remains buttonless, serializes attempts, never externalizes passphrases beyond immediate submit intent, and clears/refocuses after bounded rejection/unavailability while preserving password-manager and accessibility behavior.
+- `SystemStatusBox` renders only blocking auth-session/provider-status/thread-storage checks or unavailability, preserves the requested route, and retries through intent rather than reload while non-blocking failures remain in their owning boxes.
 - Normalizing the same canonical URL across providers, searches, retries, or ranks yields the same collision-safe `SourceId`; provider rank and result-array position never become durable identity.
 - `/threads` is the only `ThreadsBox` presentation; its pinned `fzf@0.5.2` wrapper produces fixture-locked deterministic rankings/highlights, its local keyboard behavior does not conflict with global hotkeys, and deletion requires inline `y`/Enter confirmation that Escape can cancel without closing the route.
-- `UnlockBox` participates in shared box styling while passphrase input remains ephemeral, unlogged, and unpersisted.
 - Existing persistence, export, retention, auth, interruption, stale-request, keyboard, focus, responsive, and accessibility behavior remains green unless this plan explicitly changes it.
 - Fixture and live adapters preserve the same provider-neutral contracts.
 - `README.md` and `AGENTS.md` describe the code that actually ships.
