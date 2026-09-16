@@ -40,6 +40,7 @@ Decisions made so far:
 - `UnlockBox` is a buttonless auth-entry region. It owns only an ephemeral masked draft, emits one passphrase submission at a time, and clears/refocuses after rejection while the authentication controller owns validation, network calls, safe return navigation, and bounded public auth state.
 - `SystemStatusBox` is a narrowly scoped visible box for blocking application-boundary checking or unavailability (auth session, provider status, or thread storage). It emits retry intent but never absorbs turn, thread-row, settings, import, or ordinary route failures.
 - Active turns are controller-only and never persisted; every observed terminal completed, insufficient, failed, or interrupted result becomes an immutable durable turn. Retry creates a new linked turn through `retryOfTurnId` rather than mutating terminal history.
+- A successfully executed zero-result search is a completed `SearchTurn` with `completion: "empty"`, while `completion: "results"` requires a non-empty source tuple; failure and interruption variants carry neither result nor partial sources.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
 
 Read this plan, then the completed [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md), `src/domain/types.ts`, `src/domain/schemas.ts`, `src/ports/`, `server/research.ts`, `server/app.ts`, and `src/ui/App.tsx` before implementation. Continue design in this file; do not begin implementation until the remaining box contracts and migration plan are approved.
@@ -198,9 +199,9 @@ type ActiveTurn =
   | ActiveSearchTurn
   | ActiveResearchTurn;
 
-interface TerminalTurnBase {
+interface TerminalTurnBase<K extends TurnKind> {
   id: TurnId;
-  kind: TurnKind;
+  kind: K;
   retryOfTurnId?: TurnId;
   createdAt: IsoTimestamp;
   finishedAt: IsoTimestamp;
@@ -223,6 +224,54 @@ controller-owned ActiveTurn
 ```
 
 Retry creates a new active turn and, if terminal, a new immutable turn with `retryOfTurnId` referencing the earlier same-thread terminal attempt. It never reopens or overwrites the original turn. The retried raw request must match the referenced turn; a materially edited request is a normal new turn. Abrupt process loss before a terminal event may lose controller-only active state, but it cannot leave a durable phantom `running` turn.
+
+The terminal search union is settled:
+
+```ts
+type SearchTurnResult =
+  | {
+      completion: "results";
+      sources: [SearchResult, ...SearchResult[]];
+    }
+  | {
+      completion: "empty";
+      sources: [];
+    };
+
+type SearchTurnFailure =
+  | {
+      code: "provider_unavailable" | "invalid_response" | "search_failed";
+      message: string;
+      retryable: boolean;
+    }
+  | {
+      code: "rate_limited";
+      message: string;
+      retryable: true;
+      retryAfterSeconds?: number;
+    };
+
+interface TurnInterruption {
+  reason: "user_cancelled" | "navigation" | "connection_lost";
+  message: string;
+}
+
+type SearchTurn =
+  | (TerminalTurnBase<"search"> & {
+      status: "completed";
+      result: SearchTurnResult;
+    })
+  | (TerminalTurnBase<"search"> & {
+      status: "failed";
+      failure: SearchTurnFailure;
+    })
+  | (TerminalTurnBase<"search"> & {
+      status: "interrupted";
+      interruption: TurnInterruption;
+    });
+```
+
+A successfully executed search with no destinations is a completed `empty` result, not a failure. The non-empty tuple makes `completion: "results"` truthful. Failed and interrupted variants cannot carry partial sources; `SearchProvider.search` is one atomic provider-neutral operation.
 
 The turn kind is selected per submission: trailing `?` creates research; otherwise the submission creates search. It is not durable global UI mode.
 
@@ -248,7 +297,7 @@ current request + prior thread context + macro-selected turn kind
 - Every terminal durable turn passes runtime schema validation.
 - The discriminant determines which result fields are valid; search and research result shapes are not mixed through unrelated optional fields.
 
-The persistence/lifecycle axis is settled: all terminal outcomes are durable and all active execution is controller-only. Detailed `SearchTurn` and `ResearchTurn` success/result/failure payload unions remain to be settled.
+The persistence/lifecycle axis and complete `SearchTurn` terminal union are settled. Detailed `ResearchTurn` success/result/failure payload variants remain to be settled.
 
 ### Persistence record
 
@@ -480,7 +529,7 @@ interface SearchRequest {
 
 interface SearchResponse {
   query: string;
-  sources: SearchResult[];
+  result: SearchTurnResult;
 }
 ```
 
@@ -489,8 +538,9 @@ interface SearchResponse {
 - Invokes `SearchProvider` exactly once.
 - Does not invoke `LLMProvider` or `ContentExtractor`.
 - Does not synthesize an answer.
-- Results can become evidence available to a later research turn.
-- Completion and failure are explicit.
+- A successful empty provider result completes with `completion: "empty"`; provider/rate-limit/invalid-response failures remain distinct.
+- Non-empty results can become search-destination entries available to a later research turn.
+- Completion, interruption, and failure are explicit and mutually exclusive.
 
 **Failure contract:** bounded unavailable, rate-limited, and failed search codes; no raw Brave details.
 
@@ -1757,7 +1807,7 @@ The final implementation must prove at least:
 
 ## Open Questions
 
-- What are the final discriminated `SearchTurn` and `ResearchTurn` shapes, including valid status/result/failure combinations?
+- What are the final discriminated `ResearchTurn` success/result/failure payload variants now that lifecycle persistence and `SearchTurn` are settled?
 - Is the canonical `EvidenceSet` materialized once at thread level, or are source records retained per turn and deterministically projected into the same set for display and future research context?
 - How are nine aggregate consumed sources allocated fairly and deterministically across up to three search result sets and recursive branches?
 - Beyond the approved assessment/synthesis model variables, what environment-variable names expose the explicit balanced `ResearchLimits` while keeping typed names canonical?
