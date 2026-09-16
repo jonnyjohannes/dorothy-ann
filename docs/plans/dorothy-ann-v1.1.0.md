@@ -20,7 +20,7 @@ Decisions made so far:
 - Every `ResearchTurn` follows one standard recursive protocol: the high-reasoning assessor returns `resolved`, `search`, or `decompose`; the resolver interprets the directive, joins child knowledge into parent state, reassesses, and synthesizes exactly one user-facing answer at the root.
 - Decomposition expresses `all` versus `any` child semantics. Recursive children return supported `KnowledgeUnit` values, never user-facing answers.
 - The convergence target is a useful fixed point where zero material evidence gaps remain. Resolution also stops safely on exhausted explicit budget/depth, no new knowledge, a duplicate/cyclic problem, interruption, or total provider unavailability.
-- The approved balanced tuning remains explicit: three searches, nine consumed additional sources, recursion depth two, five assessment calls, and three decomposed gaps per assessment. Search and extraction concurrency are both capped at three; these distinct controls are intentionally not collapsed into one fuel value.
+- The approved balanced tuning remains explicit: three searches, nine consumed additional sources, recursion depth two, eight assessment calls, and three child problems per decomposition. Search and extraction concurrency are both capped at three; these distinct controls are intentionally not collapsed into one fuel value.
 - `ResearchAssessor`, recursive `ResearchResolver`, and leaf `FanOutSearch` are explicit boxes. The assessor chooses semantic reductions but never answers the user; the resolver owns recursion and knowledge joining; fan-out never assesses or synthesizes.
 - An application-owned turn-local `GapLedger` assigns stable identity, validates support, records decomposition and progress, enforces legal transitions, and determines mechanical convergence.
 - `joinKnowledge` is associative, commutative, and idempotent; it preserves contradictory supported observations as contested rather than overwriting them. v1.1 keeps flat support references while leaving recursive `Evidence | All | Any` proof expressions deferred.
@@ -50,7 +50,7 @@ This makes meaningful discussion and safe refactoring harder than necessary. We 
 - Standardize initial and follow-up research questions on one recursive `resolved | search | decompose` protocol.
 - Recursively transform unresolved problems into supported knowledge, join child knowledge deterministically, and converge toward zero material evidence gaps.
 - Stop safely on sufficiency, exhausted explicit budget/depth, no new knowledge, cycles, interruption, or unavailability.
-- Retain explicit balanced per-turn ceilings: three searches, nine consumed additional sources, recursion depth two, five assessments, and three decomposed gaps per assessment.
+- Retain explicit balanced per-turn ceilings: three searches, nine consumed additional sources, recursion depth two, eight assessments, and three child problems per decomposition.
 - Separate research assessment, recursive knowledge resolution, leaf search/extraction mechanics, knowledge joining, and final synthesis responsibilities.
 - Make `Thread` and `Turn` model valid states directly rather than through loosely related optional fields.
 - Preserve provider-neutral domain and application contracts, with Brave and Anthropic remaining concrete adapters.
@@ -475,8 +475,8 @@ interface ResearchLimits {
   maxSearches: 3;
   maxConsumedSources: 9;
   maxRecursionDepth: 2;
-  maxAssessmentCalls: 5;
-  maxGapsPerAssessment: 3;
+  maxAssessmentCalls: 8;
+  maxChildProblemsPerDecomposition: 3;
   maxCandidatesPerSearch: 5;
   maxConcurrentSearches: 3;
   maxConcurrentExtractions: 3;
@@ -491,18 +491,19 @@ interface ResearchLimits {
 }
 ```
 
-These balanced values are approved defaults and hard per-turn ceilings, not targets. All recursive branches draw from the same explicit search, source, assessment, gap, and depth limits. The separate controls are intentional: they independently constrain provider calls, evidence volume, semantic reductions, branching, and recursion shape rather than hiding those costs behind one fuel number. The nine-source limit applies across the whole resolution tree, not independently to each search or node. `SearchTurn` may retain a separate visible-result limit.
+These balanced values are approved defaults and hard per-turn ceilings, not targets. Eight assessments permit the common complete path of root decomposition, three independently searched/reassessed children, and final root reassessment without batching semantically distinct problems into one assessor call. All recursive branches draw from the same explicit search, source, assessment, decomposition-branching, and depth limits. The separate controls are intentional: they independently constrain provider calls, evidence volume, semantic reductions, branching, and recursion shape rather than hiding those costs behind one fuel number. The nine-source limit applies across the whole resolution tree, not independently to each search or node. `SearchTurn` may retain a separate visible-result limit.
 
 Output:
 
 ```ts
-interface ResearchTurnOutput {
+interface ResearchTurnSuccess {
   answer: AssistantContent;
   resolution: ResearchResolution;
-  evidence: EvidencePack;
   usage?: UsageMetadata;
 }
 ```
+
+This is the successful form only. The final turn union must represent best-effort success separately from terminal insufficient-evidence, interruption, and provider failures without requiring an `answer` where none exists.
 
 **Invariants**
 
@@ -511,9 +512,9 @@ interface ResearchTurnOutput {
 - Resolution recursively joins supported child knowledge and converges toward zero material evidence gaps required by the current question.
 - A sufficient/resolved assessment conducts no additional search.
 - Recursive branches share one turn-level set of explicit limits and cannot multiply the approved ceilings.
-- No research turn invokes more than three searches, consumes more than nine additional sources, descends beyond depth two, performs more than five assessments, or emits more than three gaps from one assessment.
+- No research turn invokes more than three searches, consumes more than nine additional sources, descends beyond depth two, performs more than eight assessments, or emits more than three child problems from one decomposition.
 - A turn requests at most five candidates per search and selects at most nine aggregate sources for consumption.
-- Synthesis happens exactly once after resolution stops and the final evidence set is known.
+- Synthesis happens exactly once at the root after resolution stops and the final knowledge unit is known.
 - Useful supported evidence at a bounded stop produces a best-effort answer with explicit uncertainty; no useful supported evidence produces an insufficient-evidence failure.
 - Lifecycle progress, resolution stop reason, and terminal state are observable.
 - Partial sibling failures preserve successful evidence.
@@ -540,14 +541,15 @@ type SupportRef =
   | { type: "source"; sourceId: SourceId };
 
 interface SupportedObservation {
-  propositionKey: string;
+  id: ObservationId;
+  propositionKey: PropositionKey;
   statement: string;
   stance: "supports" | "contradicts" | "qualifies";
   support: SupportRef[];
 }
 
 interface SupportedFinding {
-  propositionKey: string;
+  propositionKey: PropositionKey;
   observations: SupportedObservation[];
   status: "supported" | "contested" | "insufficient";
 }
@@ -599,7 +601,7 @@ Evaluate the complete current problem against supplied thread context, knowledge
 - Never emits a user-facing answer or calls `SearchProvider`.
 - Assesses only supplied problem, context, knowledge, ledger state, and evidence.
 - Returns exactly one validated directive within 800 output tokens.
-- `resolved` findings reference only supplied support and satisfy the current problem's success criterion.
+- `resolved` findings reference only supplied support, satisfy the current problem's success criterion, and contain no unresolved gap IDs.
 - `search` is concrete, material, and search-ready rather than a restatement of the parent.
 - `decompose` contains one to three bounded deduplicated children with explicit `all | any` semantics.
 - A factual finding requires valid source support; user needs/preferences may use supplied turn support.
@@ -722,7 +724,7 @@ A ⊔ B       = B ⊔ A
 A ⊔ A       = A
 ```
 
-These laws make recursive grouping, concurrent completion order, retries, and duplicate paths converge on equivalent research state. Joining never uses last-write-wins for contradictory claims: it preserves both supported observations and marks the derived finding `contested`. Evidence and provenance are monotonic; current interpretation may be revised without erasing its support history.
+These laws make recursive grouping, concurrent completion order, retries, and duplicate paths converge on equivalent research state. The application derives stable observation identity from normalized proposition, statement, stance, and support references; joining deduplicates by that identity and groups observations by canonical proposition key. Semantically equivalent but differently worded observations may remain distinct in v1.1 rather than being unsafely collapsed. Joining never uses last-write-wins for contradictory claims: it preserves both supported observations and marks the derived finding `contested`. Evidence and provenance are monotonic; current interpretation may be revised without erasing its support history.
 
 For question `Q` and current knowledge `K`, the assessor computes material gaps `G(Q, K)`. Recursive research seeks a useful fixed point:
 
@@ -736,7 +738,7 @@ This means zero material gaps needed for the question, not exhaustive or absolut
 
 **Gap creation, progress, and stop policy**
 
-- The application creates stable problem/gap IDs and fingerprints from normalized question, success criterion, and ancestry; provider-generated IDs are not trusted.
+- The application creates stable problem/gap, proposition, and observation identities from normalized content, support, and ancestry; provider-generated IDs are not trusted.
 - `GapLedger` records decomposition and lifecycle without becoming a separate top-level box. Open work is selected by priority, then shallower depth, then creation order.
 - Legal transitions are `open → decomposed | resolved | blocked`; child completion does not bypass parent reassessment.
 - A recursive step must add canonical evidence, add/revise a supported observation, resolve a gap, discover a materially narrower gap, or mark work blocked. Otherwise it stops with `no_new_knowledge`.
@@ -749,10 +751,10 @@ The v1.1 persisted form may retain flat `SupportRef[]` provenance while leaving 
 **Invariants**
 
 - Root depth is zero; depth two permits root problem → material subproblem → concrete evidence/search problem.
-- At most five assessor calls and three searches occur across the complete tree; no assessment emits more than three child problems; no turn consumes more than nine additional sources.
+- At most eight assessor calls and three searches occur across the complete tree; no decomposition emits more than three child problems; no turn consumes more than nine additional sources.
 - Model-proposed support references must exist in the exact context/evidence supplied to that assessment.
 - Knowledge joining obeys the associative, commutative, and idempotent laws and preserves contradictions and provenance.
-- Gap identity, legal transitions, explicit-limit bookkeeping, and progress detection are application-controlled.
+- Gap/knowledge identity, legal transitions, explicit-limit bookkeeping, and progress detection are application-controlled.
 - The resolver creates no child `Turn` records and emits no user-facing synthesis.
 
 **Failure contract:** bounded child failures contribute blocked/unresolved knowledge where sibling findings remain useful; interruption or total provider unavailability stops the resolver with a typed reason.
@@ -775,8 +777,10 @@ The v1.1 persisted form may retain flat `SupportRef[]` provenance while leaving 
 
 ```ts
 interface ResearchSearch {
+  problemId: ResearchProblemId;
   query: string;
   purpose: string;
+  successCriterion: string;
   priority: 1 | 2 | 3;
 }
 
@@ -808,17 +812,19 @@ interface ResearchSearchResult {
 }
 ```
 
+`ResearchAssessor` emits one `search` directive for one problem. `ResearchResolver` may batch up to three independent ready search directives discovered across recursive branches into one `FanOutSearch` call; each result remains associated with its originating `problemId`.
+
 **Invariants**
 
-- Accepts no more than the remaining search budget and never more than three instructions.
+- Accepts no more than the remaining search budget and never more than three independent ready instructions.
 - Invokes `SearchProvider` at most once per instruction; independent searches run concurrently up to three.
 - Requests at most five candidates per search.
-- Selection consumes no more than the remaining shared source budget and never more than nine aggregate additional sources per turn.
+- Selection consumes no more than the remaining shared source budget and never more than nine aggregate additional sources per turn. A source is consumed when selected for extraction/research context, whether extraction succeeds or fails; unselected candidates do not consume this budget.
 - Results and known sources are canonicalized and deduplicated before consumption.
 - Each unique source is extracted at most once through one globally bounded three-worker pool.
 - Search-to-candidate-to-consumed-source association is preserved.
 - Successful siblings survive another search or extraction failing.
-- Fan-out does not assess, recurse, or synthesize.
+- Fan-out does not assess, recurse, join knowledge, or synthesize.
 
 **Failure contract:** individual failures remain typed within the result where viable sibling evidence permits continuation; total unavailability or interruption leaves as a bounded fan-out failure.
 
@@ -826,30 +832,30 @@ interface ResearchSearchResult {
 
 ### `AnswerSynthesizer`
 
-**Capability:** synthesize one answer to the current question from bounded thread context and the final supplied evidence set.
+**Capability:** synthesize the one user-facing root answer from bounded thread context and the final `KnowledgeUnit` produced by recursive resolution.
 
 ```text
-question + ThreadContext + merged evidence + optional guidance
-                              |
-                              v
-                    [ AnswerSynthesizer ]
-                              |
-                              v
-                 streamed AssistantContent
+root question + ThreadContext + final KnowledgeUnit
+                         |
+                         v
+               [ AnswerSynthesizer ]
+                         |
+                         v
+            streamed AssistantContent
 ```
 
 **Invariants**
 
 - Answers the current question in conversational context.
-- Uses only supplied evidence for factual support.
-- Cites only supplied source IDs.
-- Planner/assessment output cannot become direct answer content.
+- Uses only supplied supported findings and evidence for factual support.
+- Cites only source IDs reachable through the final knowledge unit.
+- Assessor directives cannot become direct answer content; internal findings may inform the answer only with their validated support.
 - Empty provider completion becomes a bounded synthesis failure.
 - Research answer opening and presentation policy remain explicit product contracts while retained.
 
 **Implementation boundary:** model prompting and stream parsing may vary behind the input/output and citation contracts.
 
-**Current mapping:** `synthesize` and synthesis-input construction live in `server/research.ts`; provider streaming lives in `server/anthropic.ts`.
+**Current mapping:** `synthesize` and synthesis-input construction live in `server/research.ts`; provider streaming lives in `server/anthropic.ts`. The current implementation synthesizes from evidence directly; the target supplies the recursively joined root knowledge unit.
 
 ### `ThreadStore`
 
@@ -957,13 +963,13 @@ The final implementation must prove at least:
 - A resolved assessment performs zero new searches; only the root synthesizes, exactly once.
 - Decomposition produces one to three prioritized material children with explicit `all | any` semantics.
 - Resolution converges to a useful fixed point with zero material gaps when the explicit limits permit.
-- No research turn invokes more than three searches, consumes/extracts more than nine additional sources, descends beyond depth two, performs more than five assessments, or emits more than three child problems per assessment.
+- No research turn invokes more than three searches, consumes/extracts more than nine additional sources, descends beyond depth two, performs more than eight assessments, or emits more than three child problems per decomposition.
 - Each search returns at most five candidates; leaf searches and extraction each use a global concurrency bound of three.
 - FanOutSearch never assesses, recurses, joins knowledge, or synthesizes; ResearchResolver never emits a user-facing answer or child turn.
 - No-new-knowledge, duplicate-problem, exhausted explicit limit/depth, interruption, and provider-unavailable stops are typed and observable.
 - Budget exhaustion with useful evidence produces best-effort synthesis with uncertainty; no useful evidence produces insufficient-evidence failure.
 - Partial sibling failures preserve viable evidence and provenance.
-- Synthesis receives typed bounded thread context and the final evidence set, emits only allowed citations, and fails on empty output.
+- Synthesis receives typed bounded thread context and the final root knowledge unit, emits only citations reachable through that unit, and fails on empty output.
 - Search and research failures cross boxes as bounded typed failures without provider payloads.
 - Existing persistence, export, retention, auth, interruption, stale-request, keyboard, focus, responsive, and accessibility behavior remains green unless this plan explicitly changes it.
 - Fixture and live adapters preserve the same provider-neutral contracts.
