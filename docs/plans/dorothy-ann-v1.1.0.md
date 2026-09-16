@@ -31,7 +31,7 @@ Decisions made so far:
 - The persistence wrapper currently named `StoredThreadEnvelopeV2` is not a top-level architecture box. Its naming and exact storage contract remain open.
 - The agreed visual regions are `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, and `UnlockBox`. Boxes receive typed view state and emit intent; route/workspace controllers coordinate application and system capabilities.
 - `Hotkeys` is an explicit layout-control box, not a visible region. It translates unhandled global keyboard events and current layout context into semantic intents without navigating, focusing DOM nodes, cancelling work, or invoking system capabilities directly.
-- `ThreadsBox` has one canonical `/threads` route with aggressive fzf-like filtering and keyboard behavior, not separate route and overlay presentations.
+- `ThreadsBox` has one canonical `/threads` route with aggressive `fzf@0.5.2`-backed filtering and keyboard behavior, not separate route and overlay presentations. The exact package version is pinned behind a pure `rankThreads` policy with fixture-locked ordering.
 - `UnlockBox` is part of the shared box vocabulary so global visual-system changes include authentication. It owns only ephemeral passphrase entry and emits authentication intent without persisting or logging the passphrase.
 - `TranscriptBox` renders durable history and the one active turn through one ordered presentation model. Live progress and streamed answer content occupy the active turn's position and are replaced, not duplicated, when that turn becomes durable.
 - `EvidenceBox` renders one thread-wide append-stable `EvidenceSet`. Canonical sources are deduplicated, durable support uses `SourceId`, display citations use derived one-based ordinals, and role occurrences allow one source to be promoted from search destination to research evidence without duplication.
@@ -909,7 +909,7 @@ The agreed layout vocabulary is:
 - `BrandBox`
 - `StickyHeader`
 - `SettingsBox`
-- `ThreadsBox` with fzf-like filtering and keyboard behavior (currently `ThreadPicker`)
+- `ThreadsBox` with `fzf@0.5.2`-backed filtering and keyboard behavior (currently `ThreadPicker`)
 - `UnlockBox`
 
 `Hotkeys` is also an explicit layout-control box, but it is not a visible region and does not receive shared visual styling.
@@ -967,7 +967,7 @@ UNLOCK     StickyHeader(BrandBox) + UnlockBox
 
 Cross-box coordination belongs to the route/workspace controller. In particular, `TranscriptBox` emits a source selection intent; the controller updates `selectedSourceId`, supplies it to `EvidenceBox`, and coordinates focus without either box querying or mutating the other's DOM.
 
-`ThreadsBox` has one canonical `/threads` route rather than an overlay or adaptive dual presentation. It locally owns aggressive fzf-like query/ranking, active-row, and keyboard interaction state. The controller supplies thread summaries and loading/failure state, then handles open, delete, and close intents through navigation and `ThreadStore`. `/threads`, its slash command, and its global shortcut all converge on the same route.
+`ThreadsBox` has one canonical `/threads` route rather than an overlay or adaptive dual presentation. It locally owns aggressive fzf-backed query/ranking, active-row, and keyboard interaction state. The controller supplies thread summaries and loading/failure state, then handles open, delete, and close intents through navigation and `ThreadStore`. `/threads`, its slash command, and its global shortcut all converge on the same route.
 
 Initial system relationships are:
 
@@ -1269,6 +1269,89 @@ unlock   -> BrandBox
 
 **Current mapping:** sticky CSS exists in `src/ui/App.module.css`, while `Home`, `Topic`, `Unlock`, and `SecondaryLayout` repeat header markup in `src/ui/App.tsx`. Copy/export effects and feedback are interleaved in `Topic`. The target composes one `StickyHeader` on every canonical page and moves effects to the controller.
 
+### `ThreadsBox`
+
+**Capability:** rapidly find and act on one durable thread through the canonical `/threads` route.
+
+```ts
+type ThreadsBoxViewState =
+  | {
+      status: "loading";
+      threads: [];
+      pendingDeletionIds: ThreadId[];
+    }
+  | {
+      status: "ready";
+      threads: ThreadSummary[];
+      pendingDeletionIds: ThreadId[];
+    }
+  | {
+      status: "failed";
+      threads: ThreadSummary[];
+      loadFailure: string;
+      pendingDeletionIds: ThreadId[];
+    };
+
+interface RankedThreadSummary {
+  thread: ThreadSummary;
+  titlePositions: number[];
+  previewPositions: number[];
+}
+
+type ThreadsBoxIntent =
+  | { type: "thread_open_requested"; threadId: ThreadId }
+  | { type: "thread_delete_requested"; threadId: ThreadId }
+  | { type: "threads_reload_requested" }
+  | { type: "threads_close_requested" };
+```
+
+Matching is isolated behind one pure UI policy:
+
+```ts
+function rankThreads(
+  threads: readonly ThreadSummary[],
+  query: string,
+): RankedThreadSummary[];
+```
+
+`rankThreads` uses exactly pinned `fzf@0.5.2` with its synchronous `extendedMatch`, `fuzzy: "v2"`, `casing: "smart-case"`, and `normalize: true` behavior. The selector searches title followed by last-turn preview; the wrapper maps returned positions back to those two fields for safe highlighting. An empty query sorts by `updatedAt` descending then `ThreadId` ascending. Non-empty equal-score results use the same deterministic tie-break order.
+
+```text
+ThreadSummary[] + local query
+              |
+              v
+         rankThreads
+              |
+              v
+     pinned fzf matcher
+              |
+              v
+ RankedThreadSummary[]
+              |
+              v
+          ThreadsBox
+```
+
+The dependency is intentionally used instead of maintaining a home-rolled approximation of fzf's scoring, smart case, normalization, extended syntax, and match positions. Pinning plus behavioral fixtures protects Dorothy Ann from accidental ranking changes or package drift; `ThreadsBox` and its controller never depend on package result types directly.
+
+**Invariants**
+
+- `/threads` is the only presentation; slash command, global shortcut, and navigation intent converge on that route.
+- Query, ranked results, active row, and match highlighting are ephemeral local UI state. Loading, deletion-in-progress, and bounded failures are controller-supplied state.
+- Typing updates ranking synchronously. Arrow keys and `Ctrl+P`/`Ctrl+N` move one active row; movement is bounded and keeps that row visible.
+- Enter requests opening the active thread. Delete/Backspace requests deletion under the separately settled confirmation contract only when it is not editing filter text; Escape requests closing the route when no box-local operation consumes it first.
+- `Ctrl+C` with a collapsed selection clears a non-empty filter; native copy is preserved for selected text and all `Cmd+C` use.
+- Empty-query and equal-score order are deterministic and do not depend on storage return order or sort stability.
+- Match highlighting renders text nodes, never matcher-produced HTML. Query syntax and Unicode/diacritic behavior are covered by fixtures.
+- The box emits semantic intents but never calls `ThreadStore`, confirms/removes data, reloads records, or navigates.
+- Loading, empty, no-match, deletion-in-progress, and load/delete failure states remain distinct, perceivable, and keyboard safe.
+
+**Failure contract:** matcher failure falls back to deterministic empty-query ordering with bounded non-blocking feedback rather than making threads inaccessible. Storage load/delete failures arrive as view state, preserve the current query/selection where possible, and expose only applicable retry intent.
+
+**Implementation boundary:** row rendering, list virtualization, highlight styling, and exact local state representation may vary. The pinned matcher configuration, wrapper result contract, keyboard semantics, deterministic tie-breaks, and accessibility behavior may not drift without amending this plan.
+
+**Current mapping:** `ThreadPicker` in `src/ui/App.tsx` directly loads/removes through `ThreadStore`, uses case-insensitive title substring filtering, owns a browser confirmation, and navigates itself; it also supports both inline and overlay rendering. The target `ThreadsBox` receives state and emits intent on canonical `/threads`, while controller effects and `rankThreads` matching remain separate explicit boundaries.
+
 The detailed contracts for the remaining layout boxes and their current → target mappings remain to be settled.
 
 ## Current → Target Overview
@@ -1372,7 +1455,7 @@ The final implementation must prove at least:
 - `BrandBox` exposes one keyboard/pointer-equivalent activation target and emits only `new_thread_requested`; tagline rotation is non-live and respects reduced motion.
 - Every canonical page composes the same `StickyHeader`; its typed contextual actions and feedback remain accessible and never perform effects directly.
 - Normalizing the same canonical URL across providers, searches, retries, or ranks yields the same collision-safe `SourceId`; provider rank and result-array position never become durable identity.
-- `/threads` is the only `ThreadsBox` presentation; its fzf-like local keyboard behavior does not conflict with global hotkeys.
+- `/threads` is the only `ThreadsBox` presentation; its pinned `fzf@0.5.2` wrapper produces fixture-locked deterministic rankings/highlights, and its local keyboard behavior does not conflict with global hotkeys.
 - `UnlockBox` participates in shared box styling while passphrase input remains ephemeral, unlogged, and unpersisted.
 - Existing persistence, export, retention, auth, interruption, stale-request, keyboard, focus, responsive, and accessibility behavior remains green unless this plan explicitly changes it.
 - Fixture and live adapters preserve the same provider-neutral contracts.
