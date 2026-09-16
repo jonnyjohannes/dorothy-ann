@@ -36,7 +36,7 @@ Decisions made so far:
 - `TranscriptBox` renders durable history and the one active turn through one ordered presentation model. Live progress and streamed answer content occupy the active turn's position and are replaced, not duplicated, when that turn becomes durable.
 - `EvidenceBox` renders one thread-wide append-stable `EvidenceSet`. Canonical sources are deduplicated, durable support uses `SourceId`, display citations use derived one-based ordinals, and role occurrences allow one source to be promoted from search destination to research evidence without duplication.
 - `BrandBox` is one identity/control surface: activating anywhere on it emits only `new_thread_requested`. `StickyHeader` composes that brand with typed route-contextual actions and feedback but performs no navigation, export, clipboard, or cancellation effects itself.
-- `SettingsBox` applies each visual preference immediately through emitted intent, has no Save/Cancel transaction, and reports persistence independently. The settings controller applies document state and persists through a browser preference adapter; failed persistence leaves the choice active for the session and visibly unsaved.
+- `SettingsBox` applies each visual preference immediately through emitted intent, has no Save/Cancel transaction, and reports persistence independently. The settings controller applies document state and persists through a browser preference adapter; failed persistence leaves the choice active for the session and visibly unsaved. Existing backup/import remains a compact secondary recovery utility with an inline validated preview and explicit keep/replace conflict policy; it never uses `window.confirm`.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
 
 Read this plan, then the completed [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md), `src/domain/types.ts`, `src/domain/schemas.ts`, `src/ports/`, `server/research.ts`, `server/app.ts`, and `src/ui/App.tsx` before implementation. Continue design in this file; do not begin implementation until the remaining box contracts and migration plan are approved.
@@ -1380,16 +1380,53 @@ interface SettingsBoxViewState {
   retentionNotice: string;
 }
 
+type BackupPreviewId = Brand<string, "BackupPreviewId">;
+type BackupConflictPolicy = "keep_existing" | "replace_existing";
+
+type BackupControlsViewState =
+  | { status: "idle" }
+  | { status: "exporting" }
+  | {
+      status: "preview";
+      previewId: BackupPreviewId;
+      fileName: string;
+      add: number;
+      conflicts: number;
+      skippedInvalid: number;
+      issueMessages: string[];
+      conflictPolicy: BackupConflictPolicy;
+      canImport: boolean;
+    }
+  | { status: "importing"; fileName: string }
+  | {
+      status: "completed";
+      message: string;
+      added: number;
+      replaced: number;
+      skipped: number;
+    }
+  | {
+      status: "failed";
+      operation: "export" | "inspect" | "import";
+      message: string;
+    };
+
 type SettingsBoxIntent =
   | { type: "appearance_changed"; value: Appearance }
   | { type: "color_scheme_changed"; value: ColorScheme }
   | { type: "primary_accent_changed"; value: PrimaryAccent }
   | { type: "preference_save_retry_requested"; key: PreferenceKey }
   | { type: "backup_export_requested" }
-  | { type: "backup_import_selected"; file: File };
+  | { type: "backup_import_selected"; file: File }
+  | {
+      type: "backup_conflict_policy_changed";
+      value: BackupConflictPolicy;
+    }
+  | { type: "backup_import_confirmed"; previewId: BackupPreviewId }
+  | { type: "backup_import_cancelled" };
 ```
 
-`BackupControlsViewState` and import-conflict intents remain to be finalized with the backup interaction. Preference flow is settled:
+Preference flow is settled:
 
 ```text
 preference changed
@@ -1417,11 +1454,41 @@ settings controller
 - `SettingsBox` does not access `document`, media queries, `localStorage`, `ThreadStore`, clipboard, downloads, or network APIs directly.
 - Form labels, current values, save status, errors, and keyboard/focus behavior remain perceivable across themes and responsive layouts.
 
-**Failure contract:** adapter unavailability leaves validated preferences active for the current session and identifies only affected values as unsaved. Backup failures remain independent from preference state and cannot make visual settings unusable.
+**Backup/import interaction**
 
-**Implementation boundary:** native select versus custom controls, section layout, and status placement may vary. Immediate application, independent persistence, normalization, no aggregate save transaction, accessibility, and controller-effect boundaries remain fixed.
+Backup remains because it is existing v1 recovery behavior across local/remote storage, not because it is a central product capability. It stays visually secondary and compact.
 
-**Current mapping:** `ThemeControl`, `ColorSchemeControl`, and `PrimaryAccentControl` in `src/ui/App.tsx` each read/write `localStorage` and mutate document theme state directly. `BackupControls` calls `ThreadStore` and browser file/download APIs directly. The target `SettingsBox` receives normalized state and emits intent; a settings controller owns application/persistence effects while the remaining backup flow is finalized separately.
+```text
+select backup file
+       |
+       v
+settings controller validates + ThreadStore.inspectImport
+       |
+       v
+SettingsBox inline preview
+  + new / conflicts / skipped-invalid counts
+  + sanitized issue messages
+  + keep-existing (safe default) / replace-existing
+       |
+       +-- cancel -> discard opaque preview
+       `-- confirm(previewId)
+                    |
+                    v
+          ThreadStore.importData
+                    |
+                    v
+             bounded report
+```
+
+A structurally invalid/unsupported backup produces an inspect failure and cannot be confirmed. Individually invalid thread records are excluded and reported as `skippedInvalid`; remaining valid records may be imported. Preview exposes at most 20 sanitized issue summaries while retaining the complete skipped count. Import is disabled when no valid add/replace work remains. `keep_existing` is the default conflict policy, and changing it updates preview state before confirmation. The controller retains the validated candidate behind opaque `BackupPreviewId` only in memory and rejects stale confirmations; raw backup content never becomes layout state.
+
+Export is one explicit action. The controller obtains validated backup data from `ThreadStore`, creates the browser download, and returns bounded status; `SettingsBox` never constructs blobs or clicks synthetic anchors.
+
+**Failure contract:** adapter unavailability leaves validated preferences active for the current session and identifies only affected values as unsaved. Export, inspect, and import failures are independent typed view states, preserve preference usability, expose no raw payloads, and permit a fresh attempt. Successful partial import reports added, replaced, and skipped counts explicitly.
+
+**Implementation boundary:** native select versus custom controls, section layout, status placement, and file-picker activation may vary. Immediate preference application, independent persistence, normalized inline backup preview, explicit conflict policy/confirmation, no native confirmation, accessibility, and controller-effect boundaries remain fixed.
+
+**Current mapping:** `ThemeControl`, `ColorSchemeControl`, and `PrimaryAccentControl` in `src/ui/App.tsx` each read/write `localStorage` and mutate document theme state directly. `BackupControls` calls `ThreadStore` and browser file/download APIs directly, then uses `window.confirm` for conflict policy; its current invalid-record message does not match its early-return behavior. The target `SettingsBox` receives normalized state and emits intent, while a settings controller owns application/persistence/download effects and presents validated import outcomes consistently.
 
 The detailed contracts for the remaining layout boxes and their current → target mappings remain to be settled.
 
@@ -1525,7 +1592,7 @@ The final implementation must prove at least:
 - `EvidenceBox` renders one thread-wide canonical set; duplicate sources retain one application-derived stable `SourceId` and display ordinal, citations resolve by ID, occurrences preserve turn/rank/role provenance, and destination-to-evidence promotion does not duplicate an entry.
 - `BrandBox` exposes one keyboard/pointer-equivalent activation target and emits only `new_thread_requested`; tagline rotation is non-live and respects reduced motion.
 - Every canonical page composes the same `StickyHeader`; its typed contextual actions and feedback remain accessible and never perform effects directly.
-- `SettingsBox` has no aggregate Save/Cancel action: each valid preference applies immediately, persists independently through the controller, and remains active but visibly `session_only` when persistence fails.
+- `SettingsBox` has no aggregate Save/Cancel action: each valid preference applies immediately, persists independently through the controller, and remains active but visibly `session_only` when persistence fails. Backup import uses an inline validated preview, safe-default keep/replace policy, opaque stale-safe confirmation ID, and explicit partial report without `window.confirm`.
 - Normalizing the same canonical URL across providers, searches, retries, or ranks yields the same collision-safe `SourceId`; provider rank and result-array position never become durable identity.
 - `/threads` is the only `ThreadsBox` presentation; its pinned `fzf@0.5.2` wrapper produces fixture-locked deterministic rankings/highlights, its local keyboard behavior does not conflict with global hotkeys, and deletion requires inline `y`/Enter confirmation that Escape can cancel without closing the route.
 - `UnlockBox` participates in shared box styling while passphrase input remains ephemeral, unlogged, and unpersisted.
