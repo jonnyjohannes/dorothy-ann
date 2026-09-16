@@ -33,6 +33,7 @@ Decisions made so far:
 - `Hotkeys` is an explicit layout-control box, not a visible region. It translates unhandled global keyboard events and current layout context into semantic intents without navigating, focusing DOM nodes, cancelling work, or invoking system capabilities directly.
 - `ThreadsBox` has one canonical `/threads` route with aggressive fzf-like filtering and keyboard behavior, not separate route and overlay presentations.
 - `UnlockBox` is part of the shared box vocabulary so global visual-system changes include authentication. It owns only ephemeral passphrase entry and emits authentication intent without persisting or logging the passphrase.
+- `TranscriptBox` renders durable history and the one active turn through one ordered presentation model. Live progress and streamed answer content occupy the active turn's position and are replaced, not duplicated, when that turn becomes durable.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
 
 Read this plan, then the completed [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md), `src/domain/types.ts`, `src/domain/schemas.ts`, `src/ports/`, `server/research.ts`, `server/app.ts`, and `src/ui/App.tsx` before implementation. Continue design in this file; do not begin implementation until the remaining box contracts and migration plan are approved.
@@ -1025,6 +1026,93 @@ type HotkeyIntent =
 
 **Current mapping:** global shortcuts live in `GlobalShortcuts`, research cancellation has a separate capture listener in `Topic`, and local picker behavior lives in `ThreadPicker` in `src/ui/App.tsx`. The target centralizes only global/cross-box gestures in `Hotkeys`; box-local behavior stays with the owning box.
 
+### `TranscriptBox`
+
+**Capability:** render durable turns and the single active turn as one ordered conversational transcript.
+
+```ts
+interface TranscriptBoxViewState {
+  turns: TranscriptTurnView[];
+}
+
+type TranscriptPhase =
+  | "starting"
+  | "searching"
+  | "assessing"
+  | "acquiring_evidence"
+  | "resolving"
+  | "synthesizing";
+
+interface TranscriptTurnView {
+  turnId: TurnId;
+  request: string;
+  presentation:
+    | {
+        kind: "active";
+        phase: TranscriptPhase;
+        streamedAnswer?: string;
+        progress: TranscriptProgressView[];
+      }
+    | {
+        kind: "search_results";
+        sourceCount: number;
+      }
+    | {
+        kind: "answer";
+        markdown: string;
+        completion: "resolved" | "best_effort";
+      }
+    | {
+        kind: "terminal";
+        status: "insufficient" | "failed" | "interrupted";
+        message: string;
+        retryable: boolean;
+      };
+}
+
+interface TranscriptProgressView {
+  id: string;
+  label: string;
+  detail?: string;
+}
+
+type TranscriptBoxIntent =
+  | { type: "evidence_selected"; sourceId: SourceId; turnId: TurnId }
+  | { type: "turn_retry_requested"; turnId: TurnId };
+```
+
+The route/workspace controller projects durable `Thread` state and bounded public lifecycle events into this presentation model. `TranscriptBox` does not receive persistence records, raw provider payloads, assessor directives, or an independent live-answer channel.
+
+```text
+durable turns + active lifecycle/answer deltas
+                    |
+                    v
+        route/workspace projection
+                    |
+                    v
+             TranscriptBox
+                    |
+                    +-- evidence_selected
+                    `-- turn_retry_requested
+```
+
+**Invariants**
+
+- Turns appear once in durable conversational order; at most the final turn has an `active` presentation.
+- The active turn occupies its eventual durable position. Completion replaces that presentation by stable `turnId` rather than appending duplicate request or answer markup.
+- Initial and follow-up requests use the same rendering path.
+- A `SearchTurn` presents its request and bounded result summary without inventing an assistant answer; ranked destinations remain in `EvidenceBox`.
+- A `ResearchTurn` may show bounded safe progress and streamed root-answer content in place. Raw assessor payloads, hidden reasoning, and provider diagnostics are never rendered.
+- Progress announcements are polite and phase-level; token deltas are not individually announced to screen readers. Completion and terminal status remain perceivable.
+- Citation activation emits typed evidence intent. The box does not query, focus, or mutate `EvidenceBox` DOM.
+- Retry is emitted only for a retryable terminal presentation; the box does not restart work itself.
+
+**Failure contract:** an empty transcript renders an intentional empty state. A terminal turn remains in sequence with its bounded public message and preserves earlier successful turns. Unsupported or stale evidence references remain inert rather than causing the transcript to fail.
+
+**Implementation boundary:** item components, markdown rendering, virtualization, and live-delta buffering may vary while ordering, replacement, accessibility, citation, and no-duplication contracts remain intact.
+
+**Current mapping:** `TurnTranscriptBox` currently receives a domain `Thread` and renders only `renderThreadScrollback(thread)`. `Topic` separately renders live research plans/loaders, a conditional initial streamed answer, and a separate follow-up answer in `src/ui/App.tsx`. The target replaces those fragmented paths with one controller-projected `TranscriptBoxViewState`; durable completion replaces the matching active view without duplicate output.
+
 The detailed contracts for the remaining layout boxes and their current → target mappings remain to be settled.
 
 ## Current → Target Overview
@@ -1123,6 +1211,7 @@ The final implementation must prove at least:
 - Search and research failures cross boxes as bounded typed failures without provider payloads.
 - `PromptBox` remains buttonless, keeps its draft editable while one active turn blocks submission, has no queue, clears a collapsed-selection draft with focused `Ctrl+C`, and preserves native copy for selected text and all `Cmd+C` use.
 - `Hotkeys` is installed once, emits semantic intents rather than effects, focuses a mounted prompt with passive unmodified `:`, emits cancellation for active-turn Escape, and never steals editable/composing input or invokes navigation/system capabilities directly.
+- `TranscriptBox` renders durable and active turns through one ordered view model; active progress/streaming is replaced by matching durable completion without duplicate requests or answers, and initial/follow-up requests use the same path.
 - `/threads` is the only `ThreadsBox` presentation; its fzf-like local keyboard behavior does not conflict with global hotkeys.
 - `UnlockBox` participates in shared box styling while passphrase input remains ephemeral, unlogged, and unpersisted.
 - Existing persistence, export, retention, auth, interruption, stale-request, keyboard, focus, responsive, and accessibility behavior remains green unless this plan explicitly changes it.
