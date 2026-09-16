@@ -4,9 +4,9 @@
 
 - Status: planning
 - Last updated: 2026-09-15
-- Current focus: settle evidence persistence and remaining controller/transport contracts now that terminal `SearchTurn | ResearchTurn` unions and layout contracts are defined
+- Current focus: close remaining controller/transport and deterministic budget-allocation contracts now that terminal turns, evidence persistence, and layout boxes are defined
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: decide whether the canonical `EvidenceSet` is materialized at thread level or deterministically projected from per-turn source records
+- Next action: define fair deterministic allocation of the nine-source budget across ready evidence requests, then settle turn-controller and HTTP/SSE ownership
 
 ## Handoff
 
@@ -40,8 +40,9 @@ Decisions made so far:
 - `UnlockBox` is a buttonless auth-entry region. It owns only an ephemeral masked draft, emits one passphrase submission at a time, and clears/refocuses after rejection while the authentication controller owns validation, network calls, safe return navigation, and bounded public auth state.
 - `SystemStatusBox` is a narrowly scoped visible box for blocking application-boundary checking or unavailability (auth session, provider status, or thread storage). It emits retry intent but never absorbs turn, thread-row, settings, import, or ordinary route failures.
 - Active turns are controller-only and never persisted; every observed terminal completed, insufficient, failed, or interrupted result becomes an immutable durable turn. Retry creates a new linked turn through `retryOfTurnId` rather than mutating terminal history.
-- A successfully executed zero-result search is a completed `SearchTurn` with `completion: "empty"`, while `completion: "results"` requires a non-empty source tuple; failure and interruption variants carry neither result nor partial sources.
+- A successfully executed zero-result search is a completed `SearchTurn` with `completion: "empty"`, while `completion: "results"` requires a non-empty destination-reference tuple; canonical source metadata is stored once on `Thread`, and failure/interruption carry neither result nor partial destinations.
 - Failed/interrupted research records never use an ambiguous optional resolution. They explicitly persist a validated full resolution, bounded checkpoint, or `unavailable` marker according to what the controller actually received; no state is fabricated.
+- `Thread` is the durable context/aggregate root, not a runtime god object. It materializes canonical source metadata once in an append-stable source catalog; terminal turns retain rank/role/support references, and `EvidenceSet`/`ThreadContext` are deterministic bounded projections. Active execution remains controller-owned.
 - Durable/public research failures use compact capability-level codes only. Provider and implementation details remain in sanitized server observability, never turn records, SSE payloads, or client messages.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
 
@@ -117,15 +118,45 @@ Recursively resolve the current question using its conversation, available evide
 
 ### Thread context
 
-`Thread` owns the durable conversation; conversation is not a separate data-model component or mode. Research receives a bounded `ThreadContext` derived from completed turns and available evidence so orchestration does not depend on persistence metadata.
+`Thread` owns the durable conversation; conversation is not a separate data-model component or mode. It is the durable context/aggregate root, while research receives a deterministic bounded `ThreadContext` projection so orchestration does not depend on persistence metadata or mutate the aggregate.
 
 ```ts
+type ThreadContextTurn =
+  | {
+      turnId: TurnId;
+      kind: "research";
+      request: string;
+      outcome: "sufficient" | "best_effort";
+      answer: AssistantContent;
+    }
+  | {
+      turnId: TurnId;
+      kind: "search";
+      request: string;
+      outcome: "search";
+    }
+  | {
+      turnId: TurnId;
+      kind: "research";
+      request: string;
+      outcome: "insufficient";
+    }
+  | {
+      turnId: TurnId;
+      kind: TurnKind;
+      request: string;
+      outcome: "failed" | "interrupted";
+    };
+
 interface ThreadContext {
   threadId: ThreadId;
-  completedTurns: CompletedTurn[];
+  turns: ThreadContextTurn[];
+  knownSources: CanonicalSource[];
   availableEvidence: EvidencePack[];
 }
 ```
+
+The projection may include terminal requests for conversational continuity, but includes assistant answers only from completed research and factual evidence only from validated research resolutions/checkpoints. Failure messages, provider details, and unsupported partial output never become research context. Existing source destinations may be known without being treated as extracted research evidence.
 
 A follow-up question is another research turn supplied with this bounded view.
 
@@ -137,19 +168,20 @@ A follow-up question is another research turn supplied with this bounded view.
 
 ```ts
 interface Thread {
-  schemaVersion: 1 | 2;
+  schemaVersion: 3;
   id: ThreadId;
   title: string;
   createdAt: IsoTimestamp;
   updatedAt: IsoTimestamp;
   modelRef: string;
   searchRef: string;
+  sources: ThreadSourceRecord[];
   turns: Turn[];
 }
 ```
 
 ```text
-thread identity + metadata + ordered turns
+thread identity + canonical source catalog + ordered terminal turns
                     |
                     v
                 [ Thread ]
@@ -160,8 +192,8 @@ thread identity + metadata + ordered turns
 
 **Invariants**
 
-- Turns are chronologically ordered.
-- A durable thread contains only terminal turns; active/pending/running execution state is never serialized into it.
+- Turns are chronologically ordered, and canonical sources are stored once in append-stable ordinal order.
+- A durable thread contains only terminal turns plus their canonical source catalog; active turns/evidence deltas are never serialized before terminal commit.
 - `updatedAt` reflects the latest meaningful activity.
 - Serialized thread data is provider-neutral.
 - Source references used by an answer resolve by stable `SourceId` through the canonical `EvidenceSet` reconstructed from thread activity.
@@ -230,14 +262,19 @@ Retry creates a new active turn and, if terminal, a new immutable turn with `ret
 The terminal search union is settled:
 
 ```ts
+interface SearchDestinationRef {
+  sourceId: SourceId;
+  rank: number;
+}
+
 type SearchTurnResult =
   | {
       completion: "results";
-      sources: [SearchResult, ...SearchResult[]];
+      destinations: [SearchDestinationRef, ...SearchDestinationRef[]];
     }
   | {
       completion: "empty";
-      sources: [];
+      destinations: [];
     };
 
 type SearchTurnFailure =
@@ -273,7 +310,7 @@ type SearchTurn =
     });
 ```
 
-A successfully executed search with no destinations is a completed `empty` result, not a failure. The non-empty tuple makes `completion: "results"` truthful. Failed and interrupted variants cannot carry partial sources; `SearchProvider.search` is one atomic provider-neutral operation.
+A successfully executed search with no destinations is a completed `empty` result, not a failure. The non-empty tuple makes `completion: "results"` truthful. Search metadata is admitted once to the thread source catalog, while the terminal turn retains only query-relative destination references. Failed and interrupted variants cannot carry partial destinations; `SearchProvider.search` is one atomic provider-neutral operation.
 
 The turn kind is selected per submission: trailing `?` creates research; otherwise the submission creates search. It is not durable global UI mode.
 
@@ -321,9 +358,8 @@ It exists to keep storage versioning and retention metadata outside product-leve
 Normalized provider-neutral discovery result:
 
 ```ts
-interface SearchResult {
+interface CanonicalSource {
   sourceId: SourceId;
-  rank: number;
   title: string;
   url: string;
   canonicalUrl: string;
@@ -331,18 +367,32 @@ interface SearchResult {
   snippet?: string;
   publishedAt?: IsoTimestamp;
 }
+
+interface SearchResult extends CanonicalSource {
+  rank: number;
+}
 ```
 
 `SourceId` is an application-derived stable identity for the canonical source, not provider rank or result-array position. The same canonical URL normalized from different searches must receive the same collision-safe ID before evidence, citations, or support references are admitted. Provider-local IDs may be retained only as adapter metadata and never become durable source identity.
 
+Provider/search `SearchResult` is transient because `rank` belongs to one query. Durable `Thread` separates canonical source metadata from contextual references:
+
+```ts
+interface ThreadSourceRecord extends CanonicalSource {
+  ordinal: number;
+}
+```
+
+The application admits a normalized source record at most once per thread. First deterministic admission fixes its positive contiguous ordinal and normalized presentation metadata; later encounters reuse that record and add per-turn references rather than rewriting it. Terminal source admission and its referencing turn commit atomically, so no durable dangling turn reference or orphan catalog entry is created.
+
 ### Evidence model
 
-Current evidence consists of a normalized `SearchResult` paired with an `ExtractedPage`, grouped in an `EvidencePack`:
+The current implementation embeds a complete normalized `SearchResult` beside each `ExtractedPage`. The target stores canonical source metadata once on `Thread`; bounded query/time-specific extracted content remains with the research resolution/checkpoint that admitted it:
 
 ```ts
 interface ContextEvidence {
-  source: SearchResult;
-  page: ExtractedPage;
+  sourceId: SourceId;
+  page: Omit<ExtractedPage, "sourceId" | "canonicalUrl" | "title">;
 }
 
 interface EvidencePack {
@@ -366,7 +416,7 @@ interface EvidenceOccurrence {
 interface EvidenceSetEntry {
   sourceId: SourceId;
   ordinal: number;
-  source: Omit<SearchResult, "sourceId" | "rank">;
+  source: Omit<CanonicalSource, "sourceId">;
   occurrences: EvidenceOccurrence[];
 }
 
@@ -377,7 +427,9 @@ interface EvidenceSet {
 
 `EvidenceSet` is an append-stable ordered projection over a mathematical set: one entry exists per canonical source identity, while deterministic first admission supplies its display ordinal. Durable turn order, evidence-request priority, provider rank, and canonical identity—not concurrent completion order—determine admission order. A reused source retains its existing `SourceId` and ordinal. New role/turn occurrences are joined and deduplicated rather than replacing prior provenance.
 
-Only destinations actually returned by a completed `SearchTurn` receive `search_destination`; unselected research candidates do not enter the set. A research source receives `research_evidence` only when viable extracted content is admitted to research knowledge. Failed extraction does not promote a source. Exact ownership remains to be settled: source records may be materialized once at thread level or retained per turn and projected into the same canonical set, but either representation must reconstruct identical IDs, ordinals, roles, and occurrences.
+Only destinations actually returned by a completed `SearchTurn` receive `search_destination`; unselected research candidates do not enter the set. A research source receives `research_evidence` only when viable extracted content is admitted to research knowledge. Failed extraction does not promote a source.
+
+Ownership is settled: `Thread.sources` materializes canonical metadata/ordinals once; terminal search destination refs and research resolution/checkpoint support retain per-turn context; bounded extracted `EvidencePack` snapshots remain inside the terminal research state that admitted them. `EvidenceSet` is not separately persisted—it is deterministically projected from this aggregate. The route/workspace controller joins an ephemeral active evidence delta for live presentation, then terminal source admission and turn commit occur atomically.
 
 ## System Components
 
@@ -490,7 +542,7 @@ SearchResult + extraction limits
 
 ```ts
 interface ContentExtractor {
-  extract(source: SearchResult, limits: ExtractionLimits): Promise<ExtractionOutcome>;
+  extract(source: CanonicalSource, limits: ExtractionLimits): Promise<ExtractionOutcome>;
 }
 ```
 
@@ -529,9 +581,13 @@ interface SearchRequest {
   maxResults: number;
 }
 
+type SearchExecutionResult =
+  | { completion: "results"; sources: [SearchResult, ...SearchResult[]] }
+  | { completion: "empty"; sources: [] };
+
 interface SearchResponse {
   query: string;
-  result: SearchTurnResult;
+  result: SearchExecutionResult;
 }
 ```
 
@@ -543,6 +599,7 @@ interface SearchResponse {
 - A successful empty provider result completes with `completion: "empty"`; provider/rate-limit/invalid-response failures remain distinct.
 - Non-empty results can become search-destination entries available to a later research turn.
 - Completion, interruption, and failure are explicit and mutually exclusive.
+- On success, the turn controller atomically admits canonical source metadata to `Thread.sources` and converts ranked `SearchResult` values into durable `SearchDestinationRef` values; the search capability does not mutate `Thread`.
 
 **Failure contract:** bounded unavailable, rate-limited, and failed search codes; no raw Brave details.
 
@@ -945,12 +1002,30 @@ type ResolutionStopReason =
   | "duplicate_problem"
   | "provider_unavailable";
 
+interface ResearchEvidenceRef {
+  sourceId: SourceId;
+  rank: number;
+}
+
+interface ResearchTaskRecord {
+  problemId: ResearchProblemId;
+  query: string;
+  purpose: string;
+  priority: 1 | 2 | 3;
+  status: "completed" | "partial" | "failed";
+  evidence: ResearchEvidenceRef[];
+}
+
 interface ResearchResolutionBase {
   knowledge: KnowledgeUnit;
   ledger: GapLedger;
   tasks: ResearchTaskRecord[];
 }
+```
 
+`ResearchTaskRecord` is compact acquisition provenance, not an assessor transcript: it retains the problem/query relationship and query-relative ranks only for sources admitted as research evidence. Unselected candidates, failed-extraction source identities, provider payloads, and assessor rationale are not persisted. `GapLedger` retains recursive/decomposition provenance.
+
+```ts
 interface SufficientResearchResolution extends ResearchResolutionBase {
   status: "sufficient";
   stopReason: "sufficient";
@@ -1073,7 +1148,7 @@ interface EvidenceRequest {
 
 interface EvidenceAcquisitionInput {
   requests: EvidenceRequest[];
-  knownSources: SearchResult[];
+  knownSources: CanonicalSource[];
   budget: ResearchBudget;
   limits: ResearchLimits;
 }
@@ -1081,7 +1156,7 @@ interface EvidenceAcquisitionInput {
 interface EvidenceAcquisitionResult {
   requests: EvidenceRequest[];
   results: EvidenceRequestResult[];
-  sources: SearchResult[];
+  sources: CanonicalSource[];
   extractions: ExtractionOutcome[];
   evidence: EvidencePack;
   budget: ResearchBudget;
@@ -1928,7 +2003,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 
 - [~] 1. Architectural contracts — deliverable: approved named data/system/layout boxes with typed inputs, outputs/events, invariants, failure contracts, implementation boundaries, and diagrams; verify: no unresolved contract ambiguity required for implementation.
 - [ ] 2. Current → target mapping — deliverable: file-level responsibility and migration map; verify: every current orchestration/persistence/layout responsibility has one target owner.
-- [ ] 3. Data-model migration — deliverable: canonical `search | research` discriminated turns, schemas, and compatibility migration; verify: domain, schema, storage, and export tests.
+- [ ] 3. Data-model migration — deliverable: schema-v3 `Thread` aggregate with canonical source catalog, terminal `search | research` discriminated turns, deterministic context/evidence projections, and compatibility migration; verify: domain, schema, storage, import/export, source-identity, and projection tests.
 - [ ] 4. System-box refactor — deliverable: `SearchTurn` execution and standardized `ResearchTurn` composed from recursive resolver, typed assessor directives, algebraic knowledge join, evidence acquisition, and synthesis boxes; verify: focused application/provider/orchestration tests across all explicit limits, algebraic laws, and stop conditions.
 - [ ] 5. Boundary adaptation — deliverable: HTTP/SSE, persistence, UI controller, and concrete provider adapters use the new contracts; verify: app, storage, UI, interruption, and fixture parity tests.
 - [ ] 6. Layout-box refactor — deliverable: agreed layout components consume state and emit intent through explicit interfaces; verify: component, keyboard, focus, responsive, and accessibility tests.
@@ -1972,6 +2047,7 @@ The final implementation must prove at least:
 - `UnlockBox` remains buttonless, serializes attempts, never externalizes passphrases beyond immediate submit intent, and clears/refocuses after bounded rejection/unavailability while preserving password-manager and accessibility behavior.
 - `SystemStatusBox` renders only blocking auth-session/provider-status/thread-storage checks or unavailability, preserves the requested route, and retries through intent rather than reload while non-blocking failures remain in their owning boxes.
 - Normalizing the same canonical URL across providers, searches, retries, or ranks yields the same collision-safe `SourceId`; provider rank and result-array position never become durable identity.
+- `Thread` is the sole durable aggregate root: canonical source metadata/ordinal is materialized once, terminal turns retain contextual refs and bounded evidence snapshots, `EvidenceSet`/`ThreadContext` derive deterministically, and terminal source admission plus turn commit is atomic.
 - `/threads` is the only `ThreadsBox` presentation; its pinned `fzf@0.5.2` wrapper produces fixture-locked deterministic rankings/highlights, its local keyboard behavior does not conflict with global hotkeys, and deletion requires inline `y`/Enter confirmation that Escape can cancel without closing the route.
 - Existing persistence, export, retention, auth, interruption, stale-request, keyboard, focus, responsive, and accessibility behavior remains green unless this plan explicitly changes it.
 - Fixture and live adapters preserve the same provider-neutral contracts.
@@ -1979,7 +2055,6 @@ The final implementation must prove at least:
 
 ## Open Questions
 
-- Is the canonical `EvidenceSet` materialized once at thread level, or are source records retained per turn and deterministically projected into the same set for display and future research context?
 - How are nine aggregate consumed sources allocated fairly and deterministically across up to three search result sets and recursive branches?
 - Beyond the approved assessment/synthesis model variables, what environment-variable names expose the explicit balanced `ResearchLimits` while keeping typed names canonical?
 - Should the migration fallback from `ANTHROPIC_ASSESSMENT_MODEL` and `ANTHROPIC_SYNTHESIS_MODEL` to legacy `ANTHROPIC_MODEL` remain permanently or be removed after deployment?
