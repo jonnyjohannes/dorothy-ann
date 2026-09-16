@@ -4,9 +4,9 @@
 
 - Status: planning
 - Last updated: 2026-09-15
-- Current focus: define the remaining data, system, and layout boxes around recursive knowledge resolution and explicit `SearchTurn | ResearchTurn` behavior
+- Current focus: define the detailed contracts and relationships for the agreed layout boxes, then close the remaining data/system contracts
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: settle the final turn/evidence persistence contracts and layout-box boundaries, then complete the current → target migration map
+- Next action: settle each layout box's typed view state, emitted intents, invariants, failure behavior, implementation boundary, and current mapping
 
 ## Handoff
 
@@ -29,6 +29,9 @@ Decisions made so far:
 - Budget exhaustion with useful supported evidence produces a bounded best-effort synthesis that identifies unresolved uncertainty; no useful supported evidence produces an insufficient-evidence failure.
 - `Thread` and `Turn` remain the central data-model components. The target `Turn` should become a discriminated `SearchTurn | ResearchTurn` union.
 - The persistence wrapper currently named `StoredThreadEnvelopeV2` is not a top-level architecture box. Its naming and exact storage contract remain open.
+- The agreed visual regions are `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, and `UnlockBox`. Boxes receive typed view state and emit intent; route/workspace controllers coordinate application and system capabilities.
+- `ThreadsBox` has one canonical `/threads` route with aggressive fzf-like filtering and keyboard behavior, not separate route and overlay presentations.
+- `UnlockBox` is part of the shared box vocabulary so global visual-system changes include authentication. It owns only ephemeral passphrase entry and emits authentication intent without persisting or logging the passphrase.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
 
 Read this plan, then the completed [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md), `src/domain/types.ts`, `src/domain/schemas.ts`, `src/ports/`, `server/research.ts`, `server/app.ts`, and `src/ui/App.tsx` before implementation. Continue design in this file; do not begin implementation until the remaining box contracts and migration plan are approved.
@@ -51,7 +54,7 @@ This makes meaningful discussion and safe refactoring harder than necessary. We 
 - Recursively transform unresolved problems into supported knowledge, join child knowledge deterministically, and converge toward zero material evidence gaps.
 - Stop safely on sufficiency, exhausted explicit budget/depth, no new knowledge, cycles, interruption, or unavailability.
 - Retain explicit balanced per-turn ceilings: three searches, nine consumed additional sources, recursion depth two, eight assessments, and three child problems per decomposition.
-- Separate research assessment, recursive knowledge resolution, leaf search/extraction mechanics, knowledge joining, and final synthesis responsibilities.
+- Separate research assessment, recursive knowledge resolution, evidence acquisition, knowledge joining, and final synthesis responsibilities.
 - Make `Thread` and `Turn` model valid states directly rather than through loosely related optional fields.
 - Preserve provider-neutral domain and application contracts, with Brave and Anthropic remaining concrete adapters.
 - Record the current → target implementation mapping while refactoring.
@@ -867,15 +870,83 @@ The HTTP/SSE boundary is likely a named system box owning request validation, au
 
 ## Layout Components
 
-The agreed layout boxes to define are:
+The agreed layout vocabulary is:
 
 - `PromptBox`
 - `TranscriptBox` (currently `TurnTranscriptBox`)
 - `EvidenceBox`
-- `ThreadSelectorBox` with fzf-like filtering and keyboard behavior (currently `ThreadPicker`)
-- `SettingsSectionBox`
+- `BrandBox`
+- `StickyHeader`
+- `SettingsBox`
+- `ThreadsBox` with fzf-like filtering and keyboard behavior (currently `ThreadPicker`)
+- `UnlockBox`
 
-Their detailed input/output, invariants, failure, implementation, and current → target mappings remain to be settled. The intended direction is that layout boxes receive state and emit user intent; they do not directly own navigation, persistence, network requests, or research orchestration unless explicitly decided otherwise.
+`Box` identifies a visually coherent product region with one presentation capability, a typed state input, and typed user intents. All boxes participate in shared typography, spacing, border, focus, responsive, and color-scheme styling. `UnlockBox` is explicitly included so global box-level visual changes apply to the authentication screen rather than leaving it as unrelated boundary markup.
+
+Layout boxes receive state and emit user intent. They do not directly own navigation, durable persistence, network requests, turn routing, or research orchestration. Ordinary ephemeral interaction state—draft text, fuzzy query, active row, focus, disclosure, and `BrandBox` tagline rotation—may remain local to React. Route/workspace controllers translate intents into application/system calls and project resulting state back into boxes.
+
+```text
+application/system state
+          |
+          v
+route/workspace controller
+          |
+          | typed view state
+          v
++-------------------------- page ---------------------------+
+| StickyHeader                                             |
+|   +-- BrandBox                                           |
+|   `-- contextual actions                                 |
++----------------------------------------------------------+
+| TranscriptBox ---- evidence_selected(sourceId) --+       |
+|                                                  |       |
+|                                      selectedSourceId    |
+|                                                  |       |
+|                                                  v       |
+|                                            EvidenceBox   |
++----------------------------------------------------------+
+| PromptBox ----------------------- submit/cancel intent   |
++----------------------------------------------------------+
+          |
+          | typed user intent
+          v
+route/workspace controller
+          |
+          v
+application/system capability
+```
+
+The canonical page compositions are:
+
+```text
+HOME       StickyHeader(BrandBox) + PromptBox + command hints
+THREAD     StickyHeader(BrandBox, thread actions)
+           + TranscriptBox + EvidenceBox + PromptBox
+THREADS    StickyHeader(BrandBox, close) + ThreadsBox
+SETTINGS   StickyHeader(BrandBox, close) + SettingsBox
+UNLOCK     StickyHeader(BrandBox) + UnlockBox
+```
+
+Cross-box coordination belongs to the route/workspace controller. In particular, `TranscriptBox` emits a source selection intent; the controller updates `selectedSourceId`, supplies it to `EvidenceBox`, and coordinates focus without either box querying or mutating the other's DOM.
+
+`ThreadsBox` has one canonical `/threads` route rather than an overlay or adaptive dual presentation. It locally owns aggressive fzf-like query/ranking, active-row, and keyboard interaction state. The controller supplies thread summaries and loading/failure state, then handles open, delete, and close intents through navigation and `ThreadStore`. `/threads`, its slash command, and its global shortcut all converge on the same route.
+
+Initial system relationships are:
+
+```text
+PromptBox      -- submit/cancel intent --> Turn controller
+TranscriptBox  <-- durable/live turns --- route/workspace controller
+EvidenceBox    <-- reachable evidence ---- route/workspace controller
+ThreadsBox     <-- thread summaries ------ ThreadStore controller
+SettingsBox    <-- settings/backup state - settings controller
+UnlockBox      <-- auth state ------------ authentication boundary
+BrandBox       -- home/new intent --------> navigation controller
+StickyHeader   -- contextual intents -----> route/workspace controller
+```
+
+`SettingsBox` may own temporary form and file-picker state but reaches browser preferences, backup operations, and `ThreadStore` only through intents. `UnlockBox` may own an in-memory passphrase draft but never logs, persists, exports, or exposes that value outside its submit intent. `StickyHeader` owns sticky presentation, safe-area behavior, and action placement; `BrandBox` owns identity presentation and its local rotation timer, not navigation.
+
+The detailed per-box inputs, outputs, invariants, failure contracts, implementation boundaries, and current → target mappings remain to be settled.
 
 ## Current → Target Overview
 
