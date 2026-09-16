@@ -35,6 +35,7 @@ Decisions made so far:
 - `UnlockBox` is part of the shared box vocabulary so global visual-system changes include authentication. It owns only ephemeral passphrase entry and emits authentication intent without persisting or logging the passphrase.
 - `TranscriptBox` renders durable history and the one active turn through one ordered presentation model. Live progress and streamed answer content occupy the active turn's position and are replaced, not duplicated, when that turn becomes durable.
 - `EvidenceBox` renders one thread-wide append-stable `EvidenceSet`. Canonical sources are deduplicated, durable support uses `SourceId`, display citations use derived one-based ordinals, and role occurrences allow one source to be promoted from search destination to research evidence without duplication.
+- `BrandBox` is one identity/control surface: activating anywhere on it emits only `new_thread_requested`. `StickyHeader` composes that brand with typed route-contextual actions and feedback but performs no navigation, export, clipboard, or cancellation effects itself.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
 
 Read this plan, then the completed [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md), `src/domain/types.ts`, `src/domain/schemas.ts`, `src/ports/`, `server/research.ts`, `server/app.ts`, and `src/ui/App.tsx` before implementation. Continue design in this file; do not begin implementation until the remaining box contracts and migration plan are approved.
@@ -978,7 +979,7 @@ EvidenceBox    <-- reachable evidence ---- route/workspace controller
 ThreadsBox     <-- thread summaries ------ ThreadStore controller
 SettingsBox    <-- settings/backup state - settings controller
 UnlockBox      <-- auth state ------------ authentication boundary
-BrandBox       -- home/new intent --------> navigation controller
+BrandBox       -- new-thread intent ------> navigation controller
 StickyHeader   -- contextual intents -----> route/workspace controller
 ```
 
@@ -1186,6 +1187,88 @@ all durable turns + active admitted sources
 
 **Current mapping:** `EvidenceBox` currently receives a flat `SearchResult[]`; `Topic` sometimes supplies current stream sources and sometimes derives a thread-wide deduplicated list with `sourcesForThread`, while citation rendering computes numbers separately per turn. The target controller derives one canonical `EvidenceSet` and supplies the same source ID-to-ordinal mapping to both `TranscriptBox` citation rendering and `EvidenceBox`.
 
+### `BrandBox`
+
+**Capability:** present Dorothy Ann's identity as one compact control that requests a fresh workspace.
+
+```ts
+interface BrandBoxViewState {
+  mark: string;
+  taglines: readonly string[];
+  rotationIntervalMs: number;
+}
+
+type BrandBoxIntent = {
+  type: "new_thread_requested";
+};
+```
+
+**Invariants**
+
+- The mark and rotating tagline form one activation target with one stable accessible name and one `new_thread_requested` intent; there is no separate home-versus-new behavior.
+- The box never navigates, creates a thread, clears state, or cancels an active turn. The controller decides how to satisfy the intent in current route/turn/auth context.
+- Tagline rotation is ordinary local presentation state, is not announced as live content, and freezes to a deterministic value when reduced motion is requested.
+- Keyboard and pointer activation are equivalent. Focus remains visible under every supported theme.
+- The complete identity remains recognizable when narrow layouts truncate or hide tagline text.
+
+**Failure contract:** missing or empty tagline data falls back to the stable mark; inability to rotate never prevents new-thread activation.
+
+**Implementation boundary:** timer mechanics, transition styling, responsive tagline visibility, and native control-element rendering may vary while the single-target, single-intent, accessibility, and reduced-motion contracts remain intact.
+
+**Current mapping:** `RotatingBrand` in `src/ui/App.tsx` currently renders two adjacent links: the signature targets `/new`, while the optional tagline targets `/`. The target merges them into one `BrandBox` activation surface and emits intent instead of navigating directly.
+
+### `StickyHeader`
+
+**Capability:** keep global identity and bounded route-contextual actions available in one persistent page header.
+
+```ts
+type HeaderActionId =
+  | "copy_thread"
+  | "export_thread"
+  | "close_secondary";
+
+interface HeaderActionView {
+  id: HeaderActionId;
+  label: string;
+  availability: "enabled" | "disabled";
+}
+
+interface StickyHeaderViewState {
+  brand: BrandBoxViewState;
+  actions: HeaderActionView[];
+  feedback?: string;
+}
+
+type StickyHeaderIntent =
+  | BrandBoxIntent
+  | { type: "header_action_requested"; actionId: HeaderActionId };
+```
+
+Canonical action projection is route-owned:
+
+```text
+home     -> BrandBox
+thread   -> BrandBox + available copy/export actions
+threads  -> BrandBox + close
+settings -> BrandBox + close
+unlock   -> BrandBox
+```
+
+**Invariants**
+
+- Every canonical page uses the same sticky header and nested `BrandBox`; pages do not reproduce private header markup.
+- The controller supplies only actions valid for current route/state. Disabled actions cannot emit intent.
+- The header emits semantic action IDs and performs no navigation, clipboard, file export, cancellation, persistence, or auth effects.
+- Feedback such as copied/exported status is bounded, non-blocking, and announced through one polite status region without shifting primary controls unpredictably.
+- Sticky positioning respects safe areas, narrow layouts, zoom, focus visibility, anchor targets, and the fixed `PromptBox`; it never makes page content unreachable.
+- Contextual actions have stable accessible names and keyboard/pointer parity. `BrandBox` remains the first consistent landmark control.
+
+**Failure contract:** an unavailable contextual capability is omitted or disabled rather than causing header failure. Failed effects return bounded controller state/feedback while the header and brand remain usable.
+
+**Implementation boundary:** CSS stickiness, backdrop treatment, action overflow, compact responsive rendering, and component composition may vary while landmark, action, feedback, accessibility, and no-effects boundaries remain intact.
+
+**Current mapping:** sticky CSS exists in `src/ui/App.module.css`, while `Home`, `Topic`, `Unlock`, and `SecondaryLayout` repeat header markup in `src/ui/App.tsx`. Copy/export effects and feedback are interleaved in `Topic`. The target composes one `StickyHeader` on every canonical page and moves effects to the controller.
+
 The detailed contracts for the remaining layout boxes and their current → target mappings remain to be settled.
 
 ## Current → Target Overview
@@ -1286,6 +1369,8 @@ The final implementation must prove at least:
 - `Hotkeys` is installed once, emits semantic intents rather than effects, focuses a mounted prompt with passive unmodified `:`, emits cancellation for active-turn Escape, and never steals editable/composing input or invokes navigation/system capabilities directly.
 - `TranscriptBox` renders durable and active turns through one ordered view model; active progress/streaming is replaced by matching durable completion without duplicate requests or answers, and initial/follow-up requests use the same path.
 - `EvidenceBox` renders one thread-wide canonical set; duplicate sources retain one application-derived stable `SourceId` and display ordinal, citations resolve by ID, occurrences preserve turn/rank/role provenance, and destination-to-evidence promotion does not duplicate an entry.
+- `BrandBox` exposes one keyboard/pointer-equivalent activation target and emits only `new_thread_requested`; tagline rotation is non-live and respects reduced motion.
+- Every canonical page composes the same `StickyHeader`; its typed contextual actions and feedback remain accessible and never perform effects directly.
 - Normalizing the same canonical URL across providers, searches, retries, or ranks yields the same collision-safe `SourceId`; provider rank and result-array position never become durable identity.
 - `/threads` is the only `ThreadsBox` presentation; its fzf-like local keyboard behavior does not conflict with global hotkeys.
 - `UnlockBox` participates in shared box styling while passphrase input remains ephemeral, unlogged, and unpersisted.
