@@ -41,6 +41,7 @@ Decisions made so far:
 - `SystemStatusBox` is a narrowly scoped visible box for blocking application-boundary checking or unavailability (auth session, provider status, or thread storage). It emits retry intent but never absorbs turn, thread-row, settings, import, or ordinary route failures.
 - Active turns are controller-only and never persisted; every observed terminal completed, insufficient, failed, or interrupted result becomes an immutable durable turn. Retry creates a new linked turn through `retryOfTurnId` rather than mutating terminal history.
 - A successfully executed zero-result search is a completed `SearchTurn` with `completion: "empty"`, while `completion: "results"` requires a non-empty source tuple; failure and interruption variants carry neither result nor partial sources.
+- Failed/interrupted research records never use an ambiguous optional resolution. They explicitly persist a validated full resolution, bounded checkpoint, or `unavailable` marker according to what the controller actually received; no state is fabricated.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
 
 Read this plan, then the completed [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md), `src/domain/types.ts`, `src/domain/schemas.ts`, `src/ports/`, `server/research.ts`, `server/app.ts`, and `src/ui/App.tsx` before implementation. Continue design in this file; do not begin implementation until the remaining box contracts and migration plan are approved.
@@ -297,7 +298,7 @@ current request + prior thread context + macro-selected turn kind
 - Every terminal durable turn passes runtime schema validation.
 - The discriminant determines which result fields are valid; search and research result shapes are not mixed through unrelated optional fields.
 
-The persistence/lifecycle axis, complete `SearchTurn` terminal union, and completed `ResearchTurnResult` variants are settled. Failed and interrupted `ResearchTurn` payload variants remain to be settled.
+The persistence/lifecycle axis and complete terminal `SearchTurn | ResearchTurn` structural unions are settled. Exact bounded public research failure code unions remain to be settled with the transport boundary.
 
 ### Persistence record
 
@@ -635,7 +636,88 @@ type CompletedResearchTurn = TerminalTurnBase<"research"> & {
 
 This is the completed form only. `resolved` is reserved for the recursive assessor directive: it says one current problem can return supported knowledge without another reduction. `sufficient` is the root research outcome: after joined child knowledge and root reassessment, zero material gaps remain for the user's question. Several child problems may be `resolved` while the root remains `best_effort` or `insufficient`.
 
-The final turn union must represent terminal insufficient-evidence, interruption, and provider failures without requiring an `answer` where none exists.
+Failed and interrupted variants preserve only validated state actually available to the controller:
+
+```ts
+interface ResearchCheckpoint {
+  reason: "interrupted" | "execution_failure";
+  knowledge: KnowledgeUnit;
+  ledger: GapLedger;
+  tasks: ResearchTaskRecord[];
+}
+
+type IncompleteResearchState =
+  | { kind: "checkpoint"; checkpoint: ResearchCheckpoint }
+  | { kind: "unavailable" };
+
+interface InsufficientEvidenceFailure {
+  kind: "insufficient_evidence";
+  message: string;
+  retryable: true;
+}
+
+interface SynthesisFailure {
+  kind: "synthesis_failure";
+  code: string;
+  message: string;
+  retryable: boolean;
+}
+
+interface ResearchExecutionFailure {
+  kind: "execution_failure";
+  stage: "assessment" | "acquisition" | "resolution" | "transport";
+  code: string;
+  message: string;
+  retryable: boolean;
+}
+
+type FailedResearchTurn =
+  | (TerminalTurnBase<"research"> & {
+      status: "failed";
+      failure: InsufficientEvidenceFailure;
+      researchState: {
+        kind: "resolution";
+        resolution: InsufficientResearchResolution;
+      };
+    })
+  | (TerminalTurnBase<"research"> & {
+      status: "failed";
+      failure: SynthesisFailure;
+      researchState: {
+        kind: "resolution";
+        resolution:
+          | SufficientResearchResolution
+          | BestEffortResearchResolution;
+      };
+    })
+  | (TerminalTurnBase<"research"> & {
+      status: "failed";
+      failure: ResearchExecutionFailure;
+      researchState: IncompleteResearchState;
+    });
+
+type InterruptedResearchState =
+  | {
+      kind: "resolution";
+      resolution:
+        | SufficientResearchResolution
+        | BestEffortResearchResolution;
+    }
+  | IncompleteResearchState;
+
+type InterruptedResearchTurn = TerminalTurnBase<"research"> & {
+  status: "interrupted";
+  interruption: TurnInterruption;
+  researchState: InterruptedResearchState;
+};
+
+type ResearchTurn =
+  | CompletedResearchTurn
+  | FailedResearchTurn
+  | InterruptedResearchTurn;
+```
+
+An insufficient failure always carries an `InsufficientResearchResolution`. A synthesis failure always carries the synthesis-eligible sufficient/best-effort resolution that existed before answer generation failed. Earlier execution failures carry a validated checkpoint or explicitly `unavailable`; they never fabricate an empty resolution. Interruption may retain a full resolution when cancellation occurs during synthesis, a checkpoint during recursive work, or `unavailable` when no validated state reached the controller. None of these non-completed variants carries an answer.
 
 **Invariants**
 
@@ -649,6 +731,7 @@ The final turn union must represent terminal insufficient-evidence, interruption
 - Synthesis happens exactly once at the root after resolution stops and the final knowledge unit is known.
 - Useful supported evidence at a bounded stop produces a best-effort answer with explicit uncertainty; no useful supported evidence produces an insufficient-evidence failure.
 - Lifecycle progress, resolution stop reason, and terminal state are observable.
+- Failed/interrupted persistence explicitly distinguishes full resolution, bounded checkpoint, and unavailable state; no optional field implies knowledge the controller did not receive.
 - Partial sibling failures preserve successful evidence.
 
 **Current mapping:** `server/research.ts` currently performs a mandatory initial search/extraction before planning and may then conduct up to three generated searches in one non-recursive concurrent batch. Conversation is flattened rather than passed as typed bounded thread context. The target removes the special initial-search path and moves recursive knowledge resolution behind one standard initial/follow-up `ResearchTurn` contract.
@@ -746,7 +829,7 @@ Evaluate the complete current problem against supplied thread context, knowledge
 
 ### `ResearchResolver`
 
-**Capability:** recursively interpret assessor directives for one research problem within shared explicit limits, join supported child knowledge into parent state, and return a knowledge-bearing resolution rather than a user-facing answer.
+**Capability:** recursively interpret assessor directives for one research problem within shared explicit limits, join supported child knowledge into parent state, and return either a root resolution or validated interruption/execution checkpoint rather than a user-facing answer.
 
 ```text
 ResearchProblem + ResearchKnowledge + explicit ResearchBudget
@@ -769,7 +852,7 @@ ResearchProblem + ResearchKnowledge + explicit ResearchBudget
                        reassess parent
                               |
                               v
-                     ResearchResolution
+          ResearchResolution | ResearchCheckpoint
 ```
 
 ```ts
@@ -820,7 +903,6 @@ type ResolutionStopReason =
   | "depth_limit_reached"
   | "no_new_knowledge"
   | "duplicate_problem"
-  | "interrupted"
   | "provider_unavailable";
 
 interface ResearchResolutionBase {
@@ -836,10 +918,7 @@ interface SufficientResearchResolution extends ResearchResolutionBase {
 
 interface BestEffortResearchResolution extends ResearchResolutionBase {
   status: "best_effort";
-  stopReason: Exclude<
-    ResolutionStopReason,
-    "sufficient" | "interrupted"
-  >;
+  stopReason: Exclude<ResolutionStopReason, "sufficient">;
 }
 
 interface InsufficientResearchResolution extends ResearchResolutionBase {
@@ -851,6 +930,10 @@ type ResearchResolution =
   | SufficientResearchResolution
   | BestEffortResearchResolution
   | InsufficientResearchResolution;
+
+type ResearchResolverOutcome =
+  | { kind: "resolution"; resolution: ResearchResolution }
+  | { kind: "checkpoint"; checkpoint: ResearchCheckpoint };
 ```
 
 The vocabulary is intentionally layered:
@@ -907,7 +990,8 @@ This means zero material gaps needed for the question, not exhaustive or absolut
 - A recursive step must add canonical evidence, add/revise a supported observation, resolve a gap, discover a materially narrower gap, or mark work blocked. Otherwise it stops with `no_new_knowledge`.
 - Duplicate normalized ancestor problems and gap fingerprints cannot recurse.
 - Stop when resolved, an explicit hard limit is reached, no new knowledge is produced, a problem cycles, or the turn is interrupted/unavailable.
-- At a bounded stop, return `best_effort` when supported knowledge remains useful; otherwise return `insufficient`.
+- At a non-interruption bounded stop, return `best_effort` when supported knowledge remains useful; otherwise return `insufficient`.
+- Interruption or fatal execution failure before a root resolution returns a validated `ResearchCheckpoint`; it is not mislabeled as an epistemic resolution outcome.
 
 The v1.1 persisted form may retain flat `SupportRef[]` provenance while leaving room for a future recursive `SupportExpression = Evidence | All | Any`; persisting a full research AST/proof tree is deferred.
 
@@ -1817,6 +1901,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 The final implementation must prove at least:
 
 - `Turn` accepts only valid terminal search or research combinations; pending/running execution is represented only by non-persisted controller-owned `ActiveTurn`.
+- Insufficient research always carries an insufficient resolution; synthesis failure always carries a sufficient/best-effort resolution; earlier failure/interruption explicitly distinguishes a validated checkpoint from unavailable state and never carries an answer.
 - Every observed terminal outcome is committed immutably, and retry appends a same-request turn linked to an earlier same-thread terminal through `retryOfTurnId` rather than reopening it.
 - A macro-less submission creates a `SearchTurn`; a trailing-`?` submission creates a `ResearchTurn`; neither depends on persistent UI mode.
 - `SearchTurn` invokes one search and never invokes extraction or an LLM.
@@ -1853,7 +1938,7 @@ The final implementation must prove at least:
 
 ## Open Questions
 
-- What are the final failed/interrupted `ResearchTurn` payload variants now that completed `sufficient | best_effort` results, lifecycle persistence, and `SearchTurn` are settled?
+- Which exact bounded public codes and retryability rules refine `SynthesisFailure` and `ResearchExecutionFailure` when the turn and transport contracts are finalized?
 - Is the canonical `EvidenceSet` materialized once at thread level, or are source records retained per turn and deterministically projected into the same set for display and future research context?
 - How are nine aggregate consumed sources allocated fairly and deterministically across up to three search result sets and recursive branches?
 - Beyond the approved assessment/synthesis model variables, what environment-variable names expose the explicit balanced `ResearchLimits` while keeping typed names canonical?
