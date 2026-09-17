@@ -2,15 +2,15 @@
 
 ## Current State
 
-- Status: implementation in progress
+- Status: blocked on one item-5 context contract omission
 - Last updated: 2026-09-15
-- Current focus: Plan Ledger item 5 — knowledge and context policies
+- Current focus: decide the typed representation/accounting of a truncated `ThreadContext` research answer
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: mark item 5 `[~]`, implement algebraic knowledge joining and exact bounded `buildThreadContext` over the parallel v3 model
+- Next action: choose the bounded answer-truncation contract below, amend the v3 model/schema, then resume knowledge/context implementation without changing durable answers
 
 ## Handoff
 
-Implementation is active on `release/v1.1.0`. Plan Ledger items 2–4 are complete. Runtime/config/prompt scaffolding and the parallel v3 model/schemas remain isolated from current consumers. Identity material now uses NFKC/Unicode-whitespace text normalization, WHATWG safe canonical URLs, UTF-8 byte-length framing, full SHA-256/base64url typed IDs, collision detection, and one Web Crypto adapter fixture-locked in Node/browser. Deterministic v1/v2 migration converts valid lookups, archives unsupported history, rewrites/deduplicates sources and citation aliases, drops/reports incomplete or invalid entries, and validates the resulting aggregate. Brave source identity now derives from canonical URL rather than rank. Full lint/typecheck, 114 tests, build, and `git diff --check` pass. Next implement item 5 only: knowledge algebra and exact bounded thread-context projection.
+Implementation is paused at Plan Ledger item 5 after completing items 2–4. Runtime/config/prompt scaffolding and the parallel v3 model/schemas remain isolated from current consumers. Identity material now uses NFKC/Unicode-whitespace text normalization, WHATWG safe canonical URLs, UTF-8 byte-length framing, full SHA-256/base64url typed IDs, collision detection, and one Web Crypto adapter fixture-locked in Node/browser. Deterministic v1/v2 migration converts valid lookups, archives unsupported history, rewrites/deduplicates sources and citation aliases, drops/reports incomplete or invalid entries, and validates the resulting aggregate. Brave source identity now derives from canonical URL rather than rank. Full lint/typecheck, 114 tests, build, and `git diff --check` pass. Item 5 exposed one plan omission: `buildThreadContext` requires partial answer truncation to be marked in the typed protocol envelope, but `ThreadContextTurn` has no truncation field and the plan does not say how structured citation parts consume the character budget. No item-5 source code has been written. Choose the smallest contract repair under Open Questions, then resume item 5.
 
 Dorothy Ann v1.0.0 behaves correctly and is the baseline for this architectural pass. The v1.1.0 goal is to refactor the application around named, technically explicit boxes without changing working product behavior accidentally. Each box is documented as typed inputs → one owned capability → typed outputs/events, plus invariants, failure contract, and implementation boundary.
 
@@ -3140,7 +3140,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [x] 2. Runtime/config scaffold — deliverable: Node 22, exact fzf pin, canonical bounded env/deprecations, root prompt assets and startup loaders/Vercel inclusion; verify: config/prompt/deployment/frontend-exclusion tests.
 - [x] 3. Parallel v3 model/schemas — deliverable: target model, strict schemas, read-only legacy archive, and private bounded v1/v2 input schemas without breaking current consumers; verify: union/archive/bound/reference/archive-only/legacy-input tests.
 - [x] 4. Identity/migration policy — deliverable: canonical material, cross-runtime SHA-256 IDs, and deterministic v1/v2 conversion; verify: fixed Node/browser vectors plus URL/Unicode/support/ancestry/collision/source-alias/migration tests.
-- [ ] 5. Knowledge/context policies — deliverable: algebraic evidence-collection join and exact bounded thread projection; verify: law, contradiction, ordering, truncation, and byte-bound tests.
+- [!] 5. Knowledge/context policies — blocker: `ThreadContextTurn` lacks the required typed answer-truncation marker/accounting rule; deliverable: algebraic evidence-collection join and exact bounded thread projection; verify: law, contradiction, ordering, truncation, and byte-bound tests.
 - [ ] 6. Atomic storage policy/port — deliverable: typed CAS/idempotent terminal commit contract and in-memory harness; verify: commit/source/order/expiry/delete/failure contract suite.
 - [ ] 7. Storage adapters/transfer — deliverable: IndexedDB, browser-remote, Redis, portable routes, archive-preserving terminal commits, and backup/import on v3; verify: shared adapter suite plus archive-only/legacy/export/import/retention fixtures.
 - [ ] 8. LLM port/Anthropic adapter — deliverable: proposal/stream contracts, exact prompts, model routes/provenance, sanitized failures; verify: adapter structured/stream/retry/prompt tests.
@@ -3214,4 +3214,13 @@ The final implementation must prove at least:
 
 ## Open Questions
 
-No implementation-blocking product or architecture questions remain. The selected legacy policy is the bounded read-only `Thread.legacyArchive` contract above: it preserves unsupported v1/v2 history without widening `Turn` or allowing legacy content into evidence-backed execution. Any implementation discovery that changes a public contract, dependency direction, approved ceiling, provider exposure, durable shape, migration fidelity, or browser behavior must stop work and amend this plan before continuing.
+### Blocking item 5: structured answer truncation
+
+`buildThreadContext` normatively truncates an oversized included research answer at a code-point boundary and marks that truncation in the protocol envelope, but the settled `ThreadContextTurn` completed-research variant currently contains only `answer: AssistantContent`. Choose one repair:
+
+1. **Structured prefix plus marker (recommended):** add `answerTruncated: boolean`. Account for each text part's Markdown plus the canonical serialized `[[cite:<SourceId>]]` form of citation parts. Copy parts in order while budget remains, truncate only a text part at a Unicode code-point boundary, never split a citation token, stop after the first non-fitting/truncated part, and set the marker. This keeps typed citations and deterministic byte-equivalent input.
+2. **Plain contextual Markdown:** replace contextual `AssistantContent` with `{ markdown: string; truncated: boolean }`, serializing citation parts first. This simplifies accounting but loses typed citation structure at the assessor/synthesizer input boundary.
+3. **Whole-answer admission only:** never partially truncate; omit completed answers that do not fully fit. This avoids a marker but contradicts the approved oversized-latest-answer fixture and loses more useful recent context.
+4. **Other:** define another deterministic prefix/accounting contract that never mutates durable content.
+
+The selected legacy policy is the bounded read-only `Thread.legacyArchive` contract above: it preserves unsupported v1/v2 history without widening `Turn` or allowing legacy content into evidence-backed execution. Any implementation discovery that changes a public contract, dependency direction, approved ceiling, provider exposure, durable shape, migration fidelity, or browser behavior must stop work and amend this plan before continuing.
