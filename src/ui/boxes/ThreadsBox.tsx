@@ -1,0 +1,18 @@
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import styles from "../App.module.css";
+import type { ThreadId } from "../../domain/model-v3";
+import type { BoxIntent, ThreadsViewState } from "./box-types";
+import { rankThreads } from "./box-policies";
+export function ThreadsBox({ state, onIntent }: { state: ThreadsViewState; onIntent: (intent: BoxIntent) => void }) {
+  const [query, setQuery] = useState("");
+  const [active, setActive] = useState(0);
+  const [confirming, setConfirming] = useState<ThreadId | null>(null);
+  const visible = useMemo(() => rankThreads(state.threads, query), [state.threads, query]);
+  useEffect(() => setActive((value) => Math.min(value, Math.max(0, visible.length - 1))), [visible.length]);
+  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown") { event.preventDefault(); setActive((value) => Math.min(value + 1, visible.length - 1)); }
+    if (event.key === "ArrowUp") { event.preventDefault(); setActive((value) => Math.max(0, value - 1)); }
+    if (event.key === "Enter" && visible[active]) { event.preventDefault(); onIntent({ type: "thread_open_requested", threadId: visible[active].id }); }
+  };
+  return <section aria-label="Saved threads" className={styles.threadPicker}><h2 className={styles.pageTitle}><code>/threads</code></h2><input autoFocus className={styles.threadSearch} aria-label="Find threads" value={query} onChange={(event) => { setQuery(event.target.value); setActive(0); }} onKeyDown={onKeyDown} />{state.error && <p role="alert">{state.error}</p>}{state.loading ? <p role="status">Loading threads…</p> : visible.length ? <ul>{visible.map((thread, index) => <li key={thread.id} className={index === active ? styles.threadSelected : styles.threadRow}><button type="button" onClick={() => onIntent({ type: "thread_open_requested", threadId: thread.id })}>{thread.title}<small>{thread.lastRequestPreview}</small></button>{confirming === thread.id ? <span role="group" aria-label={`Confirm deletion of ${thread.title}`}><button type="button" onClick={() => { onIntent({ type: "thread_delete_requested", threadId: thread.id }); setConfirming(null); }}>Delete</button><button type="button" onClick={() => setConfirming(null)}>Cancel</button></span> : <button type="button" aria-label={`Delete ${thread.title}`} onClick={() => setConfirming(thread.id)}>×</button>}</li>)}</ul> : <p className={styles.muted}>{query ? "No matching threads." : "No saved threads yet."}</p>}</section>;
+}
