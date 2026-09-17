@@ -1,6 +1,7 @@
 .shell {
+  width: 100%;
   min-height: 100vh;
-  padding: 0 2rem;
+  padding: 0 clamp(1rem, 3vw, 3rem);
   background: var(--paper);
   color: var(--ink);
 }
@@ -23,6 +24,12 @@
   min-width: 0;
 }
 .signature {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  border: 0;
+  padding: 0;
+  background: transparent;
   color: var(--ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.78rem;
@@ -30,6 +37,10 @@
   letter-spacing: -0.08em;
   white-space: nowrap;
   text-decoration: none;
+  cursor: pointer;
+}
+.signature:focus-visible {
+  border-radius: 0.2rem;
 }
 .brand {
   color: inherit;
@@ -53,7 +64,7 @@
   line-height: 1;
 }
 .hero {
-  width: min(100%, 1100px);
+  width: min(100%, 110rem);
   margin: calc(10vh + 2.5rem) auto 0;
 }
 .hero > h1,
@@ -188,7 +199,7 @@
   color: var(--ink);
 }
 .unlockCard {
-  width: min(100%, 72rem);
+  width: min(100%, 110rem);
   margin: 28vh auto 0;
 }
 .unlockCard > .kicker {
@@ -360,14 +371,12 @@
 }
 .topicLayout {
   display: block;
-  width: min(100%, 72rem);
+  width: min(100%, 110rem);
   margin: 0 auto;
   padding-bottom: 8rem;
 }
 .researchLayout {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(15rem, 1fr);
-  gap: 2rem;
+  display: block;
 }
 .lookupLayout .sourcesBox { width: 100%; }
 .lookupLayout .scrollback { margin-bottom: 1rem; }
@@ -380,12 +389,11 @@
 }
 .evidence {
   display: block;
-  position: sticky;
-  top: 1rem;
-  align-self: start;
-  margin-top: 8vh;
-  padding: 1.25rem;
-  border-left: 1px solid var(--line);
+  width: 100%;
+  position: static;
+  margin-top: 3rem;
+  padding: 1.25rem 0;
+  border-block: 1px solid var(--line);
 }
 .evidence a,
 .resultList a,
@@ -398,13 +406,15 @@
   text-underline-offset: 0.12em;
 }
 .evidenceList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .evidenceItem {
-  border-bottom: 1px solid var(--line);
-  padding: 0.75rem 0;
+  min-width: 0;
+  padding: 1.25rem 1.5rem;
 }
 .evidenceItem small {
   display: block;
@@ -449,7 +459,7 @@
 .answerMarkdown pre,
 .answerMarkdown blockquote { max-width: 70ch; }
 .settings {
-  width: min(100%, 48rem);
+  width: min(100%, 90rem);
   margin: 10vh auto;
 }
 .settings h1 {
@@ -511,7 +521,7 @@
   cursor: pointer;
 }
 .routeHint { opacity: 0.7; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.08em; }
-.scrollback { max-width: 54rem; margin: 2rem auto 8rem; font-size: 1.05rem; line-height: 1.65; }
+.scrollback { max-width: 90rem; margin: 2rem auto 8rem; font-size: 1.05rem; line-height: 1.65; }
 .scrollback h1 { font-size: clamp(1.8rem, 4vw, 3rem); }
 .scrollback a { color: inherit; text-decoration-color: var(--accent); }
 .scrollback blockquote { margin-left: 0; margin-right: 1rem; border-left: 3px solid var(--accent); padding-left: 0.5rem; color: var(--muted); }
@@ -532,7 +542,7 @@
 }
 .promptBox > input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); padding: 0.85rem 0.7rem; }
 .promptHint { align-self: center; color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
-.commandMessage { width: min(100%, 72rem); margin: 1rem auto; color: var(--muted); }
+.commandMessage { width: min(100%, 110rem); margin: 1rem auto; color: var(--muted); }
 .researchPlanLive {
   margin: 2rem 0;
   padding: 1rem 1.25rem;
@@ -680,10 +690,11 @@
   .promptHint { display: none; }
   .promptBox > button { padding-inline: 0.7rem; }
   .evidence {
-    position: static;
     margin: 2rem 0;
-    border-left: 0;
-    border-top: 1px solid var(--line);
+    padding-block: 0.75rem;
+  }
+  .evidenceItem {
+    padding: 1.1rem 0.75rem;
   }
   .hero,
   .topic {
