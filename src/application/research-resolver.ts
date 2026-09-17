@@ -1,5 +1,6 @@
 import { joinKnowledge } from "../domain/knowledge.js";
 import type {
+  CanonicalSource,
   GapLedger,
   KnowledgeUnit,
   ResearchBudget,
@@ -16,7 +17,7 @@ import type {
   ResearchAssessor,
   ResearchAssessment,
 } from "./research-assessor.js";
-import type { EvidenceAcquirer, EvidenceAcquisitionResult, EvidenceRequest } from "./evidence-acquirer.js";
+import type { EvidenceAcquirer, EvidenceAcquisitionResult, EvidenceRequest, ResearchLimits } from "./evidence-acquirer.js";
 import type { IdentityPolicy } from "./identity-policy.js";
 import { sourceIdSchema, turnIdSchema } from "../domain/schemas.js";
 
@@ -36,6 +37,7 @@ export interface ResearchResolverDependencies {
   /** Decodes one provider response. Validation and trusted IDs remain in assessor. */
   assess(request: ResearchAssessmentRequest): Promise<ResearchAssessmentProposal>;
   acquirer: EvidenceAcquirer;
+  acquisitionLimits?: ResearchLimits;
 }
 
 export interface ResearchResolverInput {
@@ -47,7 +49,7 @@ export interface ResearchResolverInput {
 }
 
 export type ResearchResolverOutcome =
-  | { kind: "resolution"; resolution: ResearchResolution }
+  | { kind: "resolution"; resolution: ResearchResolution & { sources?: CanonicalSource[] } }
   | { kind: "checkpoint"; checkpoint: ResearchCheckpoint };
 
 const cloneLedger = (ledger: GapLedger): GapLedger => ({
@@ -98,6 +100,7 @@ export class ResearchResolver {
       budget: { ...input.budget },
       knowledge: joinKnowledge(input.problem.id, [input.knowledge]),
       tasks: [] as ResearchTaskRecord[],
+      admittedSources: [] as CanonicalSource[],
       activeFingerprints: new Set<string>(),
     };
     try {
@@ -145,7 +148,7 @@ export class ResearchResolver {
     turnId: TurnId,
     problem: ResearchProblem,
     startingKnowledge: KnowledgeUnit,
-    state: { ledger: GapLedger; budget: ResearchBudget; knowledge: KnowledgeUnit; tasks: ResearchTaskRecord[]; activeFingerprints: Set<string> },
+    state: { ledger: GapLedger; budget: ResearchBudget; knowledge: KnowledgeUnit; tasks: ResearchTaskRecord[]; admittedSources: CanonicalSource[]; activeFingerprints: Set<string> },
     operatorFromParent: "all" | "any" | undefined,
   ): Promise<{ kind: "resolution"; knowledge: KnowledgeUnit; stopReason: ResearchResolution["stopReason"] } | { kind: "checkpoint"; checkpoint: ResearchCheckpoint }> {
     const gap = await this.ensureGap(problem, state.ledger, operatorFromParent);
@@ -188,7 +191,14 @@ export class ResearchResolver {
           gap.status = "blocked";
           return { kind: "resolution", knowledge: before, stopReason: "source_budget_exhausted" };
         }
+        if (state.tasks.some((task) => normalized(task.query) === normalized(directive.query))) {
+          gap.status = "blocked";
+          return { kind: "resolution", knowledge: before, stopReason: "no_new_knowledge" };
+        }
         const acquisition = await this.acquire(problem, directive, state);
+        for (const source of acquisition.admittedSources) {
+          if (!state.admittedSources.some((existing) => existing.sourceId === source.sourceId)) state.admittedSources.push(source);
+        }
         const afterSearch = joinKnowledge(problem.id, [before, { problemId: problem.id, findings: [], evidence: acquisition.evidence, unresolvedGapIds: [] }]);
         state.knowledge = joinKnowledge(problem.id, [state.knowledge, afterSearch]);
         const task: ResearchTaskRecord = {
@@ -298,7 +308,7 @@ export class ResearchResolver {
       knownSources: problem.context.knownSources,
       availableEvidenceSourceIds: problem.context.availableEvidence.flatMap((pack) => pack.sources.map((source) => source.sourceId)),
       budget: state.budget,
-      limits: {},
+      limits: this.dependencies.acquisitionLimits ?? {},
     });
     const searches = state.budget.searchesRemaining - result.budget.searchesRemaining;
     const sources = state.budget.sourcesRemaining - result.budget.sourcesRemaining;
@@ -308,13 +318,14 @@ export class ResearchResolver {
     return result;
   }
 
-  private resolution(knowledge: KnowledgeUnit, state: { ledger: GapLedger; tasks: ResearchTaskRecord[] }, stopReason: ResearchResolution["stopReason"]): ResearchResolution {
+  private resolution(knowledge: KnowledgeUnit, state: { ledger: GapLedger; tasks: ResearchTaskRecord[]; admittedSources: CanonicalSource[] }, stopReason: ResearchResolution["stopReason"]): ResearchResolution & { sources?: CanonicalSource[] } {
     const rootOpen = state.ledger.gaps.some((gap) => gap.status === "open");
+    const sources = state.admittedSources.length ? state.admittedSources : undefined;
     const usefulKnowledge = useful(knowledge);
-    if (!rootOpen && stopReason === "sufficient") return { status: "sufficient", stopReason: "sufficient", knowledge, ledger: state.ledger, tasks: state.tasks };
+    if (!rootOpen && stopReason === "sufficient") return { status: "sufficient", stopReason: "sufficient", knowledge, ledger: state.ledger, tasks: state.tasks, sources };
     return usefulKnowledge
-      ? { status: "best_effort", stopReason: stopReason === "sufficient" ? "no_new_knowledge" : stopReason, knowledge, ledger: state.ledger, tasks: state.tasks }
-      : { status: "insufficient", stopReason: stopReason === "sufficient" ? "no_new_knowledge" : stopReason, knowledge, ledger: state.ledger, tasks: state.tasks };
+      ? { status: "best_effort", stopReason: stopReason === "sufficient" ? "no_new_knowledge" : stopReason, knowledge, ledger: state.ledger, tasks: state.tasks, sources }
+      : { status: "insufficient", stopReason: stopReason === "sufficient" ? "no_new_knowledge" : stopReason, knowledge, ledger: state.ledger, tasks: state.tasks, sources };
   }
 }
 

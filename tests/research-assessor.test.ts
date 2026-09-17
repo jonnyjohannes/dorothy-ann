@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 import { IdentityPolicy } from "../src/application/identity-policy.js";
 import {
   MAX_ASSESSMENTS,
-  ResearchAssessmentValidationError,
   ResearchAssessor,
   type ResearchAssessorInput,
 } from "../src/application/research-assessor.js";
@@ -94,8 +93,8 @@ describe("ResearchAssessor", () => {
     await expect(assessor.assess(exhausted)).rejects.toMatchObject({ code: "assessment_budget_exhausted" });
   });
 
-  it("rejects a search that merely restates the current problem", async () => {
+  it("allows the initial search to restate the current problem", async () => {
     const input = await makeInput({ proposal: { directive: { kind: "search", query: " what happened? ", purpose: "Find evidence", successCriterion: "A supported explanation", priority: 1 } } });
-    await expect(new ResearchAssessor(new IdentityPolicy(hasher)).assess(input)).rejects.toBeInstanceOf(ResearchAssessmentValidationError);
+    await expect(new ResearchAssessor(new IdentityPolicy(hasher)).assess(input)).resolves.toMatchObject({ directive: { kind: "search", query: "what happened?" } });
   });
 });

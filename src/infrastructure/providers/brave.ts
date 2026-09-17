@@ -32,7 +32,8 @@ export async function normalizeBravePayload(
   maxResults: number,
   identities: SourceIdentity,
 ): Promise<SearchResult[]> {
-  const entries = typeof payload === "object" && payload !== null && "web" in payload && typeof payload.web === "object" && payload.web !== null && "results" in payload.web && Array.isArray(payload.web.results) ? payload.web.results : [];
+  const entries = typeof payload === "object" && payload !== null && "web" in payload && typeof payload.web === "object" && payload.web !== null && "results" in payload.web && Array.isArray(payload.web.results) ? payload.web.results : null;
+  if (!entries) throw new Error("invalid_response");
   const seen = new Set<string>();
   const results: SearchResult[] = [];
   for (const entry of entries) {

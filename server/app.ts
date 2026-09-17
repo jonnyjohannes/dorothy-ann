@@ -7,7 +7,7 @@ import type { AppConfig } from "./runtime/config.js";
 import type { SystemPromptCatalog } from "../src/ports/system-prompts.js";
 import type { LLMProvider, ResearchAssessmentInput, ResearchAssessmentProposal, ResearchSynthesisInput } from "../src/ports/llm.js";
 import type { SearchProvider } from "../src/ports/providers.js";
-import type { AssistantContentPart, CanonicalSource, KnowledgeUnit, ResearchProblem, ResearchResolution, Turn, UserMessage } from "../src/domain/types.js";
+import type { AssistantContentPart, CanonicalSource, KnowledgeUnit, ResearchProblem, Turn, UserMessage } from "../src/domain/types.js";
 import { IdentityPolicy } from "../src/application/identity-policy.js";
 import { WebCryptoIdentityHasher } from "../src/infrastructure/identity/web-crypto-hasher.js";
 import { BraveSearchProvider } from "../src/infrastructure/providers/brave.js";
@@ -17,12 +17,21 @@ import { EvidenceAcquirer } from "../src/application/evidence-acquirer.js";
 import { ResearchAssessor } from "../src/application/research-assessor.js";
 import { ResearchResolver } from "../src/application/research-resolver.js";
 import { AnswerSynthesizer } from "../src/application/answer-synthesizer.js";
-import { executeResearchTurn } from "../src/application/execute-research-turn.js";
+import { executeResearchTurn, type ResearchResolutionResult } from "../src/application/execute-research-turn.js";
 import { executeSearchTurn } from "../src/application/execute-search-turn.js";
 import { createPortableApp } from "../src/server/app.js";
 import type { TurnExecutor, TurnExecutionRequest, TurnExecutionTerminal } from "../src/server/turn-stream-boundary.js";
 import { createThreadStorageRoutes } from "../src/server/thread-storage-routes.js";
 import type { ThreadStore } from "../src/ports/storage-v3.js";
+
+class UnavailableSearchProvider implements SearchProvider {
+  async search(): Promise<import("../src/domain/types.js").SearchResult[]> { throw new Error("provider_unavailable"); }
+}
+
+class UnavailableLlmProvider implements LLMProvider {
+  async assessResearch(): Promise<ResearchAssessmentProposal> { throw new Error("provider_unavailable"); }
+  async *synthesizeResearch(): AsyncIterable<never> { yield* [] as never[]; throw new Error("provider_unavailable"); }
+}
 
 class FixtureSearchProvider implements SearchProvider {
   constructor(private readonly identities: IdentityPolicy) {}
@@ -63,6 +72,7 @@ function createExecutor(config: AppConfig, prompts: SystemPromptCatalog, identit
     identities,
     assessor,
     acquirer,
+    acquisitionLimits: { maxCandidatesPerSearch: config.MAX_SEARCH_RESULTS, maxSourcesPerRequest: 3, maxConcurrentSearches: config.MAX_CONCURRENT_SEARCHES, maxConcurrentExtractions: config.MAX_CONCURRENT_EXTRACTIONS, extractionMaxCharacters: config.MAX_EXTRACTED_CHARS_PER_PAGE, extractionTimeoutMs: config.EXTRACTION_TIMEOUT_MS },
     assess: (request) => llm.assessResearch({ systemPrompt: prompts.assessor, problem: request.problem, knowledge: request.knowledge, ledger: request.ledger, budget: request.budget, allowedSupportRefs: request.allowedSupportRefs, maxOutputTokens: config.MAX_ASSESSMENT_OUTPUT_TOKENS }),
   });
   const synthesizer = new AnswerSynthesizer(llm, prompts.synthesizer, config.MAX_OUTPUT_TOKENS);
@@ -79,9 +89,10 @@ function createExecutor(config: AppConfig, prompts: SystemPromptCatalog, identit
       const problemId = await identities.problemId({ turnId: request.turnId, question: request.question, purpose: "answer the user question", successCriterion: "provide a supported answer" });
       const problem: ResearchProblem = { id: problemId, question: request.question, purpose: "answer the user question", successCriterion: "provide a supported answer", context, depth: 0 };
       const root = await resolver.resolve({ turnId: request.turnId, problem, knowledge: emptyKnowledge(problemId), ledger: { gaps: [], assessmentsUsed: 0, searchesUsed: 0, sourcesConsumed: 0 }, budget: { searchesRemaining: 3, sourcesRemaining: 9, assessmentsRemaining: 8, depthRemaining: 2 } });
-      const resolution: ResearchResolution = root.kind === "resolution" ? root.resolution : { status: "insufficient", stopReason: "provider_unavailable", knowledge: root.checkpoint.knowledge, ledger: root.checkpoint.ledger, tasks: root.checkpoint.tasks };
-      onSignal({ type: "research_state", state: { kind: "resolution", resolution } });
-      const result = await executeResearchTurn({ turnId: request.turnId, userMessage: requestMessage(request), createdAt: new Date().toISOString() as never, context, resolver: { resolve: async () => resolution }, synthesizer, assessmentModelRef: "assessment", synthesisModelRef: "synthesis", searchRef: "brave", signal });
+      const resolution = root.kind === "resolution" ? root.resolution : { checkpoint: root.checkpoint };
+      if (root.kind === "resolution") onSignal({ type: "research_state", state: { kind: "resolution", resolution: root.resolution } });
+      else onSignal({ type: "research_state", state: { kind: "checkpoint", checkpoint: root.checkpoint } });
+      const result = await executeResearchTurn({ turnId: request.turnId, userMessage: requestMessage(request), createdAt: new Date().toISOString() as never, context, resolver: { resolve: async () => resolution as ResearchResolutionResult }, synthesizer, assessmentModelRef: "assessment", synthesisModelRef: "synthesis", searchRef: "brave", signal });
       if (result.turn.status === "completed") for (const part of result.turn.result.answer.parts) if (part.type === "text") onSignal({ type: "answer_delta", delta: part.markdown });
       return terminalFor(result);
     },
@@ -92,11 +103,19 @@ export interface AppDependencies { config: AppConfig; systemPrompts: SystemPromp
 
 export function createApp({ config, systemPrompts, threadStoreV3: injectedStore }: AppDependencies) {
   const identities = new IdentityPolicy(new WebCryptoIdentityHasher());
-  const search: SearchProvider = config.DOROTHY_FIXTURE_MODE || !config.BRAVE_SEARCH_API_KEY ? new FixtureSearchProvider(identities) : new BraveSearchProvider(config.BRAVE_SEARCH_API_KEY, fetch, identities);
+  const searchReady = config.DOROTHY_FIXTURE_MODE || Boolean(config.BRAVE_SEARCH_API_KEY);
+  const llmReady = config.DOROTHY_FIXTURE_MODE || Boolean(config.ANTHROPIC_API_KEY && config.ANTHROPIC_ASSESSMENT_MODEL && config.ANTHROPIC_SYNTHESIS_MODEL);
+  const search: SearchProvider = config.DOROTHY_FIXTURE_MODE
+    ? new FixtureSearchProvider(identities)
+    : config.BRAVE_SEARCH_API_KEY
+      ? new BraveSearchProvider(config.BRAVE_SEARCH_API_KEY, fetch, identities)
+      : new UnavailableSearchProvider();
   const extractor = config.DOROTHY_FIXTURE_MODE ? undefined : new SafeContentExtractor({ maxFetchBytes: config.MAX_FETCH_BYTES, maxRedirects: config.MAX_REDIRECTS, userAgent: "dorothy-ann/1.1", minCharacters: 120 });
-  const llm: LLMProvider = config.ANTHROPIC_API_KEY && config.ANTHROPIC_ASSESSMENT_MODEL && config.ANTHROPIC_SYNTHESIS_MODEL
-    ? new AnthropicProvider({ apiKey: config.ANTHROPIC_API_KEY, assessmentModel: config.ANTHROPIC_ASSESSMENT_MODEL, synthesisModel: config.ANTHROPIC_SYNTHESIS_MODEL })
-    : new FixtureLlmProvider();
+  const llm: LLMProvider = config.DOROTHY_FIXTURE_MODE
+    ? new FixtureLlmProvider()
+    : config.ANTHROPIC_API_KEY && config.ANTHROPIC_ASSESSMENT_MODEL && config.ANTHROPIC_SYNTHESIS_MODEL
+      ? new AnthropicProvider({ apiKey: config.ANTHROPIC_API_KEY, assessmentModel: config.ANTHROPIC_ASSESSMENT_MODEL, synthesisModel: config.ANTHROPIC_SYNTHESIS_MODEL })
+      : new UnavailableLlmProvider();
   const executor = createExecutor(config, systemPrompts, identities, search, llm, extractor);
   const auth = config.APP_PASSPHRASE_SCRYPT_HASH && config.SESSION_SIGNING_KEYS ? new SessionAuth(config.APP_PASSPHRASE_SCRYPT_HASH, config.SESSION_SIGNING_KEYS) : undefined;
   const limiter: LoginAttemptLimiter = config.UPSTASH_REDIS_REST_URL && config.UPSTASH_REDIS_REST_TOKEN ? new UpstashLoginLimiter(config.UPSTASH_REDIS_REST_URL, config.UPSTASH_REDIS_REST_TOKEN) : new InMemoryLoginLimiter();
@@ -118,7 +137,7 @@ export function createApp({ config, systemPrompts, threadStoreV3: injectedStore 
     await limiter.reset(key); const session = auth.createSession(); setCookie(context, "__Host-dorothy-ann-session", session.value, { httpOnly: true, secure: true, sameSite: "Lax", path: "/", maxAge: 7 * 86400 }); return context.json({ authenticated: true });
   });
   const statusRoutes = new Hono();
-  statusRoutes.get("/", (context) => context.json({ fixtureMode: config.DOROTHY_FIXTURE_MODE, provider: true, storage: Boolean(injectedStore) }));
+  statusRoutes.get("/", (context) => context.json({ fixtureMode: config.DOROTHY_FIXTURE_MODE, provider: searchReady && llmReady, search: searchReady, llm: llmReady, storage: Boolean(injectedStore) }));
   const app = createPortableApp({ executor, maxRequestBytes: config.MAX_TURN_REQUEST_BYTES, maxResults: config.MAX_SEARCH_RESULTS, researchLimits: { maxCandidatesPerSearch: 5, maxSourcesPerRequest: 3, maxConcurrentSearches: config.MAX_CONCURRENT_SEARCHES, maxConcurrentExtractions: config.MAX_CONCURRENT_EXTRACTIONS, extractionMaxCharacters: config.MAX_EXTRACTED_CHARS_PER_PAGE, extractionTimeoutMs: config.EXTRACTION_TIMEOUT_MS }, authenticate, routes: { auth: authRoutes, status: statusRoutes, storage: injectedStore ? createThreadStorageRoutes(injectedStore) : undefined } });
   app.get("/api/health", (context) => context.json({ ok: true, fixtureMode: config.DOROTHY_FIXTURE_MODE }));
   return app;

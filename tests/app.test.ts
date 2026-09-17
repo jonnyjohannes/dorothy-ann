@@ -13,7 +13,7 @@ describe("portable v3 Hono API", () => {
     expect((await app.request("http://localhost/api/health")).status).toBe(200);
     const response = await app.request("http://localhost/api/status");
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ fixtureMode: true, provider: true, storage: false });
+    expect(await response.json()).toEqual({ fixtureMode: true, provider: true, search: true, llm: true, storage: false });
   });
   it("streams one fixture search turn through the target boundary", async () => {
     const response = await app.request("http://localhost/api/turn/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ executionId, turnId, kind: "search", query: "weather" }) });
@@ -22,6 +22,10 @@ describe("portable v3 Hono API", () => {
     expect(body).toContain("event: turn.accepted");
     expect(body).toContain("event: turn.source_delta");
     expect(body).toContain("event: turn.terminal");
+  });
+  it("reports missing live provider readiness without exposing configuration", async () => {
+    const response = await liveApp.request("http://localhost/api/status");
+    expect(await response.json()).toEqual({ fixtureMode: false, provider: false, search: false, llm: false, storage: false });
   });
   it("requires authentication outside fixture mode", async () => {
     const response = await liveApp.request("http://localhost/api/turn/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ executionId, turnId, kind: "search", query: "weather" }) });

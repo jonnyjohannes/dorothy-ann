@@ -202,9 +202,6 @@ export class ResearchAssessor {
 
     if (directive.kind === "search") {
       const query = text(directive.query, "query", 500);
-      if (normalizeIdentityText(query) === normalizeIdentityText(input.problem.question)) {
-        throw new ResearchAssessmentValidationError("query_not_material");
-      }
       return {
         problemId: input.problem.id,
         directive: {

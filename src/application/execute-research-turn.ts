@@ -1,6 +1,7 @@
 import type {
   CanonicalSource,
   IsoTimestamp,
+  ResearchCheckpoint,
   ResearchResolution,
   ResearchTurn,
   ThreadContext,
@@ -10,10 +11,10 @@ import type {
 } from "../domain/types.js";
 import type { AnswerSynthesizer } from "./answer-synthesizer.js";
 
-export type ResearchResolutionResult = ResearchResolution & {
+export type ResearchResolutionResult = (ResearchResolution & {
   /** Canonical metadata admitted during acquisition, used for reference closure. */
   sources?: CanonicalSource[];
-};
+}) | { checkpoint: ResearchCheckpoint; sources?: CanonicalSource[] };
 
 export interface ResearchResolverInput {
   turnId: ResearchTurn["id"];
@@ -89,7 +90,7 @@ function safeCode(error: unknown): string {
 }
 
 function sourceClosure(
-  resolution: ResearchResolutionResult,
+  resolution: ResearchResolution & { sources?: CanonicalSource[] },
   context: ThreadContext,
 ): CanonicalSource[] {
   const byId = new Map<string, CanonicalSource>();
@@ -132,6 +133,22 @@ export async function executeResearchTurn(input: ResearchTurnExecutionInput): Pr
       context: input.context,
       signal: input.signal,
     });
+    if ("checkpoint" in resolution) {
+      return {
+        turn: {
+          id: input.turnId,
+          kind: "research",
+          status: "failed",
+          execution: execution(input),
+          createdAt: input.createdAt,
+          finishedAt: timestamp(input),
+          userMessage: input.userMessage,
+          failure: { kind: "execution_failure", stage: "resolution", code: "resolution_invalid", message: "Research execution stopped before a validated answer was available.", retryable: false },
+          researchState: { kind: "checkpoint", checkpoint: resolution.checkpoint },
+        },
+        sources: resolution.sources ?? [],
+      };
+    }
     if (input.signal?.aborted) {
       const state = resolution.status === "sufficient" || resolution.status === "best_effort"
         ? { kind: "resolution" as const, resolution }
