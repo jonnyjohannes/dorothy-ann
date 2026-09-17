@@ -1,8 +1,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createApp } from "../server/app.js";
-import { loadConfig } from "../server/config.js";
+import { loadConfig } from "../server/runtime/config.js";
+import { FileSystemPromptSource } from "../server/runtime/system-prompts.js";
 
-const app = createApp({ config: loadConfig() });
+const appPromise = new FileSystemPromptSource().load().then((systemPrompts) => createApp({
+  config: loadConfig(),
+  systemPrompts,
+}));
 
 type VercelRequest = IncomingMessage & { body?: unknown };
 
@@ -25,6 +29,7 @@ async function requestBody(req: VercelRequest): Promise<BodyInit | undefined> {
 }
 
 export default async function handler(req: VercelRequest, res: ServerResponse) {
+  const app = await appPromise;
   const protocol = req.headers["x-forwarded-proto"] ?? "https";
   const host = req.headers["x-forwarded-host"] ?? req.headers.host;
   if (!host) {

@@ -16,11 +16,13 @@ class ApiFakeRedis implements RemoteRedis {
 
 const completedThread = (id: string): Thread => ({ schemaVersion: 2, id: id as Thread["id"], title: "Topic", createdAt: "2026-01-01T00:00:00.000Z" as never, updatedAt: "2026-01-01T00:00:00.000Z" as never, modelRef: "fixture", searchRef: "fixture", turns: [{ id: "turn-1" as never, mode: "chat", status: "completed", createdAt: "2026-01-01T00:00:00.000Z" as never, updatedAt: "2026-01-01T00:00:00.000Z" as never, userMessage: { id: "message-1" as never, role: "user", content: "hello", createdAt: "2026-01-01T00:00:00.000Z" as never } }] });
 
-const app = createApp({ config: loadConfig({ DOROTHY_FIXTURE_MODE: "true" }) });
+const systemPrompts = { assessor: "fixture assessor", synthesizer: "fixture synthesizer" };
+const app = createApp({ config: loadConfig({ DOROTHY_FIXTURE_MODE: "true" }), systemPrompts });
 const liveApp = createApp({
   config: loadConfig({ DOROTHY_FIXTURE_MODE: "false" }),
+  systemPrompts,
 });
-const storageApp = createApp({ config: loadConfig({ DOROTHY_FIXTURE_MODE: "true" }), remoteThreads: new RemoteThreadStore(new ApiFakeRedis(), "test", () => new Date("2026-01-02T00:00:00.000Z")) });
+const storageApp = createApp({ config: loadConfig({ DOROTHY_FIXTURE_MODE: "true" }), systemPrompts, remoteThreads: new RemoteThreadStore(new ApiFakeRedis(), "test", () => new Date("2026-01-02T00:00:00.000Z")) });
 describe("portable Hono API", () => {
   it("reports provider readiness without exposing secrets", async () => {
     const response = await app.request("http://localhost/api/providers/status");

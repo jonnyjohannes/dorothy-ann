@@ -2,13 +2,15 @@
 
 ## Current State
 
-- Status: ready for implementation
+- Status: implementation in progress
 - Last updated: 2026-09-15
-- Current focus: approved v1.1 architecture and read-only legacy archive are consistency-checked and implementation-ready
+- Current focus: Plan Ledger item 3 — parallel v3 model and schemas
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: begin Plan Ledger item 2, mark it `[~]`, and execute the runtime/config scaffold exactly as ordered
+- Next action: mark item 3 `[~]`, add the parallel v3 model, strict schemas, and private bounded v1/v2 input schemas without cutting over current consumers
 
 ## Handoff
+
+Implementation is active on `release/v1.1.0`. Plan Ledger item 2 is complete: the repository targets Node 22 with exact `fzf@0.5.2`; `server/runtime/config.ts` owns bounded canonical operational settings plus sanitized one-release legacy fallbacks; root `ASSESSOR.md`/`SYNTHESIZER.md` load exactly once through `FileSystemPromptSource`; Node and Vercel entrypoints await prompt loading; Vercel explicitly includes both assets; and the portable app receives the injected catalog while provider prompt cutover remains deferred to item 8. Focused config/prompt/deployment tests, full lint/typecheck/unit/build, Node startup smoke, `npm ci`, frontend prompt/secret-name scans, and `git diff --check` pass. `npm ci` reports two moderate dependency advisories; no out-of-scope forced audit upgrade was applied. Next implement item 3 only, preserving current consumers behind parallel types/schemas.
 
 Dorothy Ann v1.0.0 behaves correctly and is the baseline for this architectural pass. The v1.1.0 goal is to refactor the application around named, technically explicit boxes without changing working product behavior accidentally. Each box is documented as typed inputs → one owned capability → typed outputs/events, plus invariants, failure contract, and implementation boundary.
 
@@ -3133,7 +3135,7 @@ Execute in order. Every step must leave strict typecheck green; temporary v3/leg
 Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blocked.
 
 - [x] 1. Planning consistency gate — deliverable: approved contracts, closure bundle, legacy-history policy, file map, atomic implementation sequence, and passing implementability audit; verify: no blocking questions/placeholders, balanced fences, `git diff --check`, and checklist review.
-- [ ] 2. Runtime/config scaffold — deliverable: Node 22, exact fzf pin, canonical bounded env/deprecations, root prompt assets and startup loaders/Vercel inclusion; verify: config/prompt/deployment/frontend-exclusion tests.
+- [x] 2. Runtime/config scaffold — deliverable: Node 22, exact fzf pin, canonical bounded env/deprecations, root prompt assets and startup loaders/Vercel inclusion; verify: config/prompt/deployment/frontend-exclusion tests.
 - [ ] 3. Parallel v3 model/schemas — deliverable: target model, strict schemas, read-only legacy archive, and private bounded v1/v2 input schemas without breaking current consumers; verify: union/archive/bound/reference/archive-only/legacy-input tests.
 - [ ] 4. Identity/migration policy — deliverable: canonical material, cross-runtime SHA-256 IDs, and deterministic v1/v2 conversion; verify: fixed Node/browser vectors plus URL/Unicode/support/ancestry/collision/source-alias/migration tests.
 - [ ] 5. Knowledge/context policies — deliverable: algebraic evidence-collection join and exact bounded thread projection; verify: law, contradiction, ordering, truncation, and byte-bound tests.
