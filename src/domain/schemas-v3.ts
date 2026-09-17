@@ -29,7 +29,7 @@ import type {
   Turn,
   TurnId,
   UserMessage,
-} from "./model-v3";
+} from "./model-v3.js";
 
 const codePoints = (value: string) => [...value].length;
 const bounded = (minimum: number, maximum: number) => z.string().refine(

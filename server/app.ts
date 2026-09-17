@@ -16,14 +16,17 @@ import type { SearchResult } from "../src/domain/types.js";
 import type { SystemPromptCatalog } from "../src/ports/system-prompts.js";
 import { IdentityPolicy } from "../src/application/identity-policy.js";
 import { WebCryptoIdentityHasher } from "../src/infrastructure/identity/web-crypto-hasher.js";
+import { createThreadStorageRoutes } from "../src/server/thread-storage-routes.js";
+import type { ThreadStore as ThreadStoreV3 } from "../src/ports/storage-v3.js";
 
 export interface AppDependencies {
   config: AppConfig;
   systemPrompts: SystemPromptCatalog;
   remoteThreads?: RemoteThreadStore;
+  threadStoreV3?: ThreadStoreV3;
 }
 
-export function createApp({ config, systemPrompts, remoteThreads: injectedRemoteThreads }: AppDependencies) {
+export function createApp({ config, systemPrompts, remoteThreads: injectedRemoteThreads, threadStoreV3: injectedThreadStoreV3 }: AppDependencies) {
   void systemPrompts;
   const app = new Hono();
   const auth = config.APP_PASSPHRASE_SCRYPT_HASH && config.SESSION_SIGNING_KEYS ? new SessionAuth(config.APP_PASSPHRASE_SCRYPT_HASH, config.SESSION_SIGNING_KEYS) : null;
@@ -37,6 +40,7 @@ export function createApp({ config, systemPrompts, remoteThreads: injectedRemote
   const remoteThreads = injectedRemoteThreads ?? (config.UPSTASH_REDIS_REST_URL && config.UPSTASH_REDIS_REST_TOKEN
     ? RemoteThreadStore.fromUpstash(config.UPSTASH_REDIS_REST_URL, config.UPSTASH_REDIS_REST_TOKEN)
     : undefined);
+  const threadStoreV3 = injectedThreadStoreV3;
   const sameOrigin = (context: Parameters<Parameters<typeof app.use>[1]>[0]) => {
     const origin = context.req.header("origin");
     if (!origin) return true;
@@ -70,7 +74,8 @@ export function createApp({ config, systemPrompts, remoteThreads: injectedRemote
     await next();
   };
   app.use("/api/*", async (context, next) => { context.header("Cache-Control", "no-store"); context.header("X-Content-Type-Options", "nosniff"); context.header("Referrer-Policy", "same-origin"); context.header("X-Frame-Options", "DENY"); context.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()"); return requestGuard(context, next); });
-  for (const path of ["/api/lookup", "/api/turn", "/api/research", "/api/report", "/api/threads", "/api/threads/*"]) app.use(path, requireOwner);
+  for (const path of ["/api/lookup", "/api/turn", "/api/research", "/api/report", "/api/threads", "/api/threads/*", "/api/storage/threads", "/api/storage/threads/*"]) app.use(path, requireOwner);
+  if (threadStoreV3) app.route("/api/storage/threads", createThreadStorageRoutes(threadStoreV3));
   app.get("/api/health", (context) => context.json({ ok: true, fixtureMode: config.DOROTHY_FIXTURE_MODE }));
   app.get("/api/providers/status", async (context) => context.json({ fixtureMode: config.DOROTHY_FIXTURE_MODE, storage: config.DOROTHY_FIXTURE_MODE || Boolean(remoteThreads && await remoteThreads.health()), search: config.DOROTHY_FIXTURE_MODE || Boolean(searchProvider), chat: config.DOROTHY_FIXTURE_MODE || Boolean(chatProvider), extraction: config.DOROTHY_FIXTURE_MODE || Boolean(extractor) }));
   app.get("/api/auth/session", (context) => { const claims = auth ? auth.verifySession(getCookie(context, "__Host-dorothy-ann-session") ?? "") : null; if (!claims) return context.json({ authenticated: false }); return context.json({ authenticated: true, session: { subject: claims.subject, method: claims.method, expiresAt: new Date(claims.exp).toISOString(), absoluteExpiresAt: new Date(claims.abs).toISOString() } }); });

@@ -74,7 +74,7 @@ export interface ImportReport {
   droppedLegacyEntries: number;
 }
 
-export interface ValidatedImportCandidate { readonly __brand: "ValidatedImportCandidate" }
+export type ValidatedImportCandidate = string & { readonly __brand: "ValidatedImportCandidate" };
 export interface InspectedThreadImport { preview: ImportPreview; candidate: ValidatedImportCandidate }
 
 export interface ThreadStore {
