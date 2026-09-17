@@ -19,22 +19,34 @@ function ThemeBootstrap() {
   }, []);
   return null;
 }
-function GlobalShortcuts() {
+export function GlobalShortcuts() {
+  const location = useLocation();
   const navigate = useNavigate();
   const lastEscape = useRef(0);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.isComposing) return;
-      if (event.altKey && event.code === "KeyS") { event.preventDefault(); navigate("/threads"); return; }
-      if (event.altKey && event.code === "KeyC") { event.preventDefault(); navigate("/settings"); return; }
+      const target = event.target;
+      const isEditable = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable);
+      if (event.isComposing) return;
+      if (event.altKey && event.code === "KeyS" && !isEditable) { event.preventDefault(); navigate("/threads"); return; }
+      if (event.altKey && event.code === "KeyC" && !isEditable) { event.preventDefault(); navigate("/settings"); return; }
+      if (event.key === ":" && !event.ctrlKey && !event.altKey && !event.metaKey && !isEditable) {
+        const prompt = document.querySelector<HTMLInputElement>('input[aria-label="Search query"]:not(:disabled)');
+        if (prompt) { event.preventDefault(); prompt.focus(); return; }
+      }
       if (event.key !== "Escape") return;
+      if ((location.pathname === "/threads" || location.pathname === "/settings") && !isEditable) {
+        event.preventDefault(); navigate("/", { replace: true });
+        return;
+      }
+      if (isEditable) return;
       const current = Date.now();
       if (current - lastEscape.current < 500) { event.preventDefault(); navigate("/new", { replace: true }); }
       lastEscape.current = current;
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [navigate]);
+  }, [location.pathname, navigate]);
   return null;
 }
 function AuthGate({ children }: { children: ReactNode }) {

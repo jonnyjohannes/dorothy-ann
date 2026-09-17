@@ -16,7 +16,8 @@ export type BoxIntent =
   | { type: "thread_delete_requested"; threadId: ThreadId }
   | { type: "preference_changed"; key: string; value: string }
   | { type: "passphrase_submitted"; passphrase: string }
-  | { type: "retry_requested" };
+  | { type: "retry_requested" }
+  | { type: "route_escape_requested" };
 
 export interface TranscriptItem {
   kind: "turn" | "legacy";

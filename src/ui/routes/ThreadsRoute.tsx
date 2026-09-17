@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { IndexedDbThreadStore } from "../../infrastructure/browser/indexeddb-thread-store";
 import type { ThreadId, ThreadSummary } from "../../domain/types";
 import { ThreadsBox } from "../boxes/ThreadsBox";
+import { PromptBox } from "../boxes/PromptBox";
 import { StickyHeader } from "../boxes/StickyHeader";
 import type { BoxIntent } from "../boxes/box-types";
 import styles from "../App.module.css";
@@ -14,6 +15,7 @@ export function ThreadsRoute() {
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(true);
+  const [prompt, setPrompt] = useState("");
   const refresh = useCallback(async () => {
     setLoading(true);
     const result = await getStore().list();
@@ -27,10 +29,18 @@ export function ThreadsRoute() {
     else if (intent.type === "thread_delete_requested") void getStore().remove({ threadId: intent.threadId }).then(() => refresh());
     else if (intent.type === "new_thread_requested") navigate("/new", { replace: true });
     else if (intent.type === "retry_requested") void refresh();
+    else if (intent.type === "route_escape_requested") navigate("/", { replace: true });
+    else if (intent.type === "prompt_submitted") navigate(`/topics/new?q=${encodeURIComponent(intent.value)}`);
+    else if (intent.type === "command_requested") {
+      if (intent.command === "/new") navigate("/new", { replace: true });
+      else if (intent.command === "/settings") navigate("/settings");
+      else if (intent.command === "/threads") setPrompt("");
+    }
   };
   return <main className={styles.shell}>
     <StickyHeader onIntent={onIntent} />
     <ThreadsBox state={{ threads, loading, error }} onIntent={onIntent} />
+    <PromptBox value={prompt} onChange={setPrompt} onIntent={onIntent} />
   </main>;
 }
 
