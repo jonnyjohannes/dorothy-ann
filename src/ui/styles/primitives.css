@@ -82,7 +82,7 @@
 .ui-markdown th, .ui-markdown td { border: 1px solid var(--line); padding: var(--space-xs) var(--space-sm); }
 
 /* Native caret remains in charge; only its color changes between palette tokens. */
-.prompt-caret-cycle { caret-color: var(--accent); animation: prompt-caret-accent 12s steps(1, end) infinite; }
+.prompt-caret-cycle { caret-color: var(--accent); animation: prompt-caret-accent 30s steps(1, end) infinite; }
 @keyframes prompt-caret-accent {
   0%, 12.49% { caret-color: var(--accent-1); }
   12.5%, 24.99% { caret-color: var(--accent-2); }

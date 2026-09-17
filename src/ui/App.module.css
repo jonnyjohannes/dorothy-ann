@@ -528,20 +528,19 @@
 .promptBox {
   position: fixed;
   z-index: 3;
-  right: 0;
+  right: clamp(1rem, 3vw, 3rem);
   bottom: max(1rem, env(safe-area-inset-bottom));
-  left: 0;
+  left: clamp(1rem, 3vw, 3rem);
   display: flex;
   gap: 0.6rem;
-  padding: 0.65rem clamp(0.75rem, 3vw, 3rem);
-  border-block: 1px solid var(--line);
-  border-inline: 0;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--line);
   border-radius: 0;
   background: color-mix(in srgb, var(--paper) 96%, transparent);
   box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 12%);
   backdrop-filter: blur(10px);
 }
-.promptBox > input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); padding: 0.85rem 0.7rem; }
+.promptBox > input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); padding: 0.65rem 0.7rem; }
 .promptHint { align-self: center; color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
 .commandMessage { width: min(100%, 110rem); margin: 1rem auto; color: var(--muted); }
 .researchPlanLive {
@@ -596,14 +595,19 @@
 }
 .threadPicker ul { max-height: 55vh; overflow: auto; margin: 1rem 0; padding: 0; list-style: none; }
 .threadRow {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
   margin-block: 1.5rem;
   padding-block: 1.25rem;
 }
-.threadPicker li button { display: grid; min-width: 0; flex: 1; border: 0; background: transparent; color: var(--ink); padding: 0.8rem; text-align: left; cursor: pointer; }
-.threadPicker li .threadDelete { flex: 0 0 auto; padding: 0.35rem 0.55rem; color: #d20f39; font-size: 1.1rem; font-weight: 700; line-height: 1; text-decoration: none; }
+.threadPicker li button { display: grid; min-width: 0; border: 0; background: transparent; color: var(--ink); padding: 0.8rem; text-align: left; cursor: pointer; }
+.threadPicker li .threadDelete,
+.threadPicker li .threadActions { grid-column: 2; align-self: stretch; }
+.threadPicker li .threadDelete { width: 2.5rem; padding: 0.35rem 0.55rem; color: #d20f39; font-size: 1.1rem; font-weight: 700; line-height: 1; text-decoration: none; text-align: center; }
 .threadPicker li .threadDelete:hover { color: #e11d48; }
+.threadPicker li .threadActions { display: inline-flex; align-items: center; gap: 0.35rem; }
+.threadPicker li .threadActions button { display: inline-flex; width: auto; padding: 0.45rem 0.65rem; }
 :global(:root[data-theme="dark"]) .threadPicker li .threadDelete { color: #f38ba8; }
 :global(:root[data-theme="dark"]) .threadPicker li .threadDelete:hover { color: #f5a3b8; }
 .threadPicker li button small { color: var(--muted); margin-top: 0.25rem; }
