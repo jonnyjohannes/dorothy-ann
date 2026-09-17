@@ -2,11 +2,18 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { createApp } from "../server/app.js";
 import { loadConfig } from "../server/runtime/config.js";
 import { FileSystemPromptSource } from "../server/runtime/system-prompts.js";
+import { IdentityPolicy } from "../src/application/identity-policy.js";
+import { WebCryptoIdentityHasher } from "../src/infrastructure/identity/web-crypto-hasher.js";
+import { RedisThreadStore } from "../src/infrastructure/storage/redis-thread-store.js";
 
-const appPromise = new FileSystemPromptSource().load().then((systemPrompts) => createApp({
-  config: loadConfig(),
-  systemPrompts,
-}));
+const appPromise = new FileSystemPromptSource().load().then((systemPrompts) => {
+  const config = loadConfig();
+  const identities = new IdentityPolicy(new WebCryptoIdentityHasher());
+  const threadStoreV3 = !config.DOROTHY_FIXTURE_MODE && config.UPSTASH_REDIS_REST_URL && config.UPSTASH_REDIS_REST_TOKEN
+    ? RedisThreadStore.fromUpstash(config.UPSTASH_REDIS_REST_URL, config.UPSTASH_REDIS_REST_TOKEN, identities)
+    : undefined;
+  return createApp({ config, systemPrompts, threadStoreV3 });
+});
 
 type VercelRequest = IncomingMessage & { body?: unknown };
 
