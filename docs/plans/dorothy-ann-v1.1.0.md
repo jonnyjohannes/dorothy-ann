@@ -2,11 +2,11 @@
 
 ## Current State
 
-- Status: planning — implementability gate not yet passed
+- Status: ready for implementation
 - Last updated: 2026-09-15
-- Current focus: resolve the consistency/implementability gaps found after the architecture, storage, prompt-asset, and browser-contract passes
+- Current focus: approved v1.1 architecture and read-only legacy archive are consistency-checked and implementation-ready
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: approve or revise the recommended closure bundle for configuration compatibility, then repair the typed assessor/evidence/context/controller contracts and replace the broad implementation outline with an atomic file-level migration sequence
+- Next action: begin Plan Ledger item 2, mark it `[~]`, and execute the runtime/config scaffold exactly as ordered
 
 ## Handoff
 
@@ -27,7 +27,7 @@ Decisions made so far:
 - `LLMProvider` exposes separate assessment and synthesis capabilities. The Anthropic adapter routes assessment to a dedicated high-reasoning model and synthesis to a separately configurable balanced generation model.
 - Initial and follow-up research questions use the same protocol. An empty initial context is assessed through the same interface rather than routed through a separate mandatory-search path.
 - Budget exhaustion with useful supported evidence produces a bounded best-effort synthesis that identifies unresolved uncertainty; no useful supported evidence produces an insufficient-evidence failure.
-- `Thread` and `Turn` remain the central data-model components. Durable `Turn` is a discriminated terminal `SearchTurn | ResearchTurn` union; pending/running execution exists only as controller-owned `ActiveTurn` state. Every observed terminal outcome is persisted, including failed, insufficient, and interrupted attempts.
+- `Thread` and `Turn` remain the central data-model components. Durable `Turn` is a discriminated terminal `SearchTurn | ResearchTurn` union; pending/running execution exists only as controller-owned `ActiveTurn` state. Every validated terminal outcome is committed when storage is functioning; retryable commit failure retains the exact candidate, while permanent corruption is an explicit blocking exception rather than false durable history.
 - The target persistence wrapper is `StoredThreadRecord`: an adapter-only record with an opaque CAS revision and expiry around the complete `Thread`. `ThreadStore` now has settled atomic commit, idempotency, source reconciliation, ordering, retention, deletion-tombstone, and import/export contracts.
 - The agreed visual regions are `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, and `UnlockBox`. Boxes receive typed view state and emit intent; `WorkspaceController` coordinates routes/cross-box projection and delegates effects to owning controllers/capabilities.
 - `Hotkeys` is an explicit layout-control box, not a visible region. It translates unhandled global keyboard events and current layout context into semantic intents without navigating, focusing DOM nodes, cancelling work, or invoking system capabilities directly.
@@ -39,7 +39,7 @@ Decisions made so far:
 - `SettingsBox` applies each visual preference immediately through emitted intent, has no Save/Cancel transaction, and reports persistence independently. The settings controller applies document state and persists through a browser preference adapter; failed persistence leaves the choice active for the session and visibly unsaved. Existing backup/import remains a compact secondary recovery utility with an inline validated preview and explicit keep/replace conflict policy; it never uses `window.confirm`.
 - `UnlockBox` is a buttonless auth-entry region. It owns only an ephemeral masked draft, emits one passphrase submission at a time, and clears/refocuses after rejection while the authentication controller owns validation, network calls, safe return navigation, and bounded public auth state.
 - `SystemStatusBox` is a narrowly scoped visible box for blocking application-boundary checking or unavailability (auth session, provider status, or thread storage). It emits retry intent but never absorbs turn, thread-row, settings, import, or ordinary route failures.
-- Active turns are controller-only and never persisted; every observed terminal completed, insufficient, failed, or interrupted result becomes an immutable durable turn. Retry creates a new linked turn through `retryOfTurnId` rather than mutating terminal history.
+- Active turns are controller-only and never persisted; every validated completed, insufficient, failed, or interrupted result is submitted as an immutable durable turn, subject only to the explicit blocking permanent-store-failure exception. Retry creates a new linked turn through `retryOfTurnId` rather than mutating terminal history.
 - A successfully executed zero-result search is a completed `SearchTurn` with `completion: "empty"`, while `completion: "results"` requires a non-empty destination-reference tuple; canonical source metadata is stored once on `Thread`, and failure/interruption carry neither result nor partial destinations.
 - Failed/interrupted research records never use an ambiguous optional resolution. They explicitly persist a validated full resolution, bounded checkpoint, or `unavailable` marker according to what the controller actually received; no state is fabricated.
 - `Thread` is the durable context/aggregate root, not a runtime god object. It materializes canonical source metadata once in an append-stable source catalog; terminal turns retain rank/role/support references, and `EvidenceSet`/`ThreadContext` are deterministic bounded projections. Active execution remains controller-owned.
@@ -49,12 +49,15 @@ Decisions made so far:
 - Browser UI keeps product-level `*Box` components but standardizes their implementation on a small semantic primitive vocabulary: `Stack`, `Inline`, `Surface`, `Action`, `TextField`, `FuzzyListbox`, `StatusText`, `MarkdownContent`, and `VisuallyHidden`. `PromptBox` gains a pinned-fzf command suggester, layered single/double-Escape behavior, and a native caret whose color cycles discretely through scheme accents; native caret thickness is retained for browser/IME/accessibility safety.
 - Root synthesis begins conversationally rather than with a Markdown title. The canonical synthesis prompt explicitly forbids an opening heading, encourages descriptive Markdown after the opening paragraph, and one streaming-safe leading-line normalizer demotes a violating initial heading without changing internal Markdown.
 - The only target LLM system prompts are editable root assets `ASSESSOR.md` and `SYNTHESIZER.md`. Runtime adapters load them once at startup into a typed `SystemPromptCatalog`; all actual provider `system` parameters use one file unchanged, while dynamic context/schema/retry envelopes remain typed code-owned user input. Prompt edits require local restart or redeploy.
+- The implementability closure bundle is approved: semantic research ceilings remain fixed; only bounded operational limits use canonical env vars; legacy `MAX_CONTEXT_CHARS` and `ANTHROPIC_MODEL` have one-release v1.1 fallbacks removed in v1.2; Node 22 is canonical; deterministic typed IDs use full SHA-256/base64url over explicit normalized material; prompt files have exact Node/Vercel startup paths/inclusion.
+- Model `ResearchAssessmentProposal` is untrusted strategy/observation text plus support refs. `ResearchAssessor` derives IDs, attaches supplied evidence collections, and constructs trusted knowledge. Recursive/batched knowledge carries deterministic `EvidencePack[]`, and `buildThreadContext` now has exact turn/text/evidence/source/request-byte projection rules.
+- Unsupported v1/v2 completed/failed/interrupted chat/research history migrates to bounded read-only `Thread.legacyArchive` entries outside `Turn`; legacy lookups become re-identified search turns, incomplete work is discarded/reported, and archive content remains visible/exportable but isolated from context, evidence, retries, and execution.
 - Durable/public research failures use compact capability-level codes only. Provider and implementation details remain in sanitized server observability, never turn records, SSE payloads, or client messages.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
 
-Implementability gate result: **not ready yet**. There are no unresolved `TODO` markers and the box/failure coverage is strong, but the current type sketches still conflate model proposals with trusted knowledge, use singular evidence where recursive/batched execution requires collections, omit exact provider input and bounded-context projection contracts, and name several secondary controllers without interfaces. The implementation steps/ledger are milestone-sized rather than atomic/file-level. Configuration names, one-release model fallback, and the repository's Node 22 instruction versus current Node 24 package engine also require closure. See [`## Implementability Gate`](#implementability-gate).
+Implementability gate result: **ready**. The closure bundle is normative, model proposals are separated from trusted state, recursive evidence is collection-shaped, provider/context/identity/controller/storage/transport contracts are exact, current responsibilities map to target files, and the ordered implementation/ledger slices are independently verifiable. Unsupported v1/v2 answers migrate into a bounded read-only archive outside `Turn`; they remain visible but never masquerade as evidence-backed research or enter future context. See [`## Implementability Gate`](#implementability-gate).
 
-Read this plan, then the completed [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md), `src/domain/types.ts`, `src/domain/schemas.ts`, `src/ports/`, `server/research.ts`, `server/app.ts`, and `src/ui/App.tsx` before implementation. Continue design in this file; do not begin implementation until the remaining box contracts and migration plan are approved.
+Read this plan, then the completed [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md), `src/domain/types.ts`, `src/domain/schemas.ts`, `src/ports/`, `server/research.ts`, `server/app.ts`, and `src/ui/App.tsx` before implementation. Begin at the first unchecked Plan Ledger item, keep Current State/Handoff/ledger synchronized, and stop to amend this plan if implementation would change a settled contract.
 
 ## Summary
 
@@ -168,9 +171,36 @@ interface ThreadContext {
 
 The projection may include terminal requests for conversational continuity, but includes assistant answers only from completed research and factual evidence only from validated research resolutions/checkpoints. Failure messages, provider details, and unsupported partial output never become research context. Existing source destinations may be known without being treated as extracted research evidence.
 
+`buildThreadContext(thread, limits)` is pure and deterministic:
+
+1. Ignore `legacyArchive` completely. Take at most the newest `maxThreadContextTurns` terminal v3 turns, then restore chronological order. Include every selected request and only completed sufficient/best-effort research answers; search results, failure/interruption messages, progress, usage, and execution provenance are omitted from `turns`.
+2. `maxThreadContextChars` counts Unicode code points in request plus included answer text, not JSON/metadata overhead. Selected requests are admitted newest-first and are already bounded to 2,000 characters; if necessary drop the oldest selected turn. Spend remaining text budget on completed research answers newest-first, truncating only at code-point boundaries and marking truncation in the typed protocol envelope rather than altering durable content. Return included turns chronologically.
+3. Gather viable `EvidencePack` snapshots from selected turns' validated resolutions/checkpoints, newest turn first and pack `requestOrder` first. Deduplicate identical `(problemId, query, sourceId, extractedAt)` snapshots. Truncate each extracted passage to `maxEvidenceCharsPerSource`; admit passages until `maxEvidenceCharsTotal`, truncating the last only when at least 256 useful code points remain. Return admitted packs in chronological turn/request order.
+4. Known-source priority is: every admitted evidence/support source, then selected search destinations from newest turn/rank to oldest. Deduplicate by `SourceId`, cap at the derived `maxThreadContextTurns * 3` records (at most 24), and finally return records in thread ordinal order. A destination without an admitted viable passage is metadata only, never factual evidence.
+5. Canonical source fields are independently schema-bounded (`title` 500, `url`/`canonicalUrl` 2,048 each, `displayUrl` 512, `snippet` 1,000); metadata and JSON overhead are bounded by those schemas and the source/turn counts. The complete encoded turn request must also fit `MAX_TURN_REQUEST_BYTES = 128_000`; the controller treats overflow after deterministic projection as local `invalid_request` rather than silently dropping additional state.
+
+The same thread and limits always produce byte-equivalent canonical protocol input. Fixtures cover zero history, more than eight turns, one oversized latest answer, multibyte Unicode, repeated evidence, checkpoint evidence, more than 24 candidate sources, and exact 24,000/48,000/128,000 boundaries.
+
 A follow-up question is another research turn supplied with this bounded view.
 
 ## Data Model Components
+
+Canonical IDs remain opaque branded strings at domain boundaries:
+
+```ts
+type ThreadId = Brand<string, "ThreadId">;
+type TurnId = Brand<string, "TurnId">;
+type MessageId = Brand<string, "MessageId">;
+type ExecutionId = Brand<string, "ExecutionId">;
+type SourceId = Brand<string, "SourceId">;
+type ResearchProblemId = Brand<string, "ResearchProblemId">;
+type ResearchGapId = Brand<string, "ResearchGapId">;
+type PropositionKey = Brand<string, "PropositionKey">;
+type ObservationId = Brand<string, "ObservationId">;
+type IsoTimestamp = Brand<string, "IsoTimestamp">;
+```
+
+UUID/random execution and turn IDs are generated by injected runtime identity sources; deterministic research/source identities follow the hashed identity policy below. Branding is compile-time only and every untrusted boundary still runtime-validates the appropriate UUID or typed-hash format, length, and content.
 
 ### `Thread`
 
@@ -185,11 +215,13 @@ interface Thread {
   updatedAt: IsoTimestamp;
   sources: ThreadSourceRecord[];
   turns: Turn[];
+  legacyArchive: LegacyArchiveEntry[];
 }
 ```
 
 ```text
-thread identity + canonical source catalog + ordered terminal turns
+thread identity + canonical source catalog
+       + terminal turns + read-only legacy archive
                     |
                     v
                 [ Thread ]
@@ -200,15 +232,79 @@ thread identity + canonical source catalog + ordered terminal turns
 
 **Invariants**
 
-- Turns are chronologically ordered, and canonical sources are stored once in append-stable ordinal order.
-- A durable thread contains only terminal turns plus their canonical source catalog; active turns/evidence deltas are never serialized before terminal commit.
+- Turns are chronologically ordered, the migration-only legacy archive is chronologically ordered, and canonical sources are stored once in append-stable ordinal order. Transcript projection merges turns/archive by `(createdAt, stable ID)` without changing either durable collection.
+- A durable thread contains only terminal turns, bounded read-only legacy archive entries, and their canonical source catalog; active turns/evidence deltas are never serialized before terminal commit.
 - `updatedAt` reflects the latest meaningful activity.
 - Serialized thread data is provider-neutral.
-- Source references used by an answer resolve by stable `SourceId` through the canonical `EvidenceSet` reconstructed from thread activity.
-- Schema changes are versioned and migration-safe.
+- Source references used by a v3 research answer resolve by stable `SourceId` through the canonical `EvidenceSet` reconstructed from v3 turn activity. Legacy archive destinations resolve through the source catalog but are never evidence.
+- Schema changes are versioned and migration-safe. A valid thread contains at least one terminal turn or one legacy archive entry; new runtime execution never creates archive-only state.
 - A thread is the unit of storage, retention, selection, import, and export.
 
 Provider-neutral execution provenance belongs to each terminal turn, not `Thread`: configuration may change between requests, retries, or imports, and research uses distinct assessment and synthesis routes. A controller-created interruption may use the explicit `unavailable` marker when no authoritative server terminal supplied route refs; it never guesses configuration.
+
+```ts
+interface ThreadSummary {
+  id: ThreadId;
+  title: string;
+  createdAt: IsoTimestamp;
+  updatedAt: IsoTimestamp;
+  lastRequestPreview?: string;
+  turnCount: number;
+  legacyArchiveCount: number;
+}
+```
+
+Summary projection chooses the newest turn/archive item by `(createdAt, stable ID)` and takes at most 120 Unicode code points of its request for `lastRequestPreview`. Archive-only threads therefore remain visible and explicitly countable in `/threads`; ranking otherwise uses the same title/preview policy.
+
+### `LegacyArchiveEntry`
+
+**Meaning:** a bounded, read-only display record for v1/v2 history that cannot truthfully satisfy v3 terminal-turn evidence contracts.
+
+```ts
+type LegacyArchiveEntryId = Brand<string, "LegacyArchiveEntryId">;
+
+interface LegacyArchiveDestinationRef {
+  sourceId: SourceId;
+  rank: number;
+  legacyCitationId?: string;
+}
+
+interface LegacyArchiveEntry {
+  id: LegacyArchiveEntryId;
+  originalIndex: number;
+  legacyKind: "chat" | "research";
+  legacyStatus: "completed" | "failed" | "interrupted";
+  createdAt: IsoTimestamp;
+  finishedAt: IsoTimestamp;
+  request: string;
+  answerMarkdown?: string;
+  statusMessage?: string;
+  destinations: LegacyArchiveDestinationRef[];
+}
+```
+
+Runtime bounds count Unicode code points: at most 256 archive entries/thread, request `1..2,000`, answer Markdown `1..64,000` when present, status message `1..500` when present, at most 10 unique destinations/entry, positive unique ranks `1..10`, and legacy citation ID `1..256` when present. An entry must contain an answer or status message. `originalIndex` is a unique safe integer `0..1_000_000` within one archive. IDs use `legacy_` plus full SHA-256/base64url over length-prefixed thread ID and original index. The retained index makes IDs revalidatable after v3 export/import and prevents malformed/duplicate old turn IDs from crossing into the canonical namespace.
+
+Migration is deterministic and one-way. The pure/domain migration accepts a structural `LegacyMigrationIdentities` callback implemented by `IdentityPolicy`; it imports no Web Crypto/runtime adapter:
+
+```ts
+interface LegacyMigrationIdentities {
+  sourceId(canonicalUrl: string): Promise<SourceId>;
+  legacyArchiveEntryId(input: {
+    threadId: ThreadId;
+    originalIndex: number;
+  }): Promise<LegacyArchiveEntryId>;
+}
+```
+
+1. Process legacy turns in original array order after validating thread/timestamps/request. Discard `pending`/`running` records as incomplete ephemeral work and report their count in sanitized migration issues.
+2. Convert a `completed` record to a v3 `SearchTurn` only when it has a defined `lookupResults` array, has neither assistant content nor a research run, its turn/message IDs satisfy target UUID schemas without colliding, and the thread's legacy `searchRef` satisfies the target recorded-ref bound. Preserve those IDs, use legacy `updatedAt` as `finishedAt`, and re-identify every valid HTTP(S) source; empty valid results become `completion: "empty"`. Invalid sources are omitted and reported; if all non-empty legacy results are invalid, archive the record instead of claiming a successful empty search.
+3. Convert every other completed, failed, or interrupted legacy record with a preservable request and answer/status into `LegacyArchiveEntry`. Construct `answerMarkdown` by concatenating assistant content parts in original order: preserve each text part's Markdown byte-for-byte and serialize a citation part as `[[cite:<original sourceId>]]`; insert no separator. Reject invalid Unicode scalar strings. Values beyond archive bounds make that entry invalid rather than silently truncating it. Provider failure details are reduced to the bounded existing public message when safe; otherwise use the fixed status copy `Legacy attempt failed.` or `Legacy attempt was interrupted.`. No old code, stack, payload, or retryability crosses into the archive.
+4. Gather destination candidates from `lookupResults` then `researchRun.sources`, stable-sort by original rank/array index, canonicalize/dedupe by new `SourceId`, and retain the first 10. Preserve the entry-local old `sourceId` as `legacyCitationId` only when bounded. Duplicate/invalid/overflow destinations are reported but do not discard an otherwise valid entry.
+5. Process converted search turns and archive entries together by `(createdAt, original array index)` for source first-admission. Persist turns by `(createdAt, id)` and archive entries by `(createdAt, id)`; reject duplicate retained `originalIndex`/archive IDs. Rewrite v3 search destination refs to new IDs. Keep archive answer Markdown unchanged; at presentation time, entry-local unambiguous `legacyCitationId -> SourceId` aliases resolve old citation tokens. If one legacy ID names multiple canonical sources in an entry, omit that alias and report it; ambiguous/unmapped tokens remain inert escaped text rather than becoming v3 citations.
+6. Keep at most 256 valid archive entries. More is an invalid thread migration, not silent history deletion. If no terminal turns or archive entries survive, omit the legacy thread and report it invalid. Existing-record migration preserves valid activity/expiry timestamps; explicit backup import refreshes them under normal import policy.
+
+Archive entries are not `Turn`, cannot be created/edited/retried by runtime APIs, cannot appear in `retryOfTurnId`, and are excluded from `ThreadContext`, `EvidenceSet`, research support, synthesis, active state, source occurrences, and terminal commit input. Their source catalog records exist only so preserved destination/citation links remain stable. Transcript presentation uses the same sanitized `MarkdownContent`, adds a persistent visible/screen-reader label “legacy, not evidence-verified,” and routes archive source activation through a source-open intent rather than evidence selection. Thread deletion, retention, conflict replacement, and backup/export apply to the complete aggregate, including its archive; no separate archive lifecycle exists.
 
 ### `Turn`
 
@@ -217,7 +313,7 @@ Provider-neutral execution provenance belongs to each terminal turn, not `Thread
 Current shape:
 
 ```ts
-interface Turn {
+interface LegacyTurnV2 {
   id: TurnId;
   mode: "chat" | "research";
   status: "pending" | "running" | "completed" | "failed" | "interrupted";
@@ -299,6 +395,8 @@ interface UnavailableExecutionProvenance {
   kind: "unavailable";
 }
 
+Recorded execution refs are trimmed non-control strings of `1..200` Unicode code points; adapters resolve configuration to these provider-neutral values before execution and migration archives a legacy lookup whose thread-level ref does not satisfy the bound.
+
 type SearchTerminalBase = TerminalTurnBase<"search"> & {
   execution: SearchExecutionProvenance | UnavailableExecutionProvenance;
 };
@@ -308,7 +406,7 @@ type ResearchTerminalBase = TerminalTurnBase<"research"> & {
 };
 ```
 
-`ActiveTurn` is mutable controller state projected from request execution and lifecycle events; it is never part of a persisted `Thread`. `Turn` is immutable terminal history. Every terminal outcome observed by the controller is committed: completed search/research, insufficient evidence, bounded failure, and interruption. A failed or interrupted first request therefore creates a durable thread and appears in `ThreadsBox`; seven-day retention and explicit deletion bound that history.
+`ActiveTurn` is mutable controller state projected from request execution and lifecycle events; it is never part of a persisted `Thread`. `Turn` is immutable terminal history. Every validated terminal outcome observed by the controller is committed under a functioning store: completed search/research, insufficient evidence, bounded failure, and interruption. Retryable storage failure retains the exact candidate; non-retryable post-validation corruption enters the explicit blocking state. A failed or interrupted first request therefore creates a durable thread and appears in `ThreadsBox`; seven-day retention and explicit deletion bound that history.
 
 ```text
 controller-owned ActiveTurn
@@ -438,7 +536,55 @@ interface SearchResult extends CanonicalSource {
 }
 ```
 
+Runtime schemas enforce the canonical-source bounds used by transport/persistence/context projection: title 1–500 characters, URL/canonical URL 1–2,048, display URL 1–512, snippet 0–1,000, and positive bounded rank. Character limits count Unicode code points; adapters reject/skip overlong provider entries rather than truncating identity URLs.
+
 `SourceId` is an application-derived stable identity for the canonical source, not provider rank or result-array position. The same canonical URL normalized from different searches must receive the same collision-safe ID before evidence, citations, or support references are admitted. Provider-local IDs may be retained only as adapter metadata and never become durable source identity.
+
+### Deterministic identity policy
+
+All durable/reconciliation identities use one application policy plus an injected cross-runtime hasher:
+
+```ts
+interface IdentityHasher {
+  sha256Base64Url(material: Uint8Array): Promise<string>;
+}
+
+interface IdentityPolicy {
+  sourceId(canonicalUrl: string): Promise<SourceId>;
+  legacyArchiveEntryId(input: {
+    threadId: ThreadId;
+    originalIndex: number;
+  }): Promise<LegacyArchiveEntryId>;
+  propositionKey(proposition: string): Promise<PropositionKey>;
+  observationId(input: {
+    propositionKey: PropositionKey;
+    statement: string;
+    stance: SupportedObservation["stance"];
+    support: SupportRef[];
+  }): Promise<ObservationId>;
+  problemId(input: {
+    turnId: TurnId;
+    parentId?: ResearchProblemId;
+    question: string;
+    purpose: string;
+    successCriterion: string;
+  }): Promise<ResearchProblemId>;
+  gapIdentity(input: {
+    problemId: ResearchProblemId;
+    question: string;
+    purpose: string;
+    successCriterion: string;
+  }): Promise<{ gapId: ResearchGapId; fingerprint: string }>;
+}
+```
+
+Canonical text identity applies Unicode NFKC, trims both ends, collapses every run of Unicode whitespace to one ASCII space, and uses locale-independent JavaScript `toLowerCase()`; punctuation is retained. Support refs serialize as unique sorted `turn:<id>` / `source:<id>` strings. Identity fields are UTF-8 encoded with byte-length prefixes (`<byteLength>:<value>`) so concatenation is unambiguous.
+
+Canonical source URLs use WHATWG `URL`: only `http:`/`https:` are accepted; embedded credentials make the URL invalid, while fragments are removed before identity; host/scheme casing and default ports normalize through `URL`; path and query parameter values/order are retained; no speculative tracking-parameter removal occurs. The canonical serialized URL is the sole source identity material.
+
+IDs are full SHA-256 digests encoded base64url without padding and prefixed by type: `src_`, `legacy_`, `prop_`, `obs_`, `problem_`, or `gap_`. Root problem material includes `turnId`; child problem material includes `turnId` and `parentId`. A gap fingerprint hashes normalized question/purpose/success criterion without ancestry to detect recursive ancestor cycles; `gapId` additionally includes `problemId` so separate ledger obligations remain distinct.
+
+The concrete hasher uses Web Crypto in both Node 22 and browsers behind `IdentityHasher`; domain normalization imports no Node/browser API. Fixture vectors cover Unicode, whitespace, URL casing/default ports/fragments, support order/duplication, parent ancestry, legacy thread/index material, and same-ID/different-material integrity rejection. Stored canonical material is always compared when an existing ID is encountered; a mismatch is `integrity_failure` even though a full-digest collision is operationally implausible.
 
 Provider/search `SearchResult` is transient because `rank` belongs to one query. Durable `Thread` separates canonical source metadata from contextual references:
 
@@ -461,11 +607,15 @@ interface ContextEvidence {
 }
 
 interface EvidencePack {
+  problemId: ResearchProblemId;
+  requestOrder: number;
   query: string;
   sources: ContextEvidence[];
   createdAt: IsoTimestamp;
 }
 ```
+
+Each viable evidence request produces one pack; recursive/batched knowledge therefore carries `EvidencePack[]`, never a synthetic single-query pack. Packs order by durable/request creation order, then `problemId`; sources inside a pack order by deterministic selection order. Joining deduplicates an identical `(problemId, query, sourceId, extractedAt)` snapshot and preserves distinct time/query snapshots.
 
 The target exposes one thread-wide deduplicated `EvidenceSet`. Durable citations and support references use `SourceId`, never a mutable array index; the UI derives stable one-based ordinals for display. Each source retains turn/role occurrences so deduplication does not erase provider rank or provenance, and a search destination may be promoted to research evidence without creating another source entry.
 
@@ -553,9 +703,32 @@ task purpose + policy + conversation + current content + optional evidence
 The current code names this port `ChatProvider`; the target architectural name is `LLMProvider`. One provider port exposes separate capability methods so application code chooses a task, while only the concrete adapter chooses a provider model.
 
 ```ts
+interface ResearchAssessmentInput {
+  systemPrompt: string;
+  problem: ResearchProblem;
+  knowledge: ResearchKnowledge;
+  ledger: GapLedger;
+  budget: ResearchBudget;
+  allowedSupportRefs: SupportRef[];
+  maxOutputTokens: number;
+}
+
+interface ResearchSynthesisInput {
+  systemPrompt: string;
+  question: string;
+  context: ThreadContext;
+  resolution: SufficientResearchResolution | BestEffortResearchResolution;
+  allowedSourceIds: SourceId[];
+  maxOutputTokens: number;
+}
+
 interface LLMProvider {
-  assessResearch(input: ResearchAssessmentInput): Promise<ResearchAssessment>;
-  synthesizeResearch(input: ResearchSynthesisInput): AsyncIterable<AssistantContentPart>;
+  assessResearch(
+    input: ResearchAssessmentInput,
+  ): Promise<ResearchAssessmentProposal>;
+  synthesizeResearch(
+    input: ResearchSynthesisInput,
+  ): AsyncIterable<AssistantContentPart>;
 }
 ```
 
@@ -564,7 +737,7 @@ ResearchAssessor ── assessResearch() ──> high-reasoning model route
 AnswerSynthesizer ─ synthesizeResearch() -> balanced generation model route
 ```
 
-Assessment uses compact validated non-streaming structured output capped at 800 tokens. Synthesis uses bounded streamed output capped at 4,096 tokens. Both routes remain provider-neutral to their callers.
+Assessment uses compact validated non-streaming structured proposals capped at 800 tokens. `ResearchAssessor` validates/normalizes those untrusted proposals into application-owned `ResearchAssessment`; the provider never returns trusted domain state. Synthesis uses bounded streamed output capped at 4,096 tokens. Both routes remain provider-neutral to their callers.
 
 The Anthropic adapter maps these capabilities through separately configurable model IDs:
 
@@ -573,7 +746,7 @@ ANTHROPIC_ASSESSMENT_MODEL
 ANTHROPIC_SYNTHESIS_MODEL
 ```
 
-During migration, either setting may fall back to the existing `ANTHROPIC_MODEL`; final legacy-setting retention remains an implementation-plan decision. Different models by recursion depth are intentionally deferred because inconsistent assessors would weaken gap semantics.
+During v1.1 migration, either missing setting falls back independently to existing `ANTHROPIC_MODEL`, while an explicit new setting wins. Using fallback emits one sanitized startup deprecation notice without the model value. The fallback is removed in v1.2; persisted per-turn provenance stores the resolved model refs, never the legacy environment-variable name. Different models by recursion depth are intentionally deferred because inconsistent assessors would weaken gap semantics.
 
 **Invariants**
 
@@ -650,7 +823,7 @@ Dynamic material remains code-owned typed user/protocol input: the current probl
 
 **Failure contract:** missing, empty, invalid-encoding, oversized, or deployment-omitted assets stop application startup with one bounded `system_prompt_unavailable` configuration state naming only the role (`assessor` or `synthesizer`). Filesystem paths, contents, stack traces, and bundler details remain server-only observability.
 
-**Implementation boundary:** synchronous versus asynchronous startup read, cache representation, and Vercel include mechanism may vary inside thin runtime adapters. Once loaded, catalog values are immutable for the process and provider calls receive them unchanged.
+**Implementation boundary:** `server/runtime/system-prompts.ts` is the shared Node-only loader and reads static `new URL("../../ASSESSOR.md", import.meta.url)` / `SYNTHESIZER.md` paths once. `server/runtime/node.ts` awaits loading before `serve`; `api/index.ts` creates one module-scoped app promise and awaits it per handler. `vercel.json` adds `functions["api/index.ts"].includeFiles: ["ASSESSOR.md", "SYNTHESIZER.md"]`. The repository/runtime target is Node 22, and scaffold migration changes the current `package.json` `24.x` engine accordingly. Alternative cache internals may vary, but paths, explicit deployment inclusion, startup timing, process immutability, and unchanged provider pass-through are contracts.
 
 **Current mapping:** system prompts are duplicated inline in `server/research.ts` and `server/app.ts`; `server/anthropic.ts` appends an invalid-JSON retry suffix to the system instruction. The target removes the generic chat string and inline/retry system mutations, loads the two root Markdown assets through Node/Vercel composition adapters, and keeps retry/schema envelopes in typed protocol input.
 
@@ -701,12 +874,12 @@ macro-less SearchRequest
       SearchResponse
 ```
 
-Provisional contract:
+Contract:
 
 ```ts
 interface SearchRequest {
   query: string;
-  maxResults: number;
+  maxResults: number; // 1..10; MAX_SEARCH_RESULTS defaults to/cannot exceed 10
 }
 
 type SearchExecutionResult =
@@ -776,24 +949,29 @@ interface ResearchTurnInput {
 }
 
 interface ResearchLimits {
+  // Fixed semantic/structural policy; not environment-configurable.
   maxSearches: 3;
   maxConsumedSources: 9;
   maxRecursionDepth: 2;
   maxAssessmentCalls: 8;
   maxChildProblemsPerDecomposition: 3;
   maxCandidatesPerSearch: 5;
-  maxConcurrentSearches: 3;
-  maxConcurrentExtractions: 3;
-  extractionTimeoutMs: 8_000;
-  maxExtractedCharsPerPage: 20_000;
-  maxEvidenceCharsPerSource: 4_000;
-  maxEvidenceCharsTotal: 48_000;
-  maxThreadContextTurns: 8;
-  maxThreadContextChars: 24_000;
-  maxAssessmentOutputTokens: 800;
-  maxOutputTokens: 4_096;
+
+  // Operational values may be lowered by environment, never raised above defaults.
+  maxConcurrentSearches: number;       // 1..3, default 3
+  maxConcurrentExtractions: number;    // 1..3, default 3
+  extractionTimeoutMs: number;         // 1..8_000, default 8_000
+  maxExtractedCharsPerPage: number;    // 1..20_000, default 20_000
+  maxEvidenceCharsPerSource: number;   // 1..4_000, default 4_000
+  maxEvidenceCharsTotal: number;       // 1..48_000, default 48_000
+  maxThreadContextTurns: number;       // 1..8, default 8
+  maxThreadContextChars: number;       // 1..24_000, default 24_000
+  maxAssessmentOutputTokens: number;   // 1..800, default 800
+  maxOutputTokens: number;             // 1..4_096, default 4_096
 }
 ```
+
+The six semantic/structural values are fixed approved policy. Operational values default to the displayed maxima and may only be lowered through the canonical environment variables; configuration above a maximum, below one, non-integral where integral, or with `maxEvidenceCharsPerSource > maxEvidenceCharsTotal` fails startup rather than silently widening/repairing the contract. The canonical mappings are `MAX_CONCURRENT_SEARCHES`, `MAX_CONCURRENT_EXTRACTIONS`, `EXTRACTION_TIMEOUT_MS`, `MAX_EXTRACTED_CHARS_PER_PAGE`, `MAX_EVIDENCE_CHARS_PER_SOURCE`, `MAX_EVIDENCE_CHARS_TOTAL`, `MAX_THREAD_CONTEXT_TURNS`, `MAX_THREAD_CONTEXT_CHARS`, `MAX_ASSESSMENT_OUTPUT_TOKENS`, and `MAX_OUTPUT_TOKENS`. `MAX_TURN_REQUEST_BYTES` is operational outside `ResearchLimits`, accepts `8_000..128_000`, and defaults to `128_000`. During v1.1 only, an explicitly supplied legacy `MAX_CONTEXT_CHARS` is used as `min(value, 24_000)` when `MAX_THREAD_CONTEXT_CHARS` is absent and emits one sanitized deprecation notice; the old default is not implicitly carried forward, and support is removed in v1.2.
 
 These balanced values are approved defaults and hard per-turn ceilings, not targets. Eight assessments permit the common complete path of root decomposition, three independently searched/reassessed children, and final root reassessment without batching semantically distinct problems into one assessor call. All recursive branches draw from the same explicit search, source, assessment, decomposition-branching, and depth limits. The separate controls are intentional: they independently constrain provider calls, evidence volume, semantic reductions, branching, and recursion shape rather than hiding those costs behind one fuel number. The nine-source limit applies across the whole resolution tree, not independently to each search or node. Fair allocation derives `floor(maxConsumedSources / maxSearches) = 3` as the per-evidence-request new-source selection ownership cap; it is policy derived from approved limits, not another configurable fuel value. `SearchTurn` retains its separate visible-result limit.
 
@@ -990,6 +1168,7 @@ interface SupportedObservation {
 
 interface SupportedFinding {
   propositionKey: PropositionKey;
+  proposition: string;
   observations: SupportedObservation[];
   status: "supported" | "contested" | "insufficient";
 }
@@ -997,7 +1176,7 @@ interface SupportedFinding {
 interface KnowledgeUnit {
   problemId: ResearchProblemId;
   findings: SupportedFinding[];
-  evidence: EvidencePack;
+  evidence: EvidencePack[];
   unresolvedGapIds: ResearchGapId[];
 }
 
@@ -1006,6 +1185,35 @@ interface ResearchProblemProposal {
   purpose: string;
   successCriterion: string;
   priority: 1 | 2 | 3;
+}
+
+interface ObservationProposal {
+  proposition: string;
+  statement: string;
+  stance: "supports" | "contradicts" | "qualifies";
+  support: SupportRef[];
+}
+
+type ResearchDirectiveProposal =
+  | {
+      kind: "resolved";
+      observations: ObservationProposal[];
+    }
+  | {
+      kind: "search";
+      query: string;
+      purpose: string;
+      successCriterion: string;
+      priority: 1 | 2 | 3;
+    }
+  | {
+      kind: "decompose";
+      operator: "all" | "any";
+      problems: ResearchProblemProposal[];
+    };
+
+interface ResearchAssessmentProposal {
+  directive: ResearchDirectiveProposal;
 }
 
 type ResearchDirective =
@@ -1032,7 +1240,7 @@ interface ResearchAssessment {
 }
 ```
 
-Root `ASSESSOR.md` is the one editable system prompt for this box at every recursion stage. The following behavioral directive is its contract; dynamic problem/context/evidence/schema material is supplied separately as typed protocol input.
+Root `ASSESSOR.md` is the one editable system prompt for this box at every recursion stage. `LLMProvider` returns only `ResearchAssessmentProposal`: bounded text, support references, and strategy proposals. `ResearchAssessor` binds the current `problemId`, rejects support outside `allowedSupportRefs`, derives canonical proposition/observation identities, attaches the already-supplied evidence collection, and returns application-owned `ResearchAssessment`. The model never authors trusted IDs, gap/ledger state, evidence snapshots, or `KnowledgeUnit` structure. The following behavioral directive is the prompt contract; dynamic problem/context/evidence/schema material is supplied separately as typed protocol input.
 
 **Behavioral directive**
 
@@ -1043,8 +1251,9 @@ Evaluate the complete current problem against supplied thread context, knowledge
 - Receives root `ASSESSOR.md` unchanged for every initial, child, and reassessment call; no recursion path substitutes or appends another system instruction.
 - Never emits a user-facing answer or calls `SearchProvider`.
 - Assesses only supplied problem, context, knowledge, ledger state, and evidence.
-- Returns exactly one validated directive within 800 output tokens.
-- `resolved` findings reference only supplied support, satisfy the current problem's success criterion, and contain no unresolved gap IDs.
+- Returns exactly one application-validated directive from one provider proposal within 800 output tokens.
+- A `resolved` proposal contains 1–24 observations; proposition (240), statement (1,000), query (500), purpose (240), and success-criterion (500) fields obey those maximum character counts, duplicate normalized observations collapse, and empty/unsupported output is invalid.
+- Normalized `resolved` findings reference only supplied support, satisfy the current problem's success criterion, carry application-derived IDs/current evidence, and contain no unresolved gap IDs.
 - `search` is concrete, material, and search-ready rather than a restatement of the parent.
 - `decompose` contains one to three bounded deduplicated children with explicit `all | any` semantics.
 - A factual finding requires valid source support; user needs/preferences may use supplied turn support.
@@ -1120,7 +1329,7 @@ interface GapLedger {
 
 interface ResearchKnowledge {
   findings: SupportedFinding[];
-  evidence: EvidencePack;
+  evidence: EvidencePack[];
 }
 
 type ResolutionStopReason =
@@ -1208,7 +1417,7 @@ resolve(decompose problems) =
 
 `all` attempts every required affordable child. `any` evaluates children in priority order and may stop once the parent success criterion is supported. Every branch draws from the same explicit per-turn search, source, assessment, and depth budgets, while each assessment obeys the same three-child ceiling; no child receives fresh ceilings.
 
-The operator `⊔` is `joinKnowledge`. It must be associative, commutative, and idempotent:
+The operator `⊔` is `joinKnowledge`. It joins both supported findings and evidence-pack collections, canonicalizing final array order independently of operand/completion order. It must be associative, commutative, and idempotent:
 
 ```text
 (A ⊔ B) ⊔ C = A ⊔ (B ⊔ C)
@@ -1290,9 +1499,10 @@ interface EvidenceAcquisitionInput {
 interface EvidenceAcquisitionResult {
   requests: EvidenceRequest[];
   results: EvidenceRequestResult[];
-  sources: CanonicalSource[];
+  selectedSources: CanonicalSource[];
+  admittedSources: CanonicalSource[];
   extractions: ExtractionOutcome[];
-  evidence: EvidencePack;
+  evidence: EvidencePack[];
   budget: ResearchBudget;
 }
 
@@ -1339,7 +1549,7 @@ Unused ownership or global capacity is not released back to earlier requests. A 
 - Each request owns at most three unique new-source selections; all requests together consume no more than the remaining shared budget and never more than nine aggregate additional sources per turn. A source is consumed when selected for extraction/research context, whether extraction succeeds or fails; unselected candidates do not consume this budget.
 - Results and known sources are canonicalized and deduplicated before consumption.
 - Each unique source is extracted at most once through one globally bounded three-worker pool.
-- Evidence-request-to-candidate-to-consumed-source association is preserved.
+- Evidence-request-to-candidate-to-consumed-source association is preserved. `selectedSources` contains every unique budget-consuming extraction selection, while `admittedSources` contains only viable sources referenced by returned evidence; failed/non-viable selections never enter terminal source records.
 - Successful siblings survive another search or extraction failing.
 - Evidence acquisition does not assess, recurse, join knowledge, or synthesize.
 
@@ -1429,22 +1639,61 @@ type WorkspaceIntent =
   | { type: "route_requested"; route: AppRoute }
   | { type: "new_thread_requested" }
   | { type: "evidence_selected"; sourceId: SourceId }
+  | {
+      type: "legacy_source_open_requested";
+      archiveEntryId: LegacyArchiveEntryId;
+      sourceId: SourceId;
+    }
   | { type: "retry_turn_requested"; turnId: TurnId };
 
-interface WorkspaceViewState {
-  route: AppRoute;
-  prompt: PromptBoxViewState;
-  transcript?: TranscriptBoxViewState;
-  evidence?: EvidenceBoxViewState;
-  selectedSourceId?: SourceId;
-}
+type WorkspaceViewState =
+  | {
+      page: "home";
+      route: { page: "home" };
+      header: StickyHeaderViewState;
+      prompt: PromptBoxViewState;
+      commandHints: PromptSuggestion[];
+    }
+  | {
+      page: "thread";
+      route: { page: "thread"; threadId: ThreadId };
+      header: StickyHeaderViewState;
+      prompt: PromptBoxViewState;
+      transcript: TranscriptBoxViewState;
+      evidence: EvidenceBoxViewState;
+      selectedSourceId?: SourceId;
+    }
+  | {
+      page: "threads";
+      route: { page: "threads" };
+      header: StickyHeaderViewState;
+      threads: ThreadsBoxViewState;
+    }
+  | {
+      page: "settings";
+      route: { page: "settings" };
+      header: StickyHeaderViewState;
+      settings: SettingsBoxViewState;
+    }
+  | {
+      page: "unlock";
+      route: { page: "unlock" };
+      header: StickyHeaderViewState;
+      unlock: UnlockBoxViewState;
+    }
+  | {
+      page: "boundary";
+      retainedRoute: AppRoute;
+      header: StickyHeaderViewState;
+      status: SystemStatusBoxViewState;
+    };
 ```
 
 The workspace controller recognizes slash commands and routes them to navigation/application capabilities. Every non-command submission is delegated unchanged to `TurnController`; only the turn controller applies the trailing-`?` turn-kind policy. It composes `TranscriptBoxViewState` and `EvidenceBoxViewState` from the committed `Thread`, controller-owned active state, and active evidence delta.
 
 **Invariants**
 
-- Owns route state, safe navigation, selected evidence, focus requests, and cross-box view projection.
+- Owns route state, safe navigation, selected evidence, focus requests, archive-source link validation/delegation, and cross-box view projection. A legacy source-open intent must match that archive entry's destination before a safe external-navigation capability receives its catalog URL.
 - Does not execute search/research, parse provider events, construct terminal turns, or write thread records.
 - Delegates settings, authentication, startup status, thread-list mutation, and turn execution to their owning controllers/capabilities.
 - A slash command never accidentally becomes a turn; a non-command submission is not reclassified by UI layout code.
@@ -1453,6 +1702,42 @@ The workspace controller recognizes slash commands and routes them to navigation
 **Failure contract:** stale or route-inapplicable intents are safe no-ops; bounded failures remain in the state projection owned by the capability that failed.
 
 **Current mapping:** route state, slash-command interpretation, selected evidence, focus effects, request execution, persistence, and box composition are interleaved in `src/ui/App.tsx`.
+
+### Supporting browser controllers
+
+The named non-turn owners share one minimal observable shape; this is a TypeScript boundary, not a required base class or global store:
+
+```ts
+interface UiController<State, Intent> {
+  getState(): State;
+  dispatch(intent: Intent): Promise<void>;
+  subscribe(listener: (state: State) => void): () => void;
+}
+
+type ThreadListController = UiController<
+  ThreadsBoxViewState,
+  ThreadsBoxIntent
+>;
+
+type SettingsController = UiController<
+  SettingsBoxViewState,
+  SettingsBoxIntent
+>;
+
+type AuthenticationController = UiController<
+  UnlockBoxViewState,
+  UnlockBoxIntent
+>;
+
+type SystemBoundaryController = UiController<
+  SystemStatusBoxViewState,
+  SystemStatusBoxIntent
+>;
+```
+
+`ThreadListController` owns `ThreadStore.list/remove`, private summary revisions, stale load/delete IDs, and projection to `ThreadsBox`; it never ranks or owns local filter/confirmation state. `SettingsController` owns immediate document preference application, independent preference persistence/retry, file read/download effects, and the private `BackupPreviewId -> ValidatedImportCandidate` map. `AuthenticationController` owns one ephemeral attempt, auth calls, same-origin `returnTo`, reset keys, and success navigation intent; passphrases never enter retained controller state. `SystemBoundaryController` owns auth/provider/storage startup checks, retained safe route, stale check IDs, and retry—never ordinary box errors or page reload.
+
+These controllers may be small hooks/modules composed by `WorkspaceController`; they do not justify XState, a shared reducer, or one global store. Their supplied box state/intent unions are the observable contracts, and bounded adapter errors map to existing box failure states.
 
 ### `TurnController`
 
@@ -1501,11 +1786,17 @@ type TurnControllerState =
       phase: "commit_failed";
       activeTurn: ActiveTurn;
       terminalCandidate: Turn;
-      failure: ThreadCommitFailure;
+      failure: Extract<ThreadCommitFailure, { retryable: true }>;
+    }
+  | {
+      phase: "commit_blocked";
+      activeTurn: ActiveTurn;
+      terminalCandidate: Turn;
+      failure: Extract<ThreadCommitFailure, { retryable: false }>;
     };
 ```
 
-`terminalCandidate` is controller-owned recovery state, not durable history and not a second user-visible answer channel. Submission remains blocked through `executing | committing | commit_failed`; commit retry reuses the exact candidate and never reruns providers.
+`terminalCandidate` is controller-owned recovery state, not durable history and not a second user-visible answer channel. Submission remains blocked through `executing | committing | commit_failed | commit_blocked`; retryable commit retry reuses the exact candidate and never reruns providers.
 
 The controller performs this sequence:
 
@@ -1536,11 +1827,12 @@ publish committed workspace state
 - The first legal terminal condition is authoritative: either a validated server terminal received before local cancellation/loss wins, or the controller closes the execution with one locally reasoned interrupted candidate. Earlier source/answer deltas are presentation-only and cannot be committed independently.
 - Before commit, every destination, citation, support, task-evidence, and evidence-pack `SourceId` must resolve through the existing thread catalog or terminal `sourceRecords`.
 - Canonical source admission, ordinal assignment, terminal-turn append, thread timestamps, schema validation, and revision check happen in one `ThreadStore` transaction.
-- A terminal candidate becomes durable/visible as terminal history only after commit succeeds. Commit failure preserves the candidate in memory and blocks another submission until retry succeeds or the workspace is lost; it never reruns execution. Revision-conflict retry reloads the aggregate, treats an existing identical `turnId` as idempotent success, otherwise revalidates and commits the same immutable turn while deriving any new source ordinals against the latest catalog.
+- A terminal candidate becomes durable/visible as terminal history only after commit succeeds. Retryable failure preserves the candidate in memory and blocks another submission until exact retry succeeds; it never reruns execution. Revision-conflict retry reloads the aggregate, treats an existing identical `turnId` as idempotent success, otherwise revalidates and commits the same immutable turn while deriving any new source ordinals against the latest catalog.
+- A schema-invalid, source-unclosed, or identity-colliding server terminal is rejected before store commit and converted to the appropriate valid bounded search `invalid_response` or research transport failure with unavailable state; malformed payload content is never persisted. A non-retryable store rejection after that prevalidation indicates corruption/programmer invariant breach: enter `commit_blocked`, retain the exact candidate in memory, project a blocking `SystemStatusBox` state, and accept no destructive navigation/new turn. Reload/process loss may still lose this non-durable candidate; the product guarantee is explicitly conditioned on a functioning valid store rather than claiming impossible persistence through permanent corruption.
 - Cancellation is idempotent. Once cancellation starts, the controller may accept only newer validated `research_state` needed for recovery during the bounded cancellation window, then constructs one interrupted candidate using the locally known cancellation reason and latest validated source-closed research state or `unavailable`; other late terminal/events are stale.
 - Connection loss similarly produces one interrupted candidate and never guesses or retains a resolution/checkpoint that was not received and source-closed against existing/active canonical metadata.
 
-**Failure contract:** submission validation is local and non-durable; execution failures map only to approved terminal variants; malformed/stale transport cannot widen durable unions; commit conflicts/unavailability retain the exact terminal candidate for idempotent retry.
+**Failure contract:** submission validation is local and non-durable; execution failures map only to approved terminal variants; malformed/stale transport cannot widen durable unions; retryable commit conflicts/unavailability/quota retain the exact terminal candidate for idempotent retry; non-retryable post-validation store rejection blocks the workspace visibly without pretending the candidate was persisted.
 
 **Implementation boundary:** a React hook, state machine, or framework-free observable controller may implement this box. XState remains appropriate only if used for this named active-turn workflow; routing and ordinary box state remain local/simple.
 
@@ -1553,7 +1845,7 @@ publish committed workspace state
 ```ts
 interface TurnGateway {
   execute(
-    request: TurnExecutionRequest,
+    request: TurnGatewayRequest,
     onEvent: (event: TurnExecutionEvent) => void,
     signal: AbortSignal,
   ): Promise<void>;
@@ -1567,13 +1859,12 @@ The gateway runtime-validates every decoded event before delivery. HTTP rejectio
 **Capability:** dispatch one validated server-side execution to the matching provider-neutral `SearchTurn` or `ResearchTurn` capability and return a terminal execution payload while emitting bounded progress.
 
 ```ts
-type TurnExecutionRequest =
+type TurnGatewayRequest =
   | {
       executionId: ExecutionId;
       turnId: TurnId;
       kind: "search";
       query: string;
-      maxResults: number;
     }
   | {
       executionId: ExecutionId;
@@ -1581,8 +1872,15 @@ type TurnExecutionRequest =
       kind: "research";
       question: string;
       context: ThreadContext;
-      limits: ResearchLimits;
     };
+
+type TurnExecutionRequest =
+  | (Extract<TurnGatewayRequest, { kind: "search" }> & {
+      maxResults: number;
+    })
+  | (Extract<TurnGatewayRequest, { kind: "research" }> & {
+      limits: ResearchLimits;
+    });
 
 type TerminalPayload<T extends Turn> = T extends TerminalTurnBase<TurnKind>
   ? Omit<T, keyof TerminalTurnBase<TurnKind>>
@@ -1676,7 +1974,7 @@ type TurnExecutionEvent =
 
 **Capability:** adapt authenticated HTTP/SSE to one `TurnExecutor` invocation.
 
-The boundary owns request size/schema validation, authentication/session checks, same-origin policy, execution cancellation wiring, heartbeat comments, event IDs/sequences, SSE serialization, and bounded pre-stream HTTP errors. It emits `accepted`, invokes the executor exactly once, wraps validated executor signals with identity/sequence fields, and wraps the returned terminal payload in exactly one `terminal` event. Heartbeats are transport comments, not lifecycle events and do not advance application sequence.
+The boundary owns streaming request-size/schema validation before JSON materialization, authentication/session checks, same-origin policy, execution cancellation wiring, heartbeat comments, event IDs/sequences, SSE serialization, and bounded pre-stream HTTP errors. The wire accepts `TurnGatewayRequest` only: client input cannot choose search result limits, research budgets, concurrency, token ceilings, or provider routes. The boundary injects server-configured `maxResults`/`ResearchLimits`, re-bounds supplied `ThreadContext` to those limits, emits `accepted`, invokes the executor exactly once with `TurnExecutionRequest`, wraps validated executor signals with identity/sequence fields, and wraps the returned terminal payload in exactly one `terminal` event. Heartbeats are transport comments, not lifecycle events and do not advance application sequence.
 
 It does not classify raw prompt input, build `ThreadContext`, make search/research decisions, expose provider errors, mutate `Thread`, or decide what becomes durable. Executor failure after acceptance must become one bounded terminal execution outcome when possible; an unencodable/abrupt connection failure closes the stream and is interpreted by the browser controller as interruption.
 
@@ -1742,7 +2040,13 @@ interface ThreadBackup {
 
 interface ImportIssueSummary {
   threadId?: ThreadId;
-  code: "unsupported_version" | "invalid_thread" | "invalid_source";
+  code:
+    | "unsupported_version"
+    | "invalid_thread"
+    | "invalid_source"
+    | "legacy_incomplete_dropped"
+    | "legacy_entry_dropped"
+    | "legacy_destination_dropped";
   message: string;
 }
 
@@ -1750,6 +2054,8 @@ interface ImportPreview {
   add: number;
   conflicts: number;
   skippedInvalid: number;
+  archivedLegacyEntries: number;
+  droppedLegacyEntries: number;
   issues: ImportIssueSummary[];
 }
 
@@ -1758,6 +2064,8 @@ interface ImportReport {
   replaced: ThreadId[];
   skipped: ThreadId[];
   skippedInvalid: number;
+  archivedLegacyEntries: number;
+  droppedLegacyEntries: number;
 }
 
 interface ValidatedImportCandidate {
@@ -1807,13 +2115,13 @@ validated expected revision / optional new-thread seed
               one StoredThreadRecord
 ```
 
-- `expectedRevision: null` with `create` is legal only for a never-persisted thread ID. Empty threads are not persisted; the first terminal attempt creates the thread, admits referenced sources, and inserts the turn in one transaction.
+- `expectedRevision: null` with `create` is legal only for a never-persisted thread ID. Empty threads are not persisted; the first runtime terminal attempt creates the thread with `legacyArchive: []`, admits referenced sources, and inserts the turn in one transaction. Archive-only threads arise only from validated migration/import.
 - Existing threads require their loaded opaque revision. `create` is absent for an existing-thread commit.
 - Idempotency is checked by `turn.id`: an existing deeply equivalent terminal turn returns `already_committed` without mutation even if the supplied revision is stale. Reusing a `turn.id` for different content is `integrity_failure`.
 - Otherwise, a stale revision returns `revision_conflict`. Retry reloads the latest record and submits the same immutable terminal turn with the new revision; provider execution is never repeated.
 - Turns are inserted in deterministic `(createdAt, id)` order, not transaction-completion order. This preserves chronological history when independently active tabs race; “append a retry” means create a new immutable history entry, not blindly push to the end of an array.
 - New source ordinals are assigned contiguously in supplied `sourceRecords` order after filtering identities already in the catalog. That supplied order must already reflect the deterministic turn/source-allocation policy.
-- Every supplied new source must be reachable from the terminal turn, and every terminal destination/citation/support/task/evidence reference must resolve through the resulting catalog. Unreferenced supplied records or missing references are `invalid_record`; no orphan source is admitted.
+- Every source supplied to terminal commit must be reachable from that terminal turn, and every terminal destination/citation/support/task/evidence reference must resolve through the resulting catalog. Import/migration additionally requires each catalog record to be reachable from a turn or archive destination and every archive destination to resolve. Unreferenced supplied/imported records or missing references are `invalid_record`; no orphan source is admitted.
 - An existing `SourceId` must map to the same canonical URL. A different URL is `integrity_failure`. First admission fixes durable title, original/display URLs, snippet, publication time, and ordinal; later presentation differences are ignored rather than rewriting history.
 - Canonical URL and `SourceId` derivation are revalidated at this untrusted persistence boundary.
 - `updatedAt` advances only for a successful meaningful durable mutation. Terminal commit uses the turn's bounded validated activity time; an added or replaced import uses import time. Reads, failed commits, idempotent commits, export, and inspection do not extend retention.
@@ -1827,8 +2135,9 @@ validated expected revision / optional new-thread seed
 
 **Backup/import**
 
-- Export contains schema-v3 aggregates and retention timestamps, but never revisions, tombstones, preview handles, credentials, or adapter metadata.
-- Inspection accepts untrusted input, supports the approved v1/v2 compatibility migrations plus v3, validates each resulting aggregate/source identity/reference closure, and returns a sanitized preview plus an opaque in-memory candidate. Legacy thread-level `searchRef` migrates onto every terminal turn; legacy `modelRef` supplies both assessment/synthesis refs for research turns when distinct historical routes are unavailable.
+- Export contains schema-v3 aggregates—including any read-only legacy archive—and retention timestamps, but never revisions, tombstones, preview handles, credentials, or adapter metadata.
+- Inspection accepts untrusted input, supports the approved v1/v2 compatibility migrations plus v3, validates each resulting aggregate/source/archive identity/reference closure, and returns a sanitized preview plus an opaque in-memory candidate. Legacy thread-level `searchRef` migrates only onto converted terminal search turns. Unsupported research/chat outputs become archive entries and do not receive fabricated execution provenance or model routes.
+- Existing local/remote v1/v2 records migrate lazily on first list/load inside one adapter transaction using an injected `LegacyMigrationIdentities`. Successful conversion replaces the old record while preserving its valid activity/expiry; failed conversion leaves the old bytes untouched, excludes that record from v3 results, and emits only bounded count/code observability until expiry or a later compatible migration attempt. No partially converted aggregate is visible.
 - `BackupPreviewId` remains settings-controller state mapped to exactly one `ValidatedImportCandidate`; changing the file or completing/cancelling import invalidates it. Layout state never receives the candidate or raw backup.
 - Imported records always receive fresh local revisions. Exported revision-like fields are ignored/rejected as non-contract data.
 - `keep_existing` leaves existing aggregates, revisions, expiry, and tombstones untouched. Every added/replaced aggregate refreshes `updatedAt`/expiry to import time and receives a fresh revision. `replace_existing` installs atomically and may clear an explicit-deletion tombstone.
@@ -1837,7 +2146,7 @@ validated expected revision / optional new-thread seed
 **Invariants**
 
 - Local IndexedDB and remote adapters pass the same storage contract suite, including CAS, idempotency, ordering, source collision, deletion race, expiry, and import fixtures.
-- Storage records contain complete aggregates; no adapter persists `ActiveTurn`, terminal candidates, active evidence deltas, revisions inside backups, or provider payloads.
+- Storage records contain complete aggregates; no adapter persists `ActiveTurn`, terminal candidates, active evidence deltas, revisions inside backups, or provider payloads. `commitTerminalTurn` preserves but cannot mutate an existing archive; archive creation/replacement is legal only through validated migration/import.
 - All writes runtime-validate the complete resulting record before commit.
 - A storage failure cannot partially admit sources, partially replace a thread, or expose backend details.
 
@@ -2109,7 +2418,7 @@ type HotkeyIntent =
 
 ```ts
 interface TranscriptBoxViewState {
-  turns: TranscriptTurnView[];
+  items: Array<TranscriptTurnView | LegacyArchiveView>;
 }
 
 type TranscriptPhase =
@@ -2147,6 +2456,17 @@ interface TranscriptTurnView {
       };
 }
 
+interface LegacyArchiveView {
+  archiveEntryId: LegacyArchiveEntryId;
+  request: string;
+  createdAt: IsoTimestamp;
+  label: "legacy, not evidence-verified";
+  legacyStatus: LegacyArchiveEntry["legacyStatus"];
+  answerMarkdown?: string;
+  statusMessage?: string;
+  destinations: LegacyArchiveDestinationRef[];
+}
+
 interface TranscriptProgressView {
   id: string;
   label: string;
@@ -2155,13 +2475,19 @@ interface TranscriptProgressView {
 
 type TranscriptBoxIntent =
   | { type: "evidence_selected"; sourceId: SourceId; turnId: TurnId }
-  | { type: "turn_retry_requested"; turnId: TurnId };
+  | { type: "turn_retry_requested"; turnId: TurnId }
+  | {
+      type: "legacy_source_open_requested";
+      archiveEntryId: LegacyArchiveEntryId;
+      sourceId: SourceId;
+    };
 ```
 
-`WorkspaceController` projects durable `Thread` state and bounded public `TurnController` lifecycle state into this presentation model. `TranscriptBox` does not receive persistence records, raw provider payloads, assessor directives, or an independent live-answer channel.
+`WorkspaceController` projects durable v3 turns, read-only legacy archive entries, and bounded public `TurnController` lifecycle state into this presentation model. It resolves archive-local citation aliases against the source catalog without promoting them to evidence. `TranscriptBox` does not receive persistence records, raw provider payloads, assessor directives, or an independent live-answer channel.
 
 ```text
-durable turns + active lifecycle/answer deltas
+durable turns + read-only legacy archive
+             + active lifecycle/answer deltas
                     |
                     v
        WorkspaceController projection
@@ -2170,24 +2496,26 @@ durable turns + active lifecycle/answer deltas
              TranscriptBox
                     |
                     +-- evidence_selected
-                    `-- turn_retry_requested
+                    +-- turn_retry_requested
+                    `-- legacy_source_open_requested
 ```
 
 **Invariants**
 
-- Turns appear once in durable conversational order; at most the final turn has an `active` presentation.
+- Terminal turns and archive entries appear once in merged `(createdAt, stable ID)` conversational order; at most the final v3 turn has an `active` presentation.
+- Every archive item has the persistent visible and screen-reader label “legacy, not evidence-verified,” exposes no retry/evidence-selection action, and is excluded from active replacement. Valid archive destination/citation activation emits only `legacy_source_open_requested`; unresolved legacy tokens remain inert.
 - The active turn occupies its eventual durable position. Completion replaces that presentation by stable `turnId` rather than appending duplicate request or answer markup.
 - Initial and follow-up requests use the same rendering path.
 - A `SearchTurn` presents its request and bounded result summary without inventing an assistant answer; ranked destinations remain in `EvidenceBox`.
 - A `ResearchTurn` may show bounded safe progress and streamed root-answer content in place. Raw assessor payloads, hidden reasoning, and provider diagnostics are never rendered.
-- Every active and durable research answer uses the same `MarkdownContent` primitive. Paragraphs, internal headings, lists, nested lists, emphasis, blockquotes, links, citations, inline/fenced code, tables, and thematic breaks remain available rather than being flattened into a lowest-common-denominator transcript format.
+- Every active/durable research answer and preserved archive answer uses the same `MarkdownContent` primitive; archive rendering supplies its separate entry-local citation-link resolver and cannot produce v3 evidence citations. Paragraphs, internal headings, lists, nested lists, emphasis, blockquotes, links, citations, inline/fenced code, tables, and thematic breaks remain available rather than being flattened into a lowest-common-denominator transcript format.
 - `MarkdownContent` sanitizes/escapes untrusted markup and protocols while preserving the application's color-constellation typography for headings, emphasis, quotations, code, tables, links, and citations. Rendering a streamed answer and its committed replacement produces equivalent structure once content matches.
-- The leading conversational-opening normalizer runs before Markdown rendering; it may demote only a violating first ATX heading and never removes internal headings or other descriptive formatting.
+- The leading conversational-opening normalizer runs only on v3 research answers before Markdown rendering; it may demote only a violating first ATX heading and never removes internal headings or other descriptive formatting. Archive Markdown bypasses this synthesis-policy fallback and is otherwise preserved through the same sanitizer/renderer.
 - Progress announcements are polite and phase-level; token deltas are not individually announced to screen readers. Completion and terminal status remain perceivable.
 - Citation activation emits typed evidence intent. The box does not query, focus, or mutate `EvidenceBox` DOM.
 - Retry is emitted only for a retryable terminal presentation; the box does not restart work itself.
 
-**Failure contract:** an empty transcript renders an intentional empty state. A terminal turn remains in sequence with its bounded public message and preserves earlier successful turns. Unsupported or stale evidence references remain inert rather than causing the transcript to fail.
+**Failure contract:** an empty transcript renders an intentional empty state. An invalid/unresolved archive destination or citation remains inert while the preserved request/answer stays readable. A terminal turn remains in sequence with its bounded public message and preserves earlier successful turns. Unsupported or stale evidence references remain inert rather than causing the transcript to fail.
 
 **Implementation boundary:** item decomposition, Markdown parser/sanitizer internals, virtualization, and live-delta buffering may vary while the single `MarkdownContent` path, liberal supported formatting, color-constellation presentation, ordering, replacement, accessibility, citation, and no-duplication contracts remain intact.
 
@@ -2223,8 +2551,8 @@ all durable turns + active admitted sources
 
 **Invariants**
 
-- The box displays the complete set rather than switching scope by selected turn.
-- Each canonical source appears exactly once. Its one-based ordinal is append-stable and presentational; citations and intents retain durable `SourceId` identity.
+- The box displays the complete v3 turn-derived set rather than switching scope by selected turn. Legacy archive destinations remain source links in their transcript item and never enter `EvidenceSet`.
+- Each canonical v3 evidence/destination source appears exactly once. Its one-based ordinal is append-stable and presentational; citations and intents retain durable `SourceId` identity.
 - A repeated source keeps its ordinal while occurrences preserve every relevant turn, role, and query-relative rank.
 - Promotion from `search_destination` to `research_evidence` adds a role occurrence to the existing entry; it never creates a duplicate card or rewrites prior provenance.
 - Deterministic admission order, not async completion order, controls ordinals. Existing visible ordinals are never renumbered when new evidence arrives.
@@ -2541,7 +2869,7 @@ SettingsBox inline preview
              bounded report
 ```
 
-A structurally invalid/unsupported backup produces an inspect failure and cannot be confirmed. Individually invalid thread records are excluded and reported as `skippedInvalid`; remaining valid records may be imported. Preview exposes at most 20 sanitized issue summaries while retaining the complete skipped count. Import is disabled when no valid add/replace work remains. `keep_existing` is the default conflict policy, and changing it updates preview state before confirmation. The controller retains the validated candidate behind opaque `BackupPreviewId` only in memory and rejects stale confirmations; raw backup content never becomes layout state.
+A structurally invalid/unsupported backup produces an inspect failure and cannot be confirmed. Individually invalid thread records are excluded and reported as `skippedInvalid`; remaining valid records may be imported. Preview exposes at most 20 sanitized issue summaries while retaining complete invalid, archived-legacy, and dropped-legacy counts. Import is disabled when no valid add/replace work remains. `keep_existing` is the default conflict policy, and changing it updates preview state before confirmation. The controller retains the validated candidate behind opaque `BackupPreviewId` only in memory and rejects stale confirmations; raw backup content never becomes layout state.
 
 Export is one explicit action. The controller obtains validated backup data from `ThreadStore`, creates the browser download, and returns bounded status; `SettingsBox` never constructs blobs or clicks synthetic anchors.
 
@@ -2669,7 +2997,7 @@ application startup/boundary state
 
 **Current mapping:** `AuthGate` in `src/ui/App.tsx` currently renders checking, provider-status failure, and remote-storage failure through standalone centered markup whose retry button calls `window.location.reload()`. The target application controller projects those blocking states into `SystemStatusBox`; non-blocking failures stay with their owning box.
 
-All currently agreed layout and layout-control boxes now have initial typed contracts. A final layout consistency pass may still refine shared controller ownership and current → target sequencing after the remaining data/system contracts settle.
+All agreed layout/layout-control boxes and supporting browser controllers now have typed observable contracts. `WorkspaceViewState` is route-discriminated, cross-box ownership is explicit, and the atomic migration sequence preserves these projections without a second global state path.
 
 ## Current → Target Overview
 
@@ -2727,78 +3055,111 @@ TurnStreamBoundary owns authenticated HTTP/SSE transport only.
 Layout boxes render typed state and emit semantic intent.
 ```
 
+### File responsibility map
+
+Target files follow the repository dependency direction; temporary legacy consumer names exist only until their migration step passes; focused v1/v2 untrusted-input schemas/migrators remain for the approved backup compatibility window.
+
+| Current owner | Target owner | Responsibility / migration |
+| --- | --- | --- |
+| `src/domain/types.ts` | `src/domain/types.ts` plus temporary `src/domain/legacy-v2.ts` | v3 aggregate/turn/evidence types become canonical; v1/v2 shapes move behind migration-only types and are deleted after import/storage fixtures pass. |
+| `src/domain/schemas.ts` | `src/domain/schemas.ts`, private `src/domain/legacy-input-schemas.ts`, `src/domain/migrations.ts` | strict boundary schemas, code-point/byte/reference bounds, and deterministic v1/v2 transformation over an injected structural identity callback; migration imports no runtime or port implementation. |
+| `src/domain/policies.ts` | `src/domain/request-policy.ts`, `src/domain/identity-material.ts` | slash/macro/title policy and platform-free canonical normalization/material encoding. |
+| `src/domain/thread-state.ts`, `src/domain/citations.ts`, `src/domain/exports.ts` | `src/domain/thread-context.ts`, `src/domain/knowledge.ts`, retained focused citation/export modules | deterministic context projection, knowledge join, transcript/export citation resolution; completed-only durability assumptions removed. |
+| `src/application/thread-owner.ts` | `src/ui/controllers/turn-controller.ts` plus `src/application/commit-terminal-turn.ts` | stale request ownership becomes typed active-turn/event/atomic-commit workflow; shared commit validation remains application code. |
+| `src/ports/chat.ts` | `src/ports/llm.ts` | remove chat/planner vocabulary; add exact assessment/synthesis inputs, proposal output, streamed content. |
+| `src/ports/providers.ts`, `src/ports/extraction.ts`, `src/ports/storage.ts` | same focused port paths plus `src/ports/identity.ts`, `src/ports/system-prompts.ts`, `src/ports/turn-gateway.ts`, `src/ports/preferences.ts` | canonical provider-neutral capabilities and typed results. |
+| `server/brave.ts`, `server/anthropic.ts`, `server/extractor.ts` | `src/infrastructure/providers/brave.ts`, `src/infrastructure/providers/anthropic.ts`, `src/infrastructure/extraction/safe-content-extractor.ts` | concrete SDK/fetch adapters only; prompts and orchestration move out. |
+| `server/research.ts` | `src/application/research-assessor.ts`, `research-resolver.ts`, `evidence-acquirer.ts`, `answer-synthesizer.ts`, `execute-research-turn.ts`, `execute-search-turn.ts`, `turn-executor.ts` | split mandatory-search/planner/batch/synthesis function into named boxes; delete old module after parity switch. |
+| `server/app.ts` | `src/server/app.ts`, `src/server/turn-stream-boundary.ts`, focused auth/storage routes | portable Hono composition and typed transport only. Provider/runtime construction leaves the app factory. |
+| `server/config.ts` | `server/runtime/config.ts` | Node-only environment parsing, fixed ceilings, bounded operational values, one-release deprecations. |
+| `server/auth.ts`, `server/limiter-upstash.ts`, `server/remote-thread-store.ts` | `src/infrastructure/auth/`, `src/infrastructure/limiting/`, `src/infrastructure/storage/redis-thread-store.ts` | concrete server infrastructure behind existing/new ports. |
+| `src/adapters/browser/local-stores.ts`, `remote-stores.ts` | `src/infrastructure/browser/indexeddb-thread-store.ts`, `remote-thread-store.ts`, `preference-store.ts`, `turn-gateway.ts` | browser adapters implement target storage/gateway/preference contracts; old folder removed. |
+| inline prompt strings | root `ASSESSOR.md`, `SYNTHESIZER.md`; `server/runtime/system-prompts.ts` | exact startup-loaded system values; dynamic envelopes stay in application/provider code. |
+| `server/runtime/node.ts`, `api/index.ts`, `vercel.json` | same thin runtime entrypoints/config | await runtime config/prompt/dependency composition; Vercel explicitly includes prompt assets. |
+| `src/ui/App.tsx` | `src/ui/controllers/`, `src/ui/routes/`, slim `src/ui/App.tsx` | split workspace/turn/supporting controllers from route composition and boxes; no global client store. |
+| `src/ui/TurnTranscriptBox.tsx`, `EvidenceBox.tsx`, `MarkdownAnswer.tsx` | `src/ui/boxes/TranscriptBox.tsx`, `EvidenceBox.tsx`; `src/ui/primitives/MarkdownContent.tsx` | one durable/live transcript and one sanitized themed Markdown path. |
+| inline `PromptBox`, `ThreadPicker`, headers/settings/unlock/status in `App.tsx` | `src/ui/boxes/PromptBox.tsx`, `ThreadsBox.tsx`, `BrandBox.tsx`, `StickyHeader.tsx`, `SettingsBox.tsx`, `UnlockBox.tsx`, `SystemStatusBox.tsx` | typed view-state/intent boxes only. |
+| repeated JSX/CSS mechanics | `src/ui/primitives/layout.tsx`, `Action.tsx`, `TextField.tsx`, `FuzzyListbox.tsx`, `StatusText.tsx`, `MarkdownContent.tsx`, `VisuallyHidden.tsx`; `src/ui/styles/` | minimal semantic primitive vocabulary and shared tokens/caret animation. |
+| home/topic/secondary routing in `App.tsx` | `src/ui/routes/HomeRoute.tsx`, `ThreadRoute.tsx`, `ThreadsRoute.tsx`, `SettingsRoute.tsx`, `UnlockRoute.tsx` | canonical route compositions; `/new` command resolves to home/new workspace rather than a duplicate page. |
+| current tests | focused `tests/domain/`, `application/`, `contracts/`, `infrastructure/`, `server/`, `ui/`, retained `tests/e2e/` | migrate assertions by observable contract; add fixed identity/context/ranking/prompt/event/storage fixtures. |
+| `package.json`, `.env.example`, TypeScript/Vite config | same configuration files | Node 22 engine, exact `fzf@0.5.2`, canonical env names, target source includes/chunks, no prompt assets in browser output. |
+
+Dependency direction is enforced by lint/import fixtures: domain imports no framework/platform modules; application imports domain/ports only; infrastructure implements ports; `src/server` composes portable HTTP boundaries; root `server/` and `api/` are runtime adapters; UI imports domain/application-facing browser contracts but no provider/server implementation.
+
 ## Implementability Gate
 
-Current verdict: **not ready**. This section records the latest consistency pass; replace it with a passing result rather than appending another audit after the gaps close.
+Verdict: **ready**. The approved closure bundle and read-only legacy archive policy have been folded into the normative contracts and atomic migration sequence.
 
-| Dimension | Result | Finding |
+| Dimension | Result | Evidence |
 | --- | --- | --- |
-| No unresolved TODOs | pass | No `TODO`/`TBD` markers remain; the explicit Open Questions are the remaining decision surface. |
-| Current State / Handoff | pass after this update | Resume state now names the failed gate and next closure decision. |
-| Interfaces defined | fail | `ResearchAssessmentInput`/`ResearchSynthesisInput` are referenced but undefined; assessor model output currently contains trusted/application-derived IDs and a full `KnowledgeUnit`; recursive/batched evidence is incorrectly singular in several contracts; bounded `ThreadContext` projection is not algorithmic; `WorkspaceViewState` permits invalid route/box combinations; thread-list/settings/auth/system-boundary controllers are named without interfaces. |
-| Atomic implementation steps | fail | The nine implementation steps and ledger rows are milestones, not independently executable file-level slices. |
-| Plan Ledger | pass, needs refinement | Ledger exists with deliverables/checks, but rows 3–6 must be split or backed by an ordered atomic checklist. |
-| Dependencies explicit | partial | Provider/library/current paths are named, but exact target files, Vercel prompt inclusion/loading, environment migration, and Node target are not closed. One current storage mapping names a non-existent target-style path instead of the actual adapter files. |
-| Edge cases | partial/pass | Turn, recursion, evidence, cancellation, storage, import, keyboard, and accessibility failures are unusually complete; deterministic identity/context truncation and permanently uncommittable terminal-candidate behavior need precision. |
-| Testability | partial | Most boxes have observable assertions, but proposal normalization, identity fixtures, context truncation, prompt deployment inclusion, and secondary-controller contracts lack concrete test vectors. |
+| No unresolved placeholders | pass | No unresolved placeholder markers or implementation-blocking Open Questions remain. |
+| Current State / Handoff | pass | Status, settled decisions, resume instructions, and implementation entrypoint are current. |
+| Interfaces defined | pass | Model proposals are separated from trusted state; assessment/synthesis inputs, evidence collections, identity/storage/transport/controller/box contracts, and route-discriminated views are typed. |
+| Atomic implementation steps | pass | Eighteen ordered implementation slices name concrete files, compatibility boundaries, deliverables, and focused checks; each must leave strict typecheck green. |
+| Plan Ledger | pass | Nineteen rows include this planning gate plus one row per implementation slice with verification. |
+| Dependencies explicit | pass | Exact fzf/Node/model/env/prompt/runtime/provider/storage/browser dependencies and current → target files are named. |
+| Edge cases | pass | Limits, trust boundaries, malformed model/transport state, identity collisions, context truncation, cancellation, permanent commit failure, legacy unsupported history, retention/import, keyboard/IME, and accessibility are explicit. |
+| Testability | pass | Every box/archive boundary has observable invariants/failures and the sequence names contract, fixture, algebraic, boundary, UI, e2e, bundle, and deployment assertions. |
 
-### Blocking consistency repairs
+The migration surprise is closed honestly: supported legacy lookups become re-identified v3 search turns; incomplete work is reported/discarded; unsupported completed/failed/interrupted chat/research history becomes bounded `LegacyArchiveEntry` data outside `Turn`. Archive content remains visible/exportable but cannot enter context, evidence, retries, execution, or support.
 
-1. Separate untrusted model proposals from application-owned state. A `resolved` assessment should return bounded proposition/observation proposals and support refs, never provider-authored `ObservationId`, `PropositionKey`, `KnowledgeUnit`, copied evidence packs, or gap state. Application normalization derives stable identities and joins supplied evidence.
-2. Change recursive knowledge/acquisition evidence from singular `EvidencePack` to deterministic collections. One acquisition call may contain up to three queries, and one root knowledge unit may join evidence from multiple recursive tasks.
-3. Define exact `ResearchAssessmentInput` and `ResearchSynthesisInput`, including immutable system-prompt selection, dynamic protocol fields, budgets, allowed supports/sources, and output bounds.
-4. Define deterministic identity policies for canonical sources, propositions, observations, problems, and gaps. Provider-generated IDs remain untrusted; normalization/hash fixtures must produce byte-stable results in Node and browser runtimes.
-5. Define `buildThreadContext` selection/truncation order, complete char accounting, evidence/source inclusion, and deterministic behavior at every boundary.
-6. Replace optional-field `WorkspaceViewState` with a route-discriminated projection and define the named thread-list, settings, authentication, and system-boundary controller interfaces or explicitly collapse them into an existing owner.
-7. Reconcile the absolute “every terminal persists” product statement with permanent storage/integrity failure: execution must never rerun, retryable candidates remain memory-resident, and non-retryable invalid/integrity state needs one explicit blocking recovery/escalation path.
-8. Correct current → target paths and produce an ordered file-level migration where every present responsibility and compatibility bridge has one temporary and final owner.
-9. Close configuration/deployment decisions: structural versus operator-tunable limits, legacy Anthropic-model fallback lifetime, Node 22 versus the current `package.json` Node 24 engine, and exact Node/Vercel prompt-asset loading/inclusion.
-
-### Recommended closure bundle
-
-- Keep semantic/structural research ceilings fixed in typed code: searches `3`, consumed sources `9`, recursion depth `2`, assessments `8`, children `3`, and candidates/search `5`. Permit environment values only for operational concurrency/time/character/token limits, validated at or below approved maxima.
-- Add canonical operational names while migrating current equivalents: `MAX_CONCURRENT_SEARCHES`, `MAX_CONCURRENT_EXTRACTIONS`, `EXTRACTION_TIMEOUT_MS`, `MAX_EXTRACTED_CHARS_PER_PAGE`, `MAX_EVIDENCE_CHARS_PER_SOURCE`, `MAX_EVIDENCE_CHARS_TOTAL`, `MAX_THREAD_CONTEXT_TURNS`, `MAX_THREAD_CONTEXT_CHARS`, `MAX_ASSESSMENT_OUTPUT_TOKENS`, and `MAX_OUTPUT_TOKENS`. Remove ambiguous legacy `MAX_CONTEXT_CHARS` after mapping it during the v1.1 deployment transition.
-- In v1.1, each missing `ANTHROPIC_ASSESSMENT_MODEL`/`ANTHROPIC_SYNTHESIS_MODEL` falls back independently to `ANTHROPIC_MODEL` with one sanitized startup deprecation notice. New variables win. Remove the fallback in v1.2; never persist the legacy variable name as turn provenance.
-- Follow the repository contract and target Node 22, changing the current `package.json` `engines.node` from `24.x` during scaffold/config migration.
-- Derive canonical IDs with full SHA-256 over explicitly normalized UTF-8 identity material, encoded base64url with a type prefix. Use the Web Crypto API available in Node 22 and browsers behind one async identity policy; store collision material and reject an impossible same-ID/different-canonical-value encounter.
-- Load root prompt assets once in `server/runtime/node.ts` and `api/index.ts` through thin Node/Vercel adapters, inject the catalog into the portable app factory, and add explicit Vercel function asset inclusion plus a deployment smoke assertion. No application/domain/provider module reads files.
+Gate corrections include untrusted `ResearchAssessmentProposal` normalization, `EvidencePack[]` throughout recursive knowledge, exact identity and `buildThreadContext` algorithms, server-owned execution limits, route-discriminated workspace/supporting controllers, honest `commit_blocked` behavior, fixed/deprecated configuration policy, Node/Vercel prompt loading, and the complete file responsibility/migration map.
 
 ## Implementation Plan
 
-The implementation plan is intentionally provisional until all boxes and migration decisions are settled.
+Execute in order. Every step must leave strict typecheck green; temporary v3/legacy consumer bridges are removed in step 17, not retained as public compatibility layers; focused legacy input schemas and deterministic migration remain private compatibility code.
 
-1. Finalize data-model contracts: discriminated search/research turns, bounded thread context, evidence ownership, research result/provenance, and storage-record boundary.
-2. Run a consistency pass over the settled data/storage/controller chain, including `StoredThreadRecord`, CAS/idempotency/deletion/import behavior, root `ASSESSOR.md`/`SYNTHESIZER.md` loading, and `WorkspaceController` → `TurnController` → `TurnGateway` → `TurnStreamBoundary` → `TurnExecutor` events/failures.
-3. Finalize browser component vocabulary, shared primitive contracts, prompt fuzzy-suggestion/Escape/caret behavior, transcript Markdown presentation, and layout-box state/intent ownership.
-4. Record a precise file-level current → target mapping and migration sequence that preserves observable behavior.
-5. Introduce the canonical data model and runtime schemas with compatibility migration and focused domain tests.
-6. Add root `ASSESSOR.md`/`SYNTHESIZER.md` plus runtime prompt loading, then extract provider-neutral `SearchTurn` and `ResearchTurn` application orchestration, including the recursive directive interpreter, assessor, knowledge join, evidence acquisition, and synthesizer boxes.
-7. Adapt HTTP/SSE, provider adapters, browser controller, persistence, and layout components to the new contracts.
-8. Remove obsolete lookup/chat vocabulary and compatibility paths after migration verification.
-9. Run full acceptance checks and update `README.md` and `AGENTS.md` to describe the implemented architecture as current state.
+1. **Runtime/config scaffold** — change `package.json` to Node 22 and add exact `fzf@0.5.2`; add canonical/deprecated environment parsing in `server/runtime/config.ts` and `.env.example`; add default root `ASSESSOR.md`/`SYNTHESIZER.md`, `src/ports/system-prompts.ts`, `server/runtime/system-prompts.ts`, and Vercel inclusion without switching provider calls yet. Verify config bounds/fallback warnings, byte-exact loading, missing/empty/oversize failure, frontend exclusion, and Node/Vercel smoke fixtures.
+2. **Parallel v3 model and schemas** — add target types initially in `src/domain/model-v3.ts`, strict schemas in `src/domain/schemas-v3.ts`, and private bounded v1/v2 input schemas in `src/domain/legacy-input-schemas.ts` while current consumers retain legacy types. Verify every terminal/archive union, field/code-point bound, execution provenance, source/archive-reference closure, archive-only thread validity, and legacy-input rejection without yet converting identities.
+3. **Identity and migration policy** — add `src/ports/identity.ts`, `src/domain/identity-material.ts`, `src/application/identity-policy.ts`, and `src/domain/migrations.ts` with Web Crypto adapters for Node/browser. Implement bounded read-only archive conversion, lookup-to-search conversion, source/citation alias rewriting, incomplete/invalid reporting, and deterministic aggregate ordering. Verify fixed digest vectors, URL normalization/safety, Unicode/support/ancestry, collisions, all migration fixtures, and Brave position-ID removal.
+4. **Knowledge/context policies** — add `src/domain/knowledge.ts` and `src/domain/thread-context.ts`; change v3 knowledge/acquisition types to evidence-pack collections. Verify algebraic laws, contradiction preservation, deterministic pack ordering/dedupe, exact context turn/evidence/source selection, Unicode truncation, and request-byte overflow.
+5. **Atomic storage policy/port** — add the target v3 storage contract in `src/ports/storage-v3.ts` and application commit/reconciliation policy in `src/application/commit-terminal-turn.ts`, leaving the current port temporarily available. Verify CAS, idempotency, chronological raced insertion, source first-admission/collision/reference rules, first-terminal creation, expiry, deletion tombstones, and typed failures in an in-memory contract harness.
+6. **Storage adapters and transfer** — implement the contract in `src/infrastructure/browser/indexeddb-thread-store.ts`, `remote-thread-store.ts`, and `src/infrastructure/storage/redis-thread-store.ts`; adapt focused portable storage routes; implement v3 export/inspect/import and settings preview handles. Preserve immutable archive entries/catalog closure through terminal commits and whole-aggregate transfer. Run the same contract suite against IndexedDB, browser-remote, and Redis fixture adapters, including archive-only records, legacy migration, export/import, retention, and deletion/import races.
+7. **LLM port and Anthropic adapter** — add `src/ports/llm.ts` and `src/infrastructure/providers/anthropic.ts`; pass exact prompt-catalog values, keep dynamic schema/retry input user-side, normalize typed proposals/events/failures, and preserve separate resolved model provenance. Verify malformed/variant structured output, unchanged system values, retry behavior, citations, streaming, and sanitized errors.
+8. **Research assessor** — implement `src/application/research-assessor.ts` to build bounded input, validate proposals/support, derive IDs, and construct trusted directives/knowledge. Verify every directive, 1–24 observation bounds, unsupported refs, duplicate normalization, no trusted provider IDs/evidence, and assessment-call accounting.
+9. **Evidence acquisition** — move Brave and extraction adapters to `src/infrastructure/`; implement `src/application/evidence-acquirer.ts` with three-request rank-layer allocation, shared-source handling, one search/request, and independent three-worker extraction. Verify all budgets, duplicate/known/available sources, partial failures, no backfill, deterministic completion-order independence, and provider/fixture parity.
+10. **Recursive resolver** — implement `src/application/research-resolver.ts` over `GapLedger`, `joinKnowledge`, assessor, and acquirer. Verify `resolved/search/decompose(all|any)`, depth/branch/budget ceilings, parent reassessment, cycles, no-new-knowledge, useful best effort, insufficient outcome, checkpoints, and no child turn/answer.
+11. **Synthesis and turn executors** — implement `src/application/answer-synthesizer.ts`, leading-line normalizer, `execute-search-turn.ts`, `execute-research-turn.ts`, and `turn-executor.ts`. Verify exactly-one root synthesis, conversational opening fallback, liberal Markdown/citation reachability, empty/refused/failure paths, search's exactly-one provider call/no LLM/extraction, source records, and execution provenance.
+12. **Portable turn boundary** — add `src/server/app.ts` and `src/server/turn-stream-boundary.ts`; adapt auth/status/storage routes and make root `server/app.ts` only a temporary re-export if needed. Verify request-byte/schema/auth limits, accepted sequence one, contiguous typed events, heartbeat comments, cancellation, one executor invocation, terminal/error closure, and Node/Vercel fixture parity.
+13. **Browser gateway and turn controller** — implement `src/infrastructure/browser/turn-gateway.ts`, `src/ui/controllers/turn-controller.ts`, and transcript/evidence projection helpers. Verify event runtime validation, stale/duplicate/gap handling, active state, source-closed checkpoints, local cancellation/loss, exact terminal construction, CAS rebase/idempotency, retryable commit retention, and blocking non-retryable escalation.
+14. **Browser primitives and fuzzy policies** — add layout/action/field/status/hidden/Markdown/fuzzy primitives and the sole `fzf@0.5.2` adapter; implement `rankThreads`/`rankPromptSuggestions` and shared visual/caret tokens. Verify native semantics, sanitization, rank/highlight fixtures, reduced motion, no fzf type leakage, and no prompt content in frontend assets.
+15. **Product boxes and supporting controllers** — extract all agreed `src/ui/boxes/*` plus thread-list/settings/auth/system-boundary controllers. Add merged archive transcript presentation with persistent warning, inert unknown citations, and source-open-only intents. Verify each typed state/intent contract, archive isolation, command suggestions, Ctrl+C, Escape precedence, deletion confirmation, immediate preferences, backup preview, passphrase clearing, blocking-status retry, Markdown equivalence, and minimal sticky header accessibility.
+16. **Workspace/routes cutover** — implement route-discriminated `WorkspaceController`, focused route components, and slim `App.tsx`; switch all browser requests/history/evidence/header rendering to the target gateway/controllers/boxes. Verify initial/follow-up path parity, no queue/duplication, `/threads` sole presentation, `:` focus, single/double Escape, safe navigation/cancellation, responsive/focus/e2e behavior.
+17. **Legacy removal and canonical naming** — move v3 types/schemas/storage port to canonical filenames and update imports; delete temporary legacy consumer bridges, old `server/research.ts`, chat/planner/lookup modes/endpoints, current adapters/components, duplicate prompt strings, overlay picker, and obsolete CSS; retain only the focused private v1/v2 untrusted-input schemas and deterministic migration code. Repository-search forbidden vocabulary/paths; run lint/typecheck/tests/build and `git diff --check`.
+18. **Shipped architecture and acceptance** — update `README.md`, root `AGENTS.md`, plan Current State/Handoff/ledger, `.env.example`, and operator setup to implemented reality. Run `npm ci`, lint, typecheck, all tests, build, e2e, built-asset secret/prompt inspection, local fixture smoke, and deployment/runtime smoke; commit independently verified milestones with `<|°_°|>`.
 
 ## Plan Ledger
 
 Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blocked.
 
-- [~] 1. Architectural contracts — deliverable: approved named data/system/layout boxes with typed inputs, outputs/events, invariants, failure contracts, implementation boundaries, and diagrams; verify: no unresolved contract ambiguity required for implementation.
-- [ ] 2. Current → target mapping — deliverable: file-level responsibility and migration map; verify: every current orchestration/persistence/layout responsibility has one target owner.
-- [ ] 3. Data-model migration — deliverable: schema-v3 `Thread` aggregate with canonical source catalog, terminal `search | research` discriminated turns, deterministic context/evidence projections, and compatibility migration; verify: domain, schema, storage, import/export, source-identity, and projection tests.
-- [ ] 4. System-box refactor — deliverable: root `ASSESSOR.md`/`SYNTHESIZER.md`, runtime-only `SystemPromptSource`, `SearchTurn` execution, and standardized `ResearchTurn` composed from recursive resolver, typed assessor directives, algebraic knowledge join, evidence acquisition, and synthesis boxes; verify: prompt loading/pass-through/deployment fixtures plus focused application/provider/orchestration tests across all explicit limits, algebraic laws, and stop conditions.
-- [ ] 5. Boundary adaptation — deliverable: `WorkspaceController`, browser `TurnController`, `TurnGateway`, transport-only `TurnStreamBoundary`, server `TurnExecutor`, persistence, and concrete provider adapters use the new contracts; verify: app, storage, event-schema, stale-event, cancellation, commit-retry, UI, interruption, and fixture parity tests.
-- [ ] 6. Browser component refactor — deliverable: agreed `*Box` components consume state/emit intent and compose the minimal shared semantic primitives; `PromptBox` uses pinned-fzf command suggestions plus settled Escape/caret behavior, `TranscriptBox` preserves one liberal themed Markdown path, and `StickyHeader` uses minimal structure; verify: component, fuzzy-ranking, keyboard precedence, focus, IME, reduced-motion, Markdown/sanitization, responsive, and accessibility tests.
-- [ ] 7. Vocabulary cleanup — deliverable: obsolete `lookup`/`chat` mode names and accidental compatibility paths removed while preserving the trailing-`?` `ResearchTurn` macro; verify: repository search plus full typecheck/test/build.
-- [ ] 8. Architecture documentation — deliverable: `README.md` human architecture overview and `AGENTS.md` implementation boundaries describe implemented current state; verify: diagrams/contracts match code and links resolve.
-- [ ] 9. Acceptance — deliverable: verified v1.1.0 refactor and refreshed plan completion state; verify: lint, typecheck, unit/integration tests, build, e2e, `git diff --check`, and secret inspection.
+- [x] 1. Planning consistency gate — deliverable: approved contracts, closure bundle, legacy-history policy, file map, atomic implementation sequence, and passing implementability audit; verify: no blocking questions/placeholders, balanced fences, `git diff --check`, and checklist review.
+- [ ] 2. Runtime/config scaffold — deliverable: Node 22, exact fzf pin, canonical bounded env/deprecations, root prompt assets and startup loaders/Vercel inclusion; verify: config/prompt/deployment/frontend-exclusion tests.
+- [ ] 3. Parallel v3 model/schemas — deliverable: target model, strict schemas, read-only legacy archive, and private bounded v1/v2 input schemas without breaking current consumers; verify: union/archive/bound/reference/archive-only/legacy-input tests.
+- [ ] 4. Identity/migration policy — deliverable: canonical material, cross-runtime SHA-256 IDs, and deterministic v1/v2 conversion; verify: fixed Node/browser vectors plus URL/Unicode/support/ancestry/collision/source-alias/migration tests.
+- [ ] 5. Knowledge/context policies — deliverable: algebraic evidence-collection join and exact bounded thread projection; verify: law, contradiction, ordering, truncation, and byte-bound tests.
+- [ ] 6. Atomic storage policy/port — deliverable: typed CAS/idempotent terminal commit contract and in-memory harness; verify: commit/source/order/expiry/delete/failure contract suite.
+- [ ] 7. Storage adapters/transfer — deliverable: IndexedDB, browser-remote, Redis, portable routes, archive-preserving terminal commits, and backup/import on v3; verify: shared adapter suite plus archive-only/legacy/export/import/retention fixtures.
+- [ ] 8. LLM port/Anthropic adapter — deliverable: proposal/stream contracts, exact prompts, model routes/provenance, sanitized failures; verify: adapter structured/stream/retry/prompt tests.
+- [ ] 9. Research assessor — deliverable: trusted proposal normalization and directive construction; verify: directive/support/identity/bound/accounting tests.
+- [ ] 10. Evidence acquirer — deliverable: deterministic fair search/select/extract box and moved adapters; verify: budget/concurrency/dedupe/failure/parity tests.
+- [ ] 11. Recursive resolver — deliverable: GapLedger recursive interpreter and root outcomes/checkpoints; verify: grammar/law/limit/cycle/fixed-point tests.
+- [ ] 12. Synthesis/turn executors — deliverable: root synthesizer, heading fallback, search/research executors and dispatcher; verify: exactly-once/search-isolation/citation/Markdown/failure/provenance tests.
+- [ ] 13. Portable turn boundary — deliverable: portable Hono app and typed HTTP/SSE adapter; verify: auth/request/event/heartbeat/cancel/terminal/runtime parity tests.
+- [ ] 14. Browser gateway/turn controller — deliverable: validated stream adapter and one active/commit workflow; verify: stale/gap/cancel/checkpoint/commit/rebase/blocking tests.
+- [ ] 15. Browser primitives/fuzzy policies — deliverable: minimal primitives, shared fzf adapter, themed Markdown and caret tokens; verify: semantic/ranking/sanitization/reduced-motion/bundle tests.
+- [ ] 16. Product boxes/supporting controllers — deliverable: typed boxes, isolated read-only archive transcript presentation, plus thread-list/settings/auth/system controllers; verify: component/archive/citation isolation, keyboard, storage/auth, focus, responsive, accessibility tests.
+- [ ] 17. Workspace/routes cutover — deliverable: route-discriminated workspace, focused routes, slim App, target end-to-end browser flow; verify: initial/follow-up/no-duplication/navigation/hotkey/e2e tests.
+- [ ] 18. Legacy removal — deliverable: canonical filenames and deletion of old modes/endpoints/adapters/prompts/components/CSS; verify: forbidden repository searches plus lint/typecheck/test/build/diff checks.
+- [ ] 19. Documentation/acceptance — deliverable: shipped README/AGENTS/operator docs and completed plan ledger; verify: full baseline, secret/prompt bundle inspection, fixture and deployment smoke.
 
 ## Verification
 
 The final implementation must prove at least:
 
-- `Turn` accepts only valid terminal search or research combinations; pending/running execution is represented only by non-persisted controller-owned `ActiveTurn`.
+- `Turn` accepts only valid terminal search or research combinations; pending/running execution is represented only by non-persisted controller-owned `ActiveTurn`. `LegacyArchiveEntry` is a separate read-only migration record and cannot be accepted by execution/commit APIs as a turn.
 - Insufficient research always carries an insufficient resolution; synthesis failure always carries a sufficient/best-effort resolution; earlier failure/interruption explicitly distinguishes a validated checkpoint from unavailable state and never carries an answer.
 - Research failure records/events expose only the approved capability-level synthesis and execution codes with their fixed retryability; adapter details remain sanitized server-only observability.
-- Every observed terminal outcome is committed immutably, and retry appends a same-request turn linked to an earlier same-thread terminal through `retryOfTurnId` rather than reopening it.
+- Every validated terminal outcome is submitted for immutable commit; retryable storage failure retains/retries the exact candidate, permanent post-validation corruption blocks visibly, and a turn retry appends a same-request turn linked to an earlier same-thread terminal through `retryOfTurnId` rather than reopening it.
 - A macro-less submission creates a `SearchTurn`; a trailing-`?` submission creates a `ResearchTurn`; neither depends on persistent UI mode.
 - `SearchTurn` invokes one search and never invokes extraction or an LLM.
 - Every initial and follow-up research question enters the same recursive ResearchResolver and ResearchAssessor interfaces.
@@ -2831,7 +3192,7 @@ The final implementation must prove at least:
 - Prompt command suggestions open for `/`, support arrows plus Tab completion and Enter execution, and consume their own Escape before global handling. One eligible idle Escape blurs a focused prompt and arms the 500 ms detector; a second requests a new thread, while cancellation/confirmation/composition/modified Escapes never count.
 - Prompt caret color cycles discretely through selected-scheme accent tokens using the native caret, falls back safely, and becomes static under reduced motion; no simulated thick caret compromises native editing/IME/accessibility.
 - `Hotkeys` is installed once, emits semantic intents rather than effects, focuses a mounted prompt with passive unmodified `:`, follows the settled box-local/cancel/blur/double-Escape precedence, never steals unrelated editable or composing input, and never invokes navigation/system capabilities directly.
-- `TranscriptBox` renders durable and active turns through one ordered view model and one sanitized `MarkdownContent` primitive; active progress/streaming is replaced by matching durable completion without duplicate requests or answers, liberal internal Markdown and color-constellation styling are preserved, and initial/follow-up requests use the same path.
+- `TranscriptBox` renders durable/active turns and read-only archive entries through one merged ordered view model and one sanitized `MarkdownContent` primitive; archive entries are persistently labeled “legacy, not evidence-verified,” never expose retry/evidence actions, and resolve only bounded entry-local source aliases. Active progress/streaming is replaced by matching durable completion without duplicate requests or answers, liberal internal Markdown and color-constellation styling are preserved, and initial/follow-up requests use the same v3 path.
 - `EvidenceBox` renders one thread-wide canonical set; duplicate sources retain one application-derived stable `SourceId` and display ordinal, citations resolve by ID, occurrences preserve turn/rank/role provenance, and destination-to-evidence promotion does not duplicate an entry.
 - `BrandBox` exposes one keyboard/pointer-equivalent activation target and emits only `new_thread_requested`; tagline rotation is non-live and respects reduced motion.
 - Every canonical page composes the same minimal `StickyHeader`: one landmark with one `Surface`/`Inline`, `BrandBox`, only applicable contextual actions, and at most one feedback region; actions remain accessible and never perform effects directly.
@@ -2839,8 +3200,9 @@ The final implementation must prove at least:
 - `UnlockBox` remains buttonless, serializes attempts, never externalizes passphrases beyond immediate submit intent, and clears/refocuses after bounded rejection/unavailability while preserving password-manager and accessibility behavior.
 - `SystemStatusBox` renders only blocking auth-session/provider-status/thread-storage checks or unavailability, preserves the requested route, and retries through intent rather than reload while non-blocking failures remain in their owning boxes.
 - Normalizing the same canonical URL across providers, searches, retries, or ranks yields the same collision-safe `SourceId`; provider rank and result-array position never become durable identity.
-- `Thread` is the sole durable aggregate root: canonical source metadata/ordinal is materialized once, terminal turns retain contextual refs, per-turn execution provenance, and bounded evidence snapshots, `EvidenceSet`/`ThreadContext` derive deterministically, and terminal source admission plus turn commit is atomic.
-- `ThreadStore.commitTerminalTurn` proves opaque-CAS conflict behavior, same-turn idempotency/collision rejection, deterministic raced-turn insertion, first-admission source reconciliation, complete reference closure, atomic first-terminal thread creation, seven-day sliding expiry, deletion tombstones, and fresh-revision import semantics across local and remote contract fixtures.
+- `Thread` is the sole durable aggregate root: canonical source metadata/ordinal is materialized once, terminal turns retain contextual refs, per-turn execution provenance, and bounded evidence snapshots, while the separate immutable archive retains only legacy display/link data. `EvidenceSet`/`ThreadContext` deterministically ignore archive content, and terminal source admission plus turn commit is atomic.
+- `ThreadStore.commitTerminalTurn` proves opaque-CAS conflict behavior, same-turn idempotency/collision rejection, deterministic raced-turn insertion, first-admission source reconciliation, complete reference closure, immutable preservation of any archive, atomic first-terminal thread creation, seven-day sliding expiry, deletion tombstones, and fresh-revision import semantics across local and remote contract fixtures.
+- v1/v2 migration fixture-locks lookup conversion, full source-ID rewriting, entry-local citation aliases, byte-exact bounded archive answers, invalid/incomplete reporting, the 256-entry ceiling, archive-only thread validity, merged transcript order, archive exclusion from evidence/context/retry, and v3 export/import/deletion/retention round trips.
 - `/threads` is the only `ThreadsBox` presentation; its pinned `fzf@0.5.2` wrapper produces fixture-locked deterministic rankings/highlights, its local keyboard behavior does not conflict with global hotkeys, and deletion requires inline `y`/Enter confirmation that Escape can cancel without closing the route.
 - Existing persistence, export, retention, auth, interruption, stale-request, keyboard, focus, responsive, and accessibility behavior remains green unless this plan explicitly changes it.
 - Fixture and live adapters preserve the same provider-neutral contracts.
@@ -2848,6 +3210,4 @@ The final implementation must prove at least:
 
 ## Open Questions
 
-- Beyond the approved assessment/synthesis model variables, what environment-variable names expose the explicit balanced `ResearchLimits` while keeping typed names canonical?
-- Should the migration fallback from `ANTHROPIC_ASSESSMENT_MODEL` and `ANTHROPIC_SYNTHESIS_MODEL` to legacy `ANTHROPIC_MODEL` remain permanently or be removed after deployment?
-- After data/system contracts settle, do any layout controller projections need refinement to preserve the agreed box contracts without duplicating state?
+No implementation-blocking product or architecture questions remain. The selected legacy policy is the bounded read-only `Thread.legacyArchive` contract above: it preserves unsupported v1/v2 history without widening `Turn` or allowing legacy content into evidence-backed execution. Any implementation discovery that changes a public contract, dependency direction, approved ceiling, provider exposure, durable shape, migration fidelity, or browser behavior must stop work and amend this plan before continuing.
