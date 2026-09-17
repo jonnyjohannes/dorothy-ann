@@ -12,7 +12,7 @@
 
 Approved after v1.1.0 deployment smoke:
 
-- Primary workspace content should use the available viewport more fully on desktop while retaining responsive horizontal gutters on mobile. Avoid narrow fixed reading columns for route shells, thread content, settings, thread lists, prompts, and evidence; use a generous bounded width only to prevent impractical ultra-wide line lengths.
+- Primary workspace content should use the available viewport more fully on desktop while retaining responsive horizontal gutters on mobile. Avoid narrow fixed reading columns for route shells, thread content, settings, thread lists, prompts, and evidence; use a generous bounded width only to prevent impractical ultra-wide line lengths. The fixed PromptBox spans the viewport edge-to-edge, with internal responsive padding.
 - `EvidenceBox` is always a full-width block after transcript/answer content in document order. It must not become a sticky desktop side rail or split-column layout. This keeps the mobile reading order on every viewport.
 - Evidence presentation is a single bordered region with a top and bottom rule. Sources are laid out as flexible, consistently padded result cells that flow across desktop and wrap naturally on mobile. Source title, URL, and snippet remain accessible and each source keeps its existing activation intent; each evidence link receives a deterministic color-constellation accent derived from source identity.
 - Transcript content remains left-aligned within the broader workspace. Terminal failures and interruptions use bounded human-readable status text rather than exposing only the raw `failed`/`interrupted` discriminant.
