@@ -16,9 +16,9 @@ describe("runtime scaffold", () => {
 
   it("includes both server-only prompt assets in the Vercel function", async () => {
     const vercel = JSON.parse(await readFile(new URL("../vercel.json", import.meta.url), "utf8")) as {
-      functions: Record<string, { includeFiles: string[] }>;
+      functions: Record<string, { includeFiles: string }>;
     };
 
-    expect(vercel.functions["api/index.ts"].includeFiles).toEqual(["ASSESSOR.md", "SYNTHESIZER.md"]);
+    expect(vercel.functions["api/index.ts"].includeFiles).toBe("{ASSESSOR.md,SYNTHESIZER.md}");
   });
 });

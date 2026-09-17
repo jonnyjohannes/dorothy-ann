@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/index.ts": {
-      "includeFiles": ["ASSESSOR.md", "SYNTHESIZER.md"]
+      "includeFiles": "{ASSESSOR.md,SYNTHESIZER.md}"
     }
   },
   "rewrites": [
