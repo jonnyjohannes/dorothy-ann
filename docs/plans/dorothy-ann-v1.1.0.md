@@ -4,9 +4,9 @@
 
 - Status: planning
 - Last updated: 2026-09-15
-- Current focus: settle turn-controller and HTTP/SSE ownership now that terminal turns, evidence persistence, deterministic source allocation, and layout boxes are defined
+- Current focus: finalize `ThreadStore` revision/retention/import contracts and verify the new controller/transport event unions against every terminal turn variant
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: define the turn controller's typed inputs/state/intents and its ownership boundary with `SearchTurn`, `ResearchTurn`, `ThreadStore`, and `TurnStreamBoundary`
+- Next action: define the exact atomic `ThreadStore.commitTerminalTurn` input/result plus local/remote idempotency, retention, list/delete, and import/export behavior
 
 ## Handoff
 
@@ -29,7 +29,7 @@ Decisions made so far:
 - Budget exhaustion with useful supported evidence produces a bounded best-effort synthesis that identifies unresolved uncertainty; no useful supported evidence produces an insufficient-evidence failure.
 - `Thread` and `Turn` remain the central data-model components. Durable `Turn` is a discriminated terminal `SearchTurn | ResearchTurn` union; pending/running execution exists only as controller-owned `ActiveTurn` state. Every observed terminal outcome is persisted, including failed, insufficient, and interrupted attempts.
 - The persistence wrapper currently named `StoredThreadEnvelopeV2` is not a top-level architecture box. Its naming and exact storage contract remain open.
-- The agreed visual regions are `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, and `UnlockBox`. Boxes receive typed view state and emit intent; route/workspace controllers coordinate application and system capabilities.
+- The agreed visual regions are `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, and `UnlockBox`. Boxes receive typed view state and emit intent; `WorkspaceController` coordinates routes/cross-box projection and delegates effects to owning controllers/capabilities.
 - `Hotkeys` is an explicit layout-control box, not a visible region. It translates unhandled global keyboard events and current layout context into semantic intents without navigating, focusing DOM nodes, cancelling work, or invoking system capabilities directly.
 - `ThreadsBox` has one canonical `/threads` route with aggressive `fzf@0.5.2`-backed filtering and keyboard behavior, not separate route and overlay presentations. The exact package version is pinned behind a pure `rankThreads` policy with fixture-locked ordering. Deletion uses an inline terminal-style confirmation, never `window.confirm`.
 - `UnlockBox` is part of the shared box vocabulary so global visual-system changes include authentication. It owns only ephemeral passphrase entry and emits authentication intent without persisting or logging the passphrase.
@@ -44,6 +44,7 @@ Decisions made so far:
 - Failed/interrupted research records never use an ambiguous optional resolution. They explicitly persist a validated full resolution, bounded checkpoint, or `unavailable` marker according to what the controller actually received; no state is fabricated.
 - `Thread` is the durable context/aggregate root, not a runtime god object. It materializes canonical source metadata once in an append-stable source catalog; terminal turns retain rank/role/support references, and `EvidenceSet`/`ThreadContext` are deterministic bounded projections. Active execution remains controller-owned.
 - Fair source allocation derives a three-selection ownership cap per evidence request from the approved nine-source/three-search ceilings. Concurrent requests receive rank-layer round-robin opportunities in priority/depth/creation order; shared canonical sources consume global budget once, and unused capacity is not released into earlier requests.
+- Controller ownership is split explicitly: `WorkspaceController` owns route/cross-box projection and command delegation; browser `TurnController` owns one `ActiveTurn`, stale-event rejection, terminal construction, and atomic commit; `TurnGateway` adapts the client stream; server `TurnExecutor` dispatches provider-neutral search/research; `TurnStreamBoundary` owns only authenticated HTTP/SSE validation, heartbeat, serialization, and cancellation wiring.
 - Durable/public research failures use compact capability-level codes only. Provider and implementation details remain in sanitized server observability, never turn records, SSE payloads, or client messages.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
 
@@ -230,9 +231,42 @@ Target lifecycle:
 type Turn = SearchTurn | ResearchTurn;
 type TurnKind = "search" | "research";
 
-type ActiveTurn =
-  | ActiveSearchTurn
-  | ActiveResearchTurn;
+interface ActiveTurnBase<K extends TurnKind> {
+  id: TurnId;
+  executionId: ExecutionId;
+  kind: K;
+  retryOfTurnId?: TurnId;
+  createdAt: IsoTimestamp;
+  userMessage: UserMessage;
+  lastEventSequence: number;
+  evidenceDelta: {
+    sources: CanonicalSource[];
+    occurrences: SourceDeltaOccurrence[];
+  };
+}
+
+type ActiveSearchTurn = ActiveTurnBase<"search"> & {
+  phase: "starting" | "searching" | "cancelling" | "awaiting_terminal";
+};
+
+type ActiveResearchTurn = ActiveTurnBase<"research"> & {
+  phase:
+    | "starting"
+    | "assessing"
+    | "decomposing"
+    | "searching"
+    | "extracting"
+    | "resolving"
+    | "synthesizing"
+    | "cancelling"
+    | "awaiting_terminal";
+  answerDraft: string;
+  latestResearchState?:
+    | { kind: "checkpoint"; checkpoint: ResearchCheckpoint }
+    | { kind: "resolution"; resolution: ResearchResolution };
+};
+
+type ActiveTurn = ActiveSearchTurn | ActiveResearchTurn;
 
 interface TerminalTurnBase<K extends TurnKind> {
   id: TurnId;
@@ -430,7 +464,7 @@ interface EvidenceSet {
 
 Only destinations actually returned by a completed `SearchTurn` receive `search_destination`; unselected research candidates do not enter the set. A research source receives `research_evidence` only when viable extracted content is admitted to research knowledge. Failed extraction does not promote a source.
 
-Ownership is settled: `Thread.sources` materializes canonical metadata/ordinals once; terminal search destination refs and research resolution/checkpoint support retain per-turn context; bounded extracted `EvidencePack` snapshots remain inside the terminal research state that admitted them. `EvidenceSet` is not separately persisted—it is deterministically projected from this aggregate. The route/workspace controller joins an ephemeral active evidence delta for live presentation, then terminal source admission and turn commit occur atomically.
+Ownership is settled: `Thread.sources` materializes canonical metadata/ordinals once; terminal search destination refs and research resolution/checkpoint support retain per-turn context; bounded extracted `EvidencePack` snapshots remain inside the terminal research state that admitted them. `EvidenceSet` is not separately persisted—it is deterministically projected from this aggregate. `WorkspaceController` joins the `TurnController`'s ephemeral active evidence delta for live presentation, then terminal source admission and turn commit occur atomically.
 
 ## System Components
 
@@ -600,7 +634,7 @@ interface SearchResponse {
 - A successful empty provider result completes with `completion: "empty"`; provider/rate-limit/invalid-response failures remain distinct.
 - Non-empty results can become search-destination entries available to a later research turn.
 - Completion, interruption, and failure are explicit and mutually exclusive.
-- On success, the turn controller atomically admits canonical source metadata to `Thread.sources` and converts ranked `SearchResult` values into durable `SearchDestinationRef` values; the search capability does not mutate `Thread`.
+- On success, `TurnController` atomically admits canonical source metadata to `Thread.sources` and converts ranked `SearchResult` values into durable `SearchDestinationRef` values; the search capability does not mutate `Thread`.
 
 **Failure contract:** bounded unavailable, rate-limited, and failed search codes; no raw Brave details.
 
@@ -1244,13 +1278,295 @@ root question + ThreadContext + final KnowledgeUnit
 
 **Current mapping:** `synthesize` and synthesis-input construction live in `server/research.ts`; provider streaming lives in `server/anthropic.ts`. The current implementation synthesizes from evidence directly; the target supplies the recursively joined root knowledge unit.
 
-### `ThreadStore`
+## Controller and Runtime Boundaries
 
-A thread storage port is a required system box, but its final contract and relationship to storage records, retention, conflict handling, and local/remote adapters remain to be reviewed in the next design pass.
+The controller split is settled:
+
+```text
+layout intent
+     |
+     v
+[ WorkspaceController ]
+  route + box projections + cross-box coordination
+     |
+     | non-command request / cancellation
+     v
+[ TurnController ]
+  ActiveTurn + stale-event rejection + terminal commit
+     |
+     v
+[ TurnGateway ] ===== HTTP/SSE ===== [ TurnStreamBoundary ]
+                                           |
+                                           v
+                                    [ TurnExecutor ]
+                                      |          |
+                                      v          v
+                                 SearchTurn  ResearchTurn
+```
+
+### `WorkspaceController`
+
+**Capability:** coordinate the current route and workspace projections, interpret non-turn commands, and delegate turn lifecycle without absorbing execution, persistence, settings, or authentication internals.
+
+```ts
+type AppRoute =
+  | { page: "home" }
+  | { page: "thread"; threadId: ThreadId }
+  | { page: "threads" }
+  | { page: "settings" }
+  | { page: "unlock" };
+
+type WorkspaceIntent =
+  | { type: "raw_submission"; value: string }
+  | { type: "cancel_requested" }
+  | { type: "route_requested"; route: AppRoute }
+  | { type: "new_thread_requested" }
+  | { type: "evidence_selected"; sourceId: SourceId }
+  | { type: "retry_turn_requested"; turnId: TurnId };
+
+interface WorkspaceViewState {
+  route: AppRoute;
+  prompt: PromptBoxViewState;
+  transcript?: TranscriptBoxViewState;
+  evidence?: EvidenceBoxViewState;
+  selectedSourceId?: SourceId;
+}
+```
+
+The workspace controller recognizes slash commands and routes them to navigation/application capabilities. Every non-command submission is delegated unchanged to `TurnController`; only the turn controller applies the trailing-`?` turn-kind policy. It composes `TranscriptBoxViewState` and `EvidenceBoxViewState` from the committed `Thread`, controller-owned active state, and active evidence delta.
+
+**Invariants**
+
+- Owns route state, safe navigation, selected evidence, focus requests, and cross-box view projection.
+- Does not execute search/research, parse provider events, construct terminal turns, or write thread records.
+- Delegates settings, authentication, startup status, thread-list mutation, and turn execution to their owning controllers/capabilities.
+- A slash command never accidentally becomes a turn; a non-command submission is not reclassified by UI layout code.
+- New-thread/navigation behavior coordinates cancellation through `TurnController` rather than deleting or mutating active execution directly.
+
+**Failure contract:** stale or route-inapplicable intents are safe no-ops; bounded failures remain in the state projection owned by the capability that failed.
+
+**Current mapping:** route state, slash-command interpretation, selected evidence, focus effects, request execution, persistence, and box composition are interleaved in `src/ui/App.tsx`.
+
+### `TurnController`
+
+**Capability:** own the browser-side lifecycle of at most one active turn, bridge it through `TurnGateway`, and atomically commit exactly one validated terminal turn plus newly admitted canonical sources.
+
+```ts
+type TurnControllerIntent =
+  | {
+      type: "submit";
+      threadId?: ThreadId;
+      rawRequest: string;
+      retryOfTurnId?: TurnId;
+    }
+  | {
+      type: "cancel";
+      turnId: TurnId;
+      reason: TurnInterruption["reason"];
+    }
+  | { type: "retry_commit"; turnId: TurnId };
+
+type ThreadCommitFailure =
+  | { code: "revision_conflict"; retryable: true }
+  | { code: "storage_unavailable"; retryable: true }
+  | { code: "invalid_record"; retryable: false };
+
+type TurnControllerState =
+  | { phase: "idle" }
+  | { phase: "executing"; activeTurn: ActiveTurn }
+  | {
+      phase: "committing";
+      activeTurn: ActiveTurn;
+      terminalCandidate: Turn;
+    }
+  | {
+      phase: "commit_failed";
+      activeTurn: ActiveTurn;
+      terminalCandidate: Turn;
+      failure: ThreadCommitFailure;
+    };
+```
+
+`terminalCandidate` is controller-owned recovery state, not durable history and not a second user-visible answer channel. Submission remains blocked through `executing | committing | commit_failed`; commit retry reuses the exact candidate and never reruns providers.
+
+The controller performs this sequence:
+
+```text
+validate submission + retry link
+          |
+classify trailing ? + allocate execution/turn IDs
+          |
+load Thread -> derive bounded ThreadContext
+          |
+open TurnGateway -> project validated events into ActiveTurn
+          |
+validate terminal outcome + complete source-reference closure
+          |
+construct immutable terminal Turn
+          |
+ThreadStore.commitTerminalTurn(expected revision, new sources, turn)
+          |
+publish committed workspace state
+```
+
+**Invariants**
+
+- At most one turn executes or awaits commit in one workspace; there is no request queue.
+- The controller, not `PromptBox`, applies the deterministic trailing-`?` classification.
+- `executionId`, `turnId`, and event sequence identify the active stream. `accepted` is sequence one and each lifecycle event increments by one. Events for another execution, duplicate/lower-sequence events, and all events after terminal acceptance are ignored; a forward sequence gap or schema-invalid active event terminates that stream as connection loss. None can mutate newer state.
+- Public lifecycle events alone project `ActiveTurn`; raw SSE frames, provider payloads, assessor responses, and hidden reasoning never enter UI state.
+- The first legal terminal condition is authoritative: either a validated server terminal received before local cancellation/loss wins, or the controller closes the execution with one locally reasoned interrupted candidate. Earlier source/answer deltas are presentation-only and cannot be committed independently.
+- Before commit, every destination, citation, support, task-evidence, and evidence-pack `SourceId` must resolve through the existing thread catalog or terminal `sourceRecords`.
+- Canonical source admission, ordinal assignment, terminal-turn append, thread timestamps, schema validation, and revision check happen in one `ThreadStore` transaction.
+- A terminal candidate becomes durable/visible as terminal history only after commit succeeds. Commit failure preserves the candidate in memory and blocks another submission until retry succeeds or the workspace is lost; it never reruns execution. Revision-conflict retry reloads the aggregate, treats an existing identical `turnId` as idempotent success, otherwise revalidates and commits the same immutable turn while deriving any new source ordinals against the latest catalog.
+- Cancellation is idempotent. Once cancellation starts, the controller may accept only newer validated `research_state` needed for recovery during the bounded cancellation window, then constructs one interrupted candidate using the locally known cancellation reason and latest validated source-closed research state or `unavailable`; other late terminal/events are stale.
+- Connection loss similarly produces one interrupted candidate and never guesses or retains a resolution/checkpoint that was not received and source-closed against existing/active canonical metadata.
+
+**Failure contract:** submission validation is local and non-durable; execution failures map only to approved terminal variants; malformed/stale transport cannot widen durable unions; commit conflicts/unavailability retain the exact terminal candidate for idempotent retry.
+
+**Implementation boundary:** a React hook, state machine, or framework-free observable controller may implement this box. XState remains appropriate only if used for this named active-turn workflow; routing and ordinary box state remain local/simple.
+
+**Current mapping:** active request IDs, abort controllers, stream parsing, live answer/source state, stale-event checks, turn construction, and `ThreadStore` writes are interleaved in `Topic`/`App` in `src/ui/App.tsx`.
+
+### `TurnGateway`
+
+**Capability:** expose one browser-side typed streaming call while hiding HTTP, SSE framing, authentication cookies, and abort mechanics.
+
+```ts
+interface TurnGateway {
+  execute(
+    request: TurnExecutionRequest,
+    onEvent: (event: TurnExecutionEvent) => void,
+    signal: AbortSignal,
+  ): Promise<void>;
+}
+```
+
+The gateway runtime-validates every decoded event before delivery. HTTP rejection before stream acceptance becomes a bounded gateway failure; disconnection after acceptance is reported as connection loss to `TurnController`. It owns no turn policy, durable construction, source admission, or UI projection.
+
+### `TurnExecutor`
+
+**Capability:** dispatch one validated server-side execution to the matching provider-neutral `SearchTurn` or `ResearchTurn` capability and return a terminal execution payload while emitting bounded progress.
+
+```ts
+type TurnExecutionRequest =
+  | {
+      executionId: ExecutionId;
+      turnId: TurnId;
+      kind: "search";
+      query: string;
+      maxResults: number;
+    }
+  | {
+      executionId: ExecutionId;
+      turnId: TurnId;
+      kind: "research";
+      question: string;
+      context: ThreadContext;
+      limits: ResearchLimits;
+    };
+
+type TerminalPayload<T extends Turn> = T extends TerminalTurnBase<TurnKind>
+  ? Omit<T, keyof TerminalTurnBase<TurnKind>>
+  : never;
+
+type TurnExecutionTerminal =
+  | {
+      kind: "search";
+      outcome: TerminalPayload<SearchTurn>;
+      sourceRecords: CanonicalSource[];
+    }
+  | {
+      kind: "research";
+      outcome: TerminalPayload<ResearchTurn>;
+      sourceRecords: CanonicalSource[];
+    };
+
+type TurnExecutionSignal =
+  | { type: "phase"; phase: TurnPhase }
+  | {
+      type: "source_delta";
+      sources: CanonicalSource[];
+      occurrences: SourceDeltaOccurrence[];
+    }
+  | {
+      type: "research_state";
+      state:
+        | { kind: "checkpoint"; checkpoint: ResearchCheckpoint }
+        | { kind: "resolution"; resolution: ResearchResolution };
+    }
+  | { type: "answer_delta"; delta: string };
+
+interface TurnExecutor {
+  execute(
+    request: TurnExecutionRequest,
+    onSignal: (signal: TurnExecutionSignal) => void,
+    signal: AbortSignal,
+  ): Promise<TurnExecutionTerminal>;
+}
+```
+
+The executor receives an application cancellation signal and emits typed transport-independent signals before returning its one terminal payload. It does not authenticate HTTP requests, assign SSE sequence numbers, encode SSE, load or persist threads, allocate source ordinals, navigate, or construct `TerminalTurnBase` metadata. `sourceRecords` must contain canonical metadata for every terminal reference not already available in input context; the browser controller performs final reference-closure validation against the durable aggregate.
+
+### `TurnExecutionEvent`
+
+```ts
+type TurnPhase =
+  | "searching"
+  | "assessing"
+  | "decomposing"
+  | "extracting"
+  | "resolving"
+  | "synthesizing";
+
+interface TurnEventBase {
+  executionId: ExecutionId;
+  turnId: TurnId;
+  sequence: number;
+}
+
+interface SourceDeltaOccurrence {
+  sourceId: SourceId;
+  role: EvidenceRole;
+  rank?: number;
+}
+
+type TurnExecutionEvent =
+  | (TurnEventBase & { type: "accepted"; kind: TurnKind })
+  | (TurnEventBase & { type: "phase"; phase: TurnPhase })
+  | (TurnEventBase & {
+      type: "source_delta";
+      sources: CanonicalSource[];
+      occurrences: SourceDeltaOccurrence[];
+    })
+  | (TurnEventBase & {
+      type: "research_state";
+      state:
+        | { kind: "checkpoint"; checkpoint: ResearchCheckpoint }
+        | { kind: "resolution"; resolution: ResearchResolution };
+    })
+  | (TurnEventBase & { type: "answer_delta"; delta: string })
+  | (TurnEventBase & {
+      type: "terminal";
+      terminal: TurnExecutionTerminal;
+    });
+```
+
+`accepted.kind` and `terminal.kind` must match the request. Search permits only the `searching` phase plus search-destination source deltas; `research_state` and `answer_delta` are legal only for research. A checkpoint is emitted only after application validation at a recoverable resolver boundary and after any source deltas needed to close its references; the full source-closed root resolution is emitted before synthesis begins. This lets cancellation or connection loss persist exactly the latest validated state actually received without exposing assessor rationale or fabricating knowledge. `source_delta` contains only normalized public source metadata and contextual occurrences; extracted page text reaches the browser only inside a bounded validated checkpoint/resolution. Exactly one terminal event is legal. Event schemas reject unknown fields and bound array/string sizes. Progress phases are coarse public lifecycle, not hidden reasoning.
 
 ### `TurnStreamBoundary`
 
-The HTTP/SSE boundary is likely a named system box owning request validation, authentication, cancellation, heartbeat, event serialization, and bounded public errors—but not search or research decisions. Its final contract remains to be reviewed.
+**Capability:** adapt authenticated HTTP/SSE to one `TurnExecutor` invocation.
+
+The boundary owns request size/schema validation, authentication/session checks, same-origin policy, execution cancellation wiring, heartbeat comments, event IDs/sequences, SSE serialization, and bounded pre-stream HTTP errors. It emits `accepted`, invokes the executor exactly once, wraps validated executor signals with identity/sequence fields, and wraps the returned terminal payload in exactly one `terminal` event. Heartbeats are transport comments, not lifecycle events and do not advance application sequence.
+
+It does not classify raw prompt input, build `ThreadContext`, make search/research decisions, expose provider errors, mutate `Thread`, or decide what becomes durable. Executor failure after acceptance must become one bounded terminal execution outcome when possible; an unencodable/abrupt connection failure closes the stream and is interpreted by the browser controller as interruption.
+
+**Current mapping:** `/api/lookup`, `/api/research`, request validation, authentication, SSE writing, heartbeats, orchestration, and cancellation are interleaved in `server/app.ts`; stream parsing and stale-request handling are interleaved in `src/ui/App.tsx`.
+
+### `ThreadStore`
+
+`ThreadStore` is the persistence port used by `TurnController` and thread/settings capabilities. Its terminal operation must atomically revision-check the thread, admit canonical sources with deterministic ordinals, append one schema-valid immutable terminal turn, and update metadata. Local IndexedDB and remote adapters must implement the same observable contract. Retention, list/delete, import/export, and exact record/envelope naming remain for the dedicated storage-contract pass.
 
 ## Layout Components
 
@@ -1281,7 +1597,7 @@ KeyboardEvent + route/focus/turn context
 application/system state                               |
           |                                            |
           v                                            v
-                 route/workspace controller <----------+
+                   WorkspaceController <---------------+
                             |
                             | typed view state
                             v
@@ -1302,10 +1618,10 @@ application/system state                               |
                             |
                             | typed user intent
                             v
-                 route/workspace controller
+                   WorkspaceController
                             |
                             v
-              application/system capability
+              owning application controller/capability
 ```
 
 The canonical page compositions are:
@@ -1320,23 +1636,23 @@ UNLOCK     StickyHeader(BrandBox) + UnlockBox
 BOUNDARY   StickyHeader(BrandBox) + SystemStatusBox
 ```
 
-Cross-box coordination belongs to the route/workspace controller. In particular, `TranscriptBox` emits a source selection intent; the controller updates `selectedSourceId`, supplies it to `EvidenceBox`, and coordinates focus without either box querying or mutating the other's DOM.
+Cross-box coordination belongs to `WorkspaceController`. In particular, `TranscriptBox` emits a source selection intent; the controller updates `selectedSourceId`, supplies it to `EvidenceBox`, and coordinates focus without either box querying or mutating the other's DOM.
 
 `ThreadsBox` has one canonical `/threads` route rather than an overlay or adaptive dual presentation. It locally owns aggressive fzf-backed query/ranking, active-row, and keyboard interaction state. The controller supplies thread summaries and loading/failure state, then handles open, delete, and close intents through navigation and `ThreadStore`. `/threads`, its slash command, and its global shortcut all converge on the same route.
 
 Initial system relationships are:
 
 ```text
-PromptBox      -- raw submit intent ------> Turn controller
-Hotkeys        -- focus/cancel/route intent -> route/workspace controller
-TranscriptBox  <-- durable/live turns --- route/workspace controller
-EvidenceBox    <-- reachable evidence ---- route/workspace controller
-ThreadsBox     <-- thread summaries ------ ThreadStore controller
-SettingsBox    <-- settings/backup state - settings controller
-UnlockBox      <-- auth state ------------ authentication boundary
-SystemStatusBox<-- startup/boundary state - application controller
-BrandBox       -- new-thread intent ------> navigation controller
-StickyHeader   -- contextual intents -----> route/workspace controller
+PromptBox      -- raw submit intent ------> WorkspaceController -> TurnController
+Hotkeys        -- focus/cancel/route intent -> WorkspaceController
+TranscriptBox  <-- durable/live turns ----- WorkspaceController
+EvidenceBox    <-- reachable evidence ----- WorkspaceController
+ThreadsBox     <-- thread summaries ------- thread-list controller
+SettingsBox    <-- settings/backup state -- settings controller
+UnlockBox      <-- auth state ------------- authentication controller
+SystemStatusBox<-- startup/boundary state -- application controller
+BrandBox       -- new-thread intent -------> WorkspaceController
+StickyHeader   -- contextual intents ------> WorkspaceController
 ```
 
 `SettingsBox` may own temporary form and file-picker state but reaches browser preferences, backup operations, and `ThreadStore` only through intents. `UnlockBox` may own an in-memory passphrase draft but never logs, persists, exports, or exposes that value outside its submit intent. `StickyHeader` owns sticky presentation, safe-area behavior, and action placement; `BrandBox` owns identity presentation and its local rotation timer, not navigation.
@@ -1466,13 +1782,13 @@ type TranscriptBoxIntent =
   | { type: "turn_retry_requested"; turnId: TurnId };
 ```
 
-The route/workspace controller projects durable `Thread` state and bounded public lifecycle events into this presentation model. `TranscriptBox` does not receive persistence records, raw provider payloads, assessor directives, or an independent live-answer channel.
+`WorkspaceController` projects durable `Thread` state and bounded public `TurnController` lifecycle state into this presentation model. `TranscriptBox` does not receive persistence records, raw provider payloads, assessor directives, or an independent live-answer channel.
 
 ```text
 durable turns + active lifecycle/answer deltas
                     |
                     v
-        route/workspace projection
+       WorkspaceController projection
                     |
                     v
              TranscriptBox
@@ -1991,21 +2307,31 @@ server/research.ts
 
 TARGET
 
-Turn controller
-  ├── SearchTurn ───────────────────> SearchProvider
-  └── ResearchTurn
-        ├── ResearchResolver
-        │     ├── ResearchAssessor ─> LLMProvider
-        │     ├── recursive child KnowledgeUnits
-        │     ├── joinKnowledge (⊔)
-        │     └── EvidenceAcquirer
-        │           ├───────────────> SearchProvider
-        │           └───────────────> ContentExtractor
-        └── AnswerSynthesizer ──────> LLMProvider
+layout boxes
+     |
+WorkspaceController
+     |
+TurnController ──> ThreadStore atomic terminal commit
+     |
+TurnGateway ===== HTTP/SSE ===== TurnStreamBoundary
+                                      |
+                                 TurnExecutor
+                                  ├── SearchTurn ─────────> SearchProvider
+                                  └── ResearchTurn
+                                        ├── ResearchResolver
+                                        │     ├── ResearchAssessor -> LLMProvider
+                                        │     ├── recursive child KnowledgeUnits
+                                        │     ├── joinKnowledge (⊔)
+                                        │     └── EvidenceAcquirer
+                                        │           ├────> SearchProvider
+                                        │           └────> ContentExtractor
+                                        └── AnswerSynthesizer -> LLMProvider
 
-ThreadStore owns persistence contracts.
-TurnStreamBoundary owns HTTP/SSE transport contracts.
-Layout boxes render state and emit user intent.
+WorkspaceController owns route and cross-box projection.
+TurnController owns browser active/durable lifecycle.
+TurnExecutor owns server-side execution dispatch.
+TurnStreamBoundary owns authenticated HTTP/SSE transport only.
+Layout boxes render typed state and emit semantic intent.
 ```
 
 ## Implementation Plan
@@ -2013,7 +2339,7 @@ Layout boxes render state and emit user intent.
 The implementation plan is intentionally provisional until all boxes and migration decisions are settled.
 
 1. Finalize data-model contracts: discriminated search/research turns, bounded thread context, evidence ownership, research result/provenance, and storage-record boundary.
-2. Finalize system-box contracts: research events/failures, `ThreadStore`, `TurnStreamBoundary`, and controller ownership.
+2. Finalize remaining system-box contracts: `ThreadStore` revision/idempotency/retention/import behavior and a consistency pass over the settled `WorkspaceController` → `TurnController` → `TurnGateway` → `TurnStreamBoundary` → `TurnExecutor` events/failures.
 3. Finalize layout-box contracts and state/intent ownership.
 4. Record a precise file-level current → target mapping and migration sequence that preserves observable behavior.
 5. Introduce the canonical data model and runtime schemas with compatibility migration and focused domain tests.
@@ -2030,7 +2356,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [ ] 2. Current → target mapping — deliverable: file-level responsibility and migration map; verify: every current orchestration/persistence/layout responsibility has one target owner.
 - [ ] 3. Data-model migration — deliverable: schema-v3 `Thread` aggregate with canonical source catalog, terminal `search | research` discriminated turns, deterministic context/evidence projections, and compatibility migration; verify: domain, schema, storage, import/export, source-identity, and projection tests.
 - [ ] 4. System-box refactor — deliverable: `SearchTurn` execution and standardized `ResearchTurn` composed from recursive resolver, typed assessor directives, algebraic knowledge join, evidence acquisition, and synthesis boxes; verify: focused application/provider/orchestration tests across all explicit limits, algebraic laws, and stop conditions.
-- [ ] 5. Boundary adaptation — deliverable: HTTP/SSE, persistence, UI controller, and concrete provider adapters use the new contracts; verify: app, storage, UI, interruption, and fixture parity tests.
+- [ ] 5. Boundary adaptation — deliverable: `WorkspaceController`, browser `TurnController`, `TurnGateway`, transport-only `TurnStreamBoundary`, server `TurnExecutor`, persistence, and concrete provider adapters use the new contracts; verify: app, storage, event-schema, stale-event, cancellation, commit-retry, UI, interruption, and fixture parity tests.
 - [ ] 6. Layout-box refactor — deliverable: agreed layout components consume state and emit intent through explicit interfaces; verify: component, keyboard, focus, responsive, and accessibility tests.
 - [ ] 7. Vocabulary cleanup — deliverable: obsolete `lookup`/`chat` mode names and accidental compatibility paths removed while preserving the trailing-`?` `ResearchTurn` macro; verify: repository search plus full typecheck/test/build.
 - [ ] 8. Architecture documentation — deliverable: `README.md` human architecture overview and `AGENTS.md` implementation boundaries describe implemented current state; verify: diagrams/contracts match code and links resolve.
@@ -2062,6 +2388,10 @@ The final implementation must prove at least:
 - Partial sibling failures preserve viable evidence and provenance.
 - Synthesis receives typed bounded thread context and the final root knowledge unit, emits only citations reachable through that unit, and fails on empty output.
 - Search and research failures cross boxes as bounded typed failures without provider payloads.
+- `WorkspaceController` alone coordinates route/cross-box projections and slash commands, while non-command requests pass unchanged to `TurnController`; neither layout boxes nor workspace routing execute or persist turns.
+- `TurnController` allows one execution/commit candidate with no queue, rejects stale/duplicate/gapped events deterministically, validates terminal source-reference closure, persists interruption on cancellation/connection loss, and retries commit without rerunning providers.
+- `TurnGateway` validates decoded public events; `TurnStreamBoundary` owns authenticated HTTP/SSE framing, contiguous sequencing, heartbeat comments, and cancellation wiring only; `TurnExecutor` dispatches exactly one provider-neutral search/research execution without loading or writing `Thread`.
+- Exactly one legal terminal condition is authoritative: a validated pre-cancellation server terminal or one controller-created interruption; active answer/source deltas never become an independent persistence or rendering path.
 - `PromptBox` remains buttonless, keeps its draft editable while one active turn blocks submission, has no queue, clears a collapsed-selection draft with focused `Ctrl+C`, and preserves native copy for selected text and all `Cmd+C` use.
 - `Hotkeys` is installed once, emits semantic intents rather than effects, focuses a mounted prompt with passive unmodified `:`, emits cancellation for active-turn Escape, and never steals editable/composing input or invokes navigation/system capabilities directly.
 - `TranscriptBox` renders durable and active turns through one ordered view model; active progress/streaming is replaced by matching durable completion without duplicate requests or answers, and initial/follow-up requests use the same path.
@@ -2084,6 +2414,4 @@ The final implementation must prove at least:
 - Should the migration fallback from `ANTHROPIC_ASSESSMENT_MODEL` and `ANTHROPIC_SYNTHESIS_MODEL` to legacy `ANTHROPIC_MODEL` remain permanently or be removed after deployment?
 - Does `modelRef`/`searchRef` remain on `Thread`, move to turns, or become derived execution metadata?
 - Should `StoredThreadEnvelopeV2` be retained as-is, renamed to `StoredThreadRecord`, or reshaped during the model migration?
-- What exact responsibilities belong to the turn controller versus `ResearchTurn` and the HTTP/SSE boundary?
-- What lifecycle event and failure unions form the public `ResearchTurn` contract?
 - After data/system contracts settle, do any layout controller projections need refinement to preserve the agreed box contracts without duplicating state?
