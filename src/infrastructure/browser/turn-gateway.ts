@@ -20,6 +20,7 @@ const sourceId = z.string().regex(/^src_[A-Za-z0-9_-]{43}$/);
 const source = canonicalSourceV3Schema;
 const base = z.object({ executionId: uuid, turnId: uuid, sequence: z.number().int().positive() }).strict();
 const eventSchema = z.discriminatedUnion("type", [
+  base.extend({ type: z.literal("error"), code: z.enum(["invalid_event", "invalid_terminal", "execution_failed"]), message: z.string().min(1).max(500) }),
   base.extend({ type: z.literal("accepted"), kind: z.enum(["search", "research"]) }),
   base.extend({ type: z.literal("phase"), phase: z.enum(["searching", "assessing", "decomposing", "extracting", "resolving", "synthesizing"]) }),
   base.extend({
@@ -46,6 +47,7 @@ const eventSchema = z.discriminatedUnion("type", [
 ]);
 
 const eventNameToType: Record<string, TurnGatewayEvent["type"]> = {
+  "turn.error": "error",
   "turn.accepted": "accepted",
   "turn.phase": "phase",
   "turn.source_delta": "source_delta",

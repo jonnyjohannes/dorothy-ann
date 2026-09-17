@@ -66,7 +66,7 @@ export function ThreadRoute() {
     setMessage("");
     const result = await activeController.run({ threadId, turnId, executionId, kind, request, userMessage, createdAt, expectedRevision: record && record.ok ? record.value?.revision ?? null : null, create: current ? undefined : { id: threadId, title: request.slice(0, 60), createdAt }, context, gatewayOptions: { maxResults: 5, researchLimits: {} } });
     if (result.ok) { threadRef.current = result.record.thread; setThread(result.record.thread); if (routeThreadId === "new") navigate(`/topics/${encodeURIComponent(String(threadId))}`, { replace: true }); }
-    else setMessage(result.error === "commit_retryable" ? "The result was not saved. Retry save." : "That turn could not be completed.");
+    else setMessage(result.error === "commit_retryable" ? "The result was not saved. Retry save." : result.message ?? "That turn could not be completed.");
   }, [navigate, routeThreadId, threadId]);
 
   useEffect(() => {

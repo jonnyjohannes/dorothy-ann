@@ -93,7 +93,7 @@ describe("portable turn stream boundary", () => {
     const response = await app.request("http://localhost/", { method: "POST", body: JSON.stringify({ executionId, turnId, kind: "search", query: "hello" }) });
     const body = await response.text();
     expect(body).toContain("turn.error");
-    expect(body).toContain('"message":"turn execution failed"');
+    expect(body).toContain('"message":"Turn execution failed."');
     expect(body).not.toContain("provider secret");
   });
 });

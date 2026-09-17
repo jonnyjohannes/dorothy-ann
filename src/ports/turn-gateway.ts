@@ -44,7 +44,9 @@ export interface TurnGatewaySourceOccurrence {
   role: "search_destination" | "research_evidence";
   rank?: number;
 }
+export type TurnGatewayErrorCode = "invalid_event" | "invalid_terminal" | "execution_failed";
 export type TurnGatewayEvent =
+  | { executionId: ExecutionId; turnId: TurnId; sequence: number; type: "error"; code: TurnGatewayErrorCode; message: string }
   | { executionId: ExecutionId; turnId: TurnId; sequence: number; type: "accepted"; kind: TurnKind }
   | { executionId: ExecutionId; turnId: TurnId; sequence: number; type: "phase"; phase: TurnGatewayPhase }
   | { executionId: ExecutionId; turnId: TurnId; sequence: number; type: "source_delta"; sources: CanonicalSource[]; occurrences: TurnGatewaySourceOccurrence[] }

@@ -114,6 +114,12 @@ function failureStage(error: unknown): "assessment" | "acquisition" | "resolutio
   if (value === "transport_failed") return "transport";
   return "resolution";
 }
+function failureMessage(stage: "assessment" | "acquisition" | "resolution" | "transport"): string {
+  if (stage === "assessment") return "Research assessment was unavailable or invalid.";
+  if (stage === "acquisition") return "Research could not acquire usable evidence.";
+  if (stage === "transport") return "Research lost its provider connection.";
+  return "Research resolution stopped before a validated answer was available.";
+}
 
 /** Resolves once and, only for a sufficient/best-effort root, synthesizes once. */
 export async function executeResearchTurn(input: ResearchTurnExecutionInput): Promise<ResearchTurnExecutionResult> {
@@ -188,7 +194,7 @@ export async function executeResearchTurn(input: ResearchTurnExecutionInput): Pr
         kind: "execution_failure",
         stage,
         code: stage === "resolution" ? "resolution_invalid" : `${stage}_failed` as "assessment_failed" | "acquisition_failed" | "transport_failed",
-        message: "Research execution failed before a validated answer was available.",
+        message: failureMessage(stage),
         retryable: stage !== "resolution",
       },
       researchState: { kind: "unavailable" },

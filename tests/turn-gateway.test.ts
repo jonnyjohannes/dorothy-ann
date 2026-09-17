@@ -22,6 +22,13 @@ describe("browser turn gateway", () => {
     expect(events[1]).toMatchObject({ sequence: 2, type: "terminal" });
   });
 
+  it("decodes sanitized execution errors as typed boundary events", async () => {
+    const gateway = createFetchTurnGateway({ fetch: async () => response(event("accepted", 1, { kind: "search" }) + event("error", 2, { code: "invalid_terminal", message: "Turn execution returned an invalid result." })) });
+    const events: unknown[] = [];
+    for await (const item of gateway.stream(request, options, new AbortController().signal)) events.push(item);
+    expect(events[1]).toMatchObject({ type: "error", code: "invalid_terminal", message: "Turn execution returned an invalid result." });
+  });
+
   it("rejects malformed decoded payloads instead of exposing unvalidated events", async () => {
     const gateway = createFetchTurnGateway({ fetch: async () => response(event("accepted", 1, { kind: "search" }).replace('"kind":"search"', '"kind":"unknown"')) });
     const iterator = gateway.stream(request, options, new AbortController().signal)[Symbol.asyncIterator]();

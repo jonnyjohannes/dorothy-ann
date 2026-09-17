@@ -32,6 +32,13 @@ describe("TurnController", () => {
     expect(await duplicate.run(input())).toMatchObject({ ok: false, error: "invalid_event" });
   });
 
+  it("returns sanitized server errors instead of mapping them to a generic interruption", async () => {
+    const error = { executionId, turnId, sequence: 2, type: "error" as const, code: "invalid_terminal" as const, message: "Turn execution returned an invalid result." };
+    const store = storeWith(async () => { throw new Error("must not commit"); });
+    const controller = new TurnController(gatewayFor([accepted, error]), store);
+    expect(await controller.run(input())).toMatchObject({ ok: false, error: "turn_error", message: "Turn execution returned an invalid result." });
+  });
+
   it("persists a controller-created cancellation and owns one active run", async () => {
     let committed: unknown;
     const store = storeWith(async (commit) => { committed = commit; return { ok: true, value: { disposition: "committed", record: record("r1") } }; });

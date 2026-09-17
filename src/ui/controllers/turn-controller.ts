@@ -43,12 +43,13 @@ export type TurnControllerError =
   | "already_active"
   | "invalid_event"
   | "invalid_terminal"
+  | "turn_error"
   | "commit_retryable"
   | "commit_blocked";
 
 export type TurnControllerResult =
   | { ok: true; turn: Turn; record: StoredThreadRecord; disposition: "committed" | "already_committed" }
-  | { ok: false; error: TurnControllerError; failure?: ThreadStoreFailure; candidate?: Turn };
+  | { ok: false; error: TurnControllerError; message?: string; failure?: ThreadStoreFailure; candidate?: Turn };
 
 interface Candidate {
   input: TurnStartInput;
@@ -108,10 +109,11 @@ export class TurnController {
     this.emit();
     let terminal: Turn | undefined;
     let protocolError: TurnControllerError | undefined;
+    let protocolMessage: string | undefined;
     try {
       for await (const event of this.gateway.stream(gatewayRequest(input), input.gatewayOptions, abort.signal)) {
         const accepted = this.acceptEvent(active, event);
-        if (!accepted.ok) { protocolError = accepted.error; abort.abort(); break; }
+        if (!accepted.ok) { protocolError = accepted.error; protocolMessage = accepted.message; abort.abort(); break; }
         this.emit();
         if (event.type === "terminal") {
           const candidate = this.buildTerminal(active, event);
@@ -123,7 +125,7 @@ export class TurnController {
     } catch {
       if (!active.cancelled && !protocolError) return this.finishInterruption(active, "connection_lost");
     }
-    if (protocolError) return this.finishWithoutCommit(active, protocolError);
+    if (protocolError) return this.finishWithoutCommit(active, protocolError, protocolMessage);
     if (terminal) return this.finishWithCommit({ input, turn: terminal, sourceRecords: this.sourcesForTerminal(active, terminal) });
     return this.finishInterruption(active, active.cancelled ?? "connection_lost");
   }
@@ -141,13 +143,14 @@ export class TurnController {
     return this.finishWithCommit(pending);
   }
 
-  private acceptEvent(active: ActiveRun, event: TurnGatewayEvent): { ok: true } | { ok: false; error: TurnControllerError } {
+  private acceptEvent(active: ActiveRun, event: TurnGatewayEvent): { ok: true } | { ok: false; error: TurnControllerError; message?: string } {
     if (!isGatewayIdentity(event, active.input.executionId, active.input.turnId)) return { ok: false, error: "invalid_event" };
     const expected = active.events.length + 1;
     if (event.sequence !== expected) return { ok: false, error: "invalid_event" };
     if (expected === 1 && event.type !== "accepted") return { ok: false, error: "invalid_event" };
     if (expected > 1 && event.type === "accepted") return { ok: false, error: "invalid_event" };
     if (event.type === "accepted" && event.kind !== active.input.kind) return { ok: false, error: "invalid_event" };
+    if (event.type === "error") return { ok: false, error: "turn_error", message: event.message };
     active.events.push(event);
     this.view.lastSequence = event.sequence;
     this.view.events = [...active.events];
@@ -186,11 +189,11 @@ export class TurnController {
     return this.finishWithCommit({ input: active.input, turn, sourceRecords: [] });
   }
 
-  private finishWithoutCommit(active: ActiveRun, error: TurnControllerError): TurnControllerResult {
+  private finishWithoutCommit(active: ActiveRun, error: TurnControllerError, message?: string): TurnControllerResult {
     if (this.active === active) this.active = undefined;
     this.view.active = false;
     this.emit();
-    return { ok: false, error };
+    return { ok: false, error, message };
   }
 
   private async finishWithCommit(candidate: Candidate): Promise<TurnControllerResult> {

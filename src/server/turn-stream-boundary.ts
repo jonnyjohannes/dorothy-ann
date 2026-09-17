@@ -58,6 +58,7 @@ export interface TurnExecutionEventBase {
 }
 
 export type TurnExecutionEvent =
+  | (TurnExecutionEventBase & { type: "error"; code: "invalid_event" | "invalid_terminal" | "execution_failed"; message: string })
   | (TurnExecutionEventBase & { type: "accepted"; kind: TurnKind })
   | (TurnExecutionEventBase & { type: "phase"; phase: TurnPhase })
   | (TurnExecutionEventBase & { type: "source_delta"; sources: CanonicalSource[]; occurrences: SourceDeltaOccurrence[] })
@@ -196,10 +197,10 @@ export function createTurnStreamBoundary(options: TurnStreamBoundaryOptions): Ho
           terminalSent = true;
           await write("terminal", { terminal });
         } else if (!terminalSent) {
-          await writer.write(`event: turn.error\ndata: ${JSON.stringify({ code: protocolInvalid ? "invalid_event" : "invalid_terminal", message: "turn execution returned an invalid result" })}\n\n`);
+          await write("error", { code: protocolInvalid ? "invalid_event" : "invalid_terminal", message: protocolInvalid ? "Turn execution emitted an invalid event." : "Turn execution returned an invalid result." });
         }
       } catch {
-        if (!terminalSent && !context.req.raw.signal.aborted) await writer.write(`event: turn.error\ndata: ${JSON.stringify({ code: "execution_failed", message: "turn execution failed" })}\n\n`);
+        if (!terminalSent && !context.req.raw.signal.aborted) await write("error", { code: "execution_failed", message: "Turn execution failed." });
       } finally {
         clearInterval(heartbeat);
         context.req.raw.signal.removeEventListener("abort", abortRequest);
