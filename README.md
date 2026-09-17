@@ -1,44 +1,48 @@
 # Dorothy Ann
 
-Dorothy Ann, the browser-based lookup and research chat app inspired by the Magic School Bus kid who always had the answer because she had **done the research**.
-
-Ask a quick question. Open the evidence. Go deeper when it matters. Keep the sources. Export the answer as Markdown.
-
-> Step inside, it's a wilder ride!
+Dorothy Ann is a browser-based information resolver and researcher. A macro-less request creates a ranked `SearchTurn`; a request ending in `?` creates a recursively resolved `ResearchTurn` with bounded evidence and one synthesized answer.
 
 ## what it does
 
-- ⚡ **lookup mode** for quick, ranked web results
-- 🔎 **research mode** for bounded, source-backed answers
-- 💬 **chat mode** for follow-up questions grounded in the topic
-- 🧾 **Dorothy Ann reports** that export as portable Markdown
-- 🗂️ **browser-local topics** backed by IndexedDB
-- 🔐 **small private research desk** with passphrase access
-- 🧪 **fixture mode** so the app can be developed without live provider credentials
+- ⚡ **search turns** return ranked, normalized sources without LLM synthesis
+- 🔎 **research turns** recursively resolve evidence gaps within explicit search, source, depth, branch, and assessment ceilings
+- 🧾 **thread history** keeps terminal turns, canonical source metadata, evidence projections, and read-only migrated legacy archive entries
+- 🗂️ **browser workspace** provides focused home, thread, thread-list, settings, and unlock routes backed by typed product boxes
+- 🔐 **private research desk** keeps authentication, storage, provider, and extraction implementations behind ports
+- 🧪 **fixture mode** supports development without live provider credentials
 
-The architecture stays deliberately portable: Brave handles discovery, the application owns extraction and evidence handling, Anthropic handles synthesis, and the core application stays behind provider-neutral interfaces.
+## architecture
 
-## project status
+The package is strict TypeScript targeting Node 22. Domain and application code remain provider/platform independent. The main boundaries are:
 
-Dorothy Ann v1.0.0 is launched and serving as a real browser default search engine. The completed [v1.0.0 plan](docs/plans/dorothy-ann-v1.0.0.md) records the adaptive research behavior, verification, and release state; focused patches can follow real-world use.
+- `src/domain/` — canonical v3 types, schemas, identity, migration, knowledge, and context policies
+- `src/application/` — assessor, evidence acquisition, recursive resolution, synthesis, turn execution, and terminal commit policies
+- `src/ports/` — provider-neutral LLM, search, extraction, storage, identity, prompts, and turn-gateway contracts
+- `src/infrastructure/` — Anthropic/Brave/extraction, browser gateway/storage, Redis, identity, and runtime adapters
+- `src/server/` — portable Hono composition and authenticated HTTP/SSE turn boundary
+- `server/` and `api/` — thin Node/Vercel runtime adapters
+- `src/ui/` — route composition, workspace/turn controllers, semantic primitives, and typed `*Box` components
+- `tests/` — domain, application, contract, infrastructure, UI, and Playwright coverage
 
-## screenshots
+`ASSESSOR.md` and `SYNTHESIZER.md` are the only target LLM system-prompt assets. Runtime loading keeps them out of browser bundles and durable product data; dynamic context, schemas, retries, and evidence remain typed user/protocol input.
 
-The visual tour will land here once the first browser build has something photogenic to show.
+## development
+
+```bash
+npm ci
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run test:e2e
+```
+
+Fixture mode is the default. Live provider credentials are optional for local implementation and must never be exposed through `VITE_*` variables or browser assets.
 
 ## documentation
 
-- [v1.0.0 plan](docs/plans/dorothy-ann-v1.0.0.md) — adaptive research behavior, architecture, verification, and release record
-- [v1.0.0-alpha2 plan](docs/plans/dorothy-ann-v1.0.0-alpha2.md) — persistent workspace and browser shell milestone
-- [v1.0.0-alpha1 plan](docs/plans/dorothy-ann-v1.0.0-alpha1.md) — foundational product and implementation specification
-- [Repository guide](AGENTS.md) — working boundaries, verification habits, and agent instructions
-
-## the north star
-
-> “According to my research…”
-
-Dorothy Ann is the energy: curious, prepared, a little intense, and ready to share what she has learned.
-
----
+- [v1.1.0 architecture plan](docs/plans/dorothy-ann-v1.1.0.md) — implemented boxes, contracts, migration policy, verification, and handoff
+- [v1.0.0 plan](docs/plans/dorothy-ann-v1.0.0.md) — original product baseline
+- [Repository guide](AGENTS.md) — working boundaries, verification, secrets, and implementation rules
 
 made with curiosity, citations, and Miss Frizzle's timeless wisdom. <|°_°|>
