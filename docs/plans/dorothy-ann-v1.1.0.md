@@ -4,13 +4,13 @@
 
 - Status: implementation in progress
 - Last updated: 2026-09-15
-- Current focus: Plan Ledger item 4 — identity and migration policy
+- Current focus: Plan Ledger item 5 — knowledge and context policies
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: mark item 4 `[~]`, implement canonical identity material, cross-runtime SHA-256 adapters, and deterministic v1/v2 conversion into the parallel v3 model
+- Next action: mark item 5 `[~]`, implement algebraic knowledge joining and exact bounded `buildThreadContext` over the parallel v3 model
 
 ## Handoff
 
-Implementation is active on `release/v1.1.0`. Plan Ledger items 2–3 are complete. Runtime/config/prompt scaffolding targets Node 22, exact `fzf@0.5.2`, bounded canonical/deprecated configuration, startup-loaded root prompts, and schema-valid Vercel brace-glob inclusion (confirmed by `vercel build`). Parallel `model-v3.ts`, strict `schemas-v3.ts`, and private bounded `legacy-input-schemas.ts` now define terminal-only search/research unions, honest execution/research-state combinations, Unicode bounds, complete source/turn support closure, retry/order/timestamp invariants, and archive-only/read-only history while current consumers remain untouched. Full lint/typecheck, 105 tests, build, frontend scans, and `git diff --check` pass. `npm ci` reports two moderate dependency advisories; no out-of-scope forced audit upgrade was applied. Next implement item 4 only: identity material/hash adapters and deterministic migration.
+Implementation is active on `release/v1.1.0`. Plan Ledger items 2–4 are complete. Runtime/config/prompt scaffolding and the parallel v3 model/schemas remain isolated from current consumers. Identity material now uses NFKC/Unicode-whitespace text normalization, WHATWG safe canonical URLs, UTF-8 byte-length framing, full SHA-256/base64url typed IDs, collision detection, and one Web Crypto adapter fixture-locked in Node/browser. Deterministic v1/v2 migration converts valid lookups, archives unsupported history, rewrites/deduplicates sources and citation aliases, drops/reports incomplete or invalid entries, and validates the resulting aggregate. Brave source identity now derives from canonical URL rather than rank. Full lint/typecheck, 114 tests, build, and `git diff --check` pass. Next implement item 5 only: knowledge algebra and exact bounded thread-context projection.
 
 Dorothy Ann v1.0.0 behaves correctly and is the baseline for this architectural pass. The v1.1.0 goal is to refactor the application around named, technically explicit boxes without changing working product behavior accidentally. Each box is documented as typed inputs → one owned capability → typed outputs/events, plus invariants, failure contract, and implementation boundary.
 
@@ -3139,7 +3139,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [x] 1. Planning consistency gate — deliverable: approved contracts, closure bundle, legacy-history policy, file map, atomic implementation sequence, and passing implementability audit; verify: no blocking questions/placeholders, balanced fences, `git diff --check`, and checklist review.
 - [x] 2. Runtime/config scaffold — deliverable: Node 22, exact fzf pin, canonical bounded env/deprecations, root prompt assets and startup loaders/Vercel inclusion; verify: config/prompt/deployment/frontend-exclusion tests.
 - [x] 3. Parallel v3 model/schemas — deliverable: target model, strict schemas, read-only legacy archive, and private bounded v1/v2 input schemas without breaking current consumers; verify: union/archive/bound/reference/archive-only/legacy-input tests.
-- [ ] 4. Identity/migration policy — deliverable: canonical material, cross-runtime SHA-256 IDs, and deterministic v1/v2 conversion; verify: fixed Node/browser vectors plus URL/Unicode/support/ancestry/collision/source-alias/migration tests.
+- [x] 4. Identity/migration policy — deliverable: canonical material, cross-runtime SHA-256 IDs, and deterministic v1/v2 conversion; verify: fixed Node/browser vectors plus URL/Unicode/support/ancestry/collision/source-alias/migration tests.
 - [ ] 5. Knowledge/context policies — deliverable: algebraic evidence-collection join and exact bounded thread projection; verify: law, contradiction, ordering, truncation, and byte-bound tests.
 - [ ] 6. Atomic storage policy/port — deliverable: typed CAS/idempotent terminal commit contract and in-memory harness; verify: commit/source/order/expiry/delete/failure contract suite.
 - [ ] 7. Storage adapters/transfer — deliverable: IndexedDB, browser-remote, Redis, portable routes, archive-preserving terminal commits, and backup/import on v3; verify: shared adapter suite plus archive-only/legacy/export/import/retention fixtures.

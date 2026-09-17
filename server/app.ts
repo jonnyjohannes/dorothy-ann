@@ -14,6 +14,8 @@ import { isDurableThread } from "../src/domain/thread-state.js";
 import { RemoteThreadStore } from "./remote-thread-store.js";
 import type { SearchResult } from "../src/domain/types.js";
 import type { SystemPromptCatalog } from "../src/ports/system-prompts.js";
+import { IdentityPolicy } from "../src/application/identity-policy.js";
+import { WebCryptoIdentityHasher } from "../src/infrastructure/identity/web-crypto-hasher.js";
 
 export interface AppDependencies {
   config: AppConfig;
@@ -28,7 +30,8 @@ export function createApp({ config, systemPrompts, remoteThreads: injectedRemote
   const limiter: LoginAttemptLimiter = config.UPSTASH_REDIS_REST_URL && config.UPSTASH_REDIS_REST_TOKEN
     ? new UpstashLoginLimiter(config.UPSTASH_REDIS_REST_URL, config.UPSTASH_REDIS_REST_TOKEN)
     : new InMemoryLoginLimiter();
-  const searchProvider = config.BRAVE_SEARCH_API_KEY ? new BraveSearchProvider(config.BRAVE_SEARCH_API_KEY) : null;
+  const identities = new IdentityPolicy(new WebCryptoIdentityHasher());
+  const searchProvider = config.BRAVE_SEARCH_API_KEY ? new BraveSearchProvider(config.BRAVE_SEARCH_API_KEY, fetch, identities) : null;
   const extractor = !config.DOROTHY_FIXTURE_MODE ? new SafeContentExtractor({ maxFetchBytes: config.MAX_FETCH_BYTES, maxRedirects: config.MAX_REDIRECTS, userAgent: "dorothy-ann/1.0", minCharacters: 120 }) : undefined;
   const chatProvider = config.ANTHROPIC_API_KEY && config.ANTHROPIC_SYNTHESIS_MODEL ? new AnthropicChatProvider(config.ANTHROPIC_API_KEY, config.ANTHROPIC_SYNTHESIS_MODEL) : undefined;
   const remoteThreads = injectedRemoteThreads ?? (config.UPSTASH_REDIS_REST_URL && config.UPSTASH_REDIS_REST_TOKEN
