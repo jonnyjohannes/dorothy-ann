@@ -83,7 +83,7 @@ export interface KnowledgeUnit {
 }
 
 export type ThreadContextTurn =
-  | { turnId: TurnId; kind: "research"; request: string; outcome: "sufficient" | "best_effort"; answer: AssistantContent }
+  | { turnId: TurnId; kind: "research"; request: string; outcome: "sufficient" | "best_effort"; answer: AssistantContent; answerTruncated: boolean }
   | { turnId: TurnId; kind: "search"; request: string; outcome: "search" }
   | { turnId: TurnId; kind: "research"; request: string; outcome: "insufficient" }
   | { turnId: TurnId; kind: TurnKind; request: string; outcome: "failed" | "interrupted" };

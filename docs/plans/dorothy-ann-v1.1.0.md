@@ -2,15 +2,15 @@
 
 ## Current State
 
-- Status: blocked on one item-5 context contract omission
+- Status: implementation in progress
 - Last updated: 2026-09-15
-- Current focus: decide the typed representation/accounting of a truncated `ThreadContext` research answer
+- Current focus: Plan Ledger item 6 — atomic storage policy and port
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: choose the bounded answer-truncation contract below, amend the v3 model/schema, then resume knowledge/context implementation without changing durable answers
+- Next action: mark item 6 `[~]`, add the parallel v3 storage contract, commit/reconciliation policy, and in-memory contract harness
 
 ## Handoff
 
-Implementation is paused at Plan Ledger item 5 after completing items 2–4. Runtime/config/prompt scaffolding and the parallel v3 model/schemas remain isolated from current consumers. Identity material now uses NFKC/Unicode-whitespace text normalization, WHATWG safe canonical URLs, UTF-8 byte-length framing, full SHA-256/base64url typed IDs, collision detection, and one Web Crypto adapter fixture-locked in Node/browser. Deterministic v1/v2 migration converts valid lookups, archives unsupported history, rewrites/deduplicates sources and citation aliases, drops/reports incomplete or invalid entries, and validates the resulting aggregate. Brave source identity now derives from canonical URL rather than rank. Full lint/typecheck, 114 tests, build, and `git diff --check` pass. Item 5 exposed one plan omission: `buildThreadContext` requires partial answer truncation to be marked in the typed protocol envelope, but `ThreadContextTurn` has no truncation field and the plan does not say how structured citation parts consume the character budget. No item-5 source code has been written. Choose the smallest contract repair under Open Questions, then resume item 5.
+Implementation is active after completing Plan Ledger items 2–5. Completed contextual research answers carry `answerTruncated`; Markdown/canonical citation tokens consume the code-point budget, citations remain atomic, and only contextual copies may lose a suffix. Runtime/config/prompt scaffolding and the parallel v3 model/schemas remain isolated from current consumers. Identity material now uses NFKC/Unicode-whitespace text normalization, WHATWG safe canonical URLs, UTF-8 byte-length framing, full SHA-256/base64url typed IDs, collision detection, and one Web Crypto adapter fixture-locked in Node/browser. Deterministic v1/v2 migration converts valid lookups, archives unsupported history, rewrites/deduplicates sources and citation aliases, drops/reports incomplete or invalid entries, and validates the resulting aggregate. Brave source identity now derives from canonical URL rather than rank. Full lint/typecheck, 114 tests, build, and `git diff --check` pass. `joinKnowledge` is now deterministic, ACI, provenance-preserving, contradiction-preserving, snapshot-deduplicating, and collision-rejecting. `buildThreadContext` ignores the legacy archive, selects/budgets turns newest-first, emits structured answer prefixes, bounds/deduplicates evidence, restores chronological/ordinal output, prioritizes known sources deterministically, and exposes complete request-byte enforcement. Full lint/typecheck, 122 tests, build, and `git diff --check` pass. Next implement item 6 only: parallel v3 storage policy/port and in-memory contract harness.
 
 Dorothy Ann v1.0.0 behaves correctly and is the baseline for this architectural pass. The v1.1.0 goal is to refactor the application around named, technically explicit boxes without changing working product behavior accidentally. Each box is documented as typed inputs → one owned capability → typed outputs/events, plus invariants, failure contract, and implementation boundary.
 
@@ -143,6 +143,7 @@ type ThreadContextTurn =
       request: string;
       outcome: "sufficient" | "best_effort";
       answer: AssistantContent;
+      answerTruncated: boolean;
     }
   | {
       turnId: TurnId;
@@ -176,7 +177,7 @@ The projection may include terminal requests for conversational continuity, but 
 `buildThreadContext(thread, limits)` is pure and deterministic:
 
 1. Ignore `legacyArchive` completely. Take at most the newest `maxThreadContextTurns` terminal v3 turns, then restore chronological order. Include every selected request and only completed sufficient/best-effort research answers; search results, failure/interruption messages, progress, usage, and execution provenance are omitted from `turns`.
-2. `maxThreadContextChars` counts Unicode code points in request plus included answer text, not JSON/metadata overhead. Selected requests are admitted newest-first and are already bounded to 2,000 characters; if necessary drop the oldest selected turn. Spend remaining text budget on completed research answers newest-first, truncating only at code-point boundaries and marking truncation in the typed protocol envelope rather than altering durable content. Return included turns chronologically.
+2. `maxThreadContextChars` counts Unicode code points in requests plus contextual answer parts, not JSON/metadata overhead. A text part costs the code points in its Markdown; a citation part costs the code points in canonical `[[cite:<SourceId>]]` form. Selected requests are admitted newest-first and are already bounded to 2,000 characters; if necessary drop the oldest selected turn. Spend remaining answer budget newest-first. Copy answer parts in order; include a citation only when its complete canonical token fits, truncate only a text part at a Unicode code-point boundary, and stop that answer after the first non-fitting/truncated part. Set `answerTruncated: true` exactly when any durable suffix was omitted; never alter durable content. Return included turns chronologically.
 3. Gather viable `EvidencePack` snapshots from selected turns' validated resolutions/checkpoints, newest turn first and pack `requestOrder` first. Deduplicate identical `(problemId, query, sourceId, extractedAt)` snapshots. Truncate each extracted passage to `maxEvidenceCharsPerSource`; admit passages until `maxEvidenceCharsTotal`, truncating the last only when at least 256 useful code points remain. Return admitted packs in chronological turn/request order.
 4. Known-source priority is: every admitted evidence/support source, then selected search destinations from newest turn/rank to oldest. Deduplicate by `SourceId`, cap at the derived `maxThreadContextTurns * 3` records (at most 24), and finally return records in thread ordinal order. A destination without an admitted viable passage is metadata only, never factual evidence.
 5. Canonical source fields are independently schema-bounded (`title` 500, `url`/`canonicalUrl` 2,048 each, `displayUrl` 512, `snippet` 1,000); metadata and JSON overhead are bounded by those schemas and the source/turn counts. The complete encoded turn request must also fit `MAX_TURN_REQUEST_BYTES = 128_000`; the controller treats overflow after deterministic projection as local `invalid_request` rather than silently dropping additional state.
@@ -3140,7 +3141,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [x] 2. Runtime/config scaffold — deliverable: Node 22, exact fzf pin, canonical bounded env/deprecations, root prompt assets and startup loaders/Vercel inclusion; verify: config/prompt/deployment/frontend-exclusion tests.
 - [x] 3. Parallel v3 model/schemas — deliverable: target model, strict schemas, read-only legacy archive, and private bounded v1/v2 input schemas without breaking current consumers; verify: union/archive/bound/reference/archive-only/legacy-input tests.
 - [x] 4. Identity/migration policy — deliverable: canonical material, cross-runtime SHA-256 IDs, and deterministic v1/v2 conversion; verify: fixed Node/browser vectors plus URL/Unicode/support/ancestry/collision/source-alias/migration tests.
-- [!] 5. Knowledge/context policies — blocker: `ThreadContextTurn` lacks the required typed answer-truncation marker/accounting rule; deliverable: algebraic evidence-collection join and exact bounded thread projection; verify: law, contradiction, ordering, truncation, and byte-bound tests.
+- [x] 5. Knowledge/context policies — deliverable: algebraic evidence-collection join and exact bounded structured-prefix thread projection; verify: law, contradiction, ordering, Unicode/citation truncation, and byte-bound tests.
 - [ ] 6. Atomic storage policy/port — deliverable: typed CAS/idempotent terminal commit contract and in-memory harness; verify: commit/source/order/expiry/delete/failure contract suite.
 - [ ] 7. Storage adapters/transfer — deliverable: IndexedDB, browser-remote, Redis, portable routes, archive-preserving terminal commits, and backup/import on v3; verify: shared adapter suite plus archive-only/legacy/export/import/retention fixtures.
 - [ ] 8. LLM port/Anthropic adapter — deliverable: proposal/stream contracts, exact prompts, model routes/provenance, sanitized failures; verify: adapter structured/stream/retry/prompt tests.
@@ -3214,13 +3215,4 @@ The final implementation must prove at least:
 
 ## Open Questions
 
-### Blocking item 5: structured answer truncation
-
-`buildThreadContext` normatively truncates an oversized included research answer at a code-point boundary and marks that truncation in the protocol envelope, but the settled `ThreadContextTurn` completed-research variant currently contains only `answer: AssistantContent`. Choose one repair:
-
-1. **Structured prefix plus marker (recommended):** add `answerTruncated: boolean`. Account for each text part's Markdown plus the canonical serialized `[[cite:<SourceId>]]` form of citation parts. Copy parts in order while budget remains, truncate only a text part at a Unicode code-point boundary, never split a citation token, stop after the first non-fitting/truncated part, and set the marker. This keeps typed citations and deterministic byte-equivalent input.
-2. **Plain contextual Markdown:** replace contextual `AssistantContent` with `{ markdown: string; truncated: boolean }`, serializing citation parts first. This simplifies accounting but loses typed citation structure at the assessor/synthesizer input boundary.
-3. **Whole-answer admission only:** never partially truncate; omit completed answers that do not fully fit. This avoids a marker but contradicts the approved oversized-latest-answer fixture and loses more useful recent context.
-4. **Other:** define another deterministic prefix/accounting contract that never mutates durable content.
-
-The selected legacy policy is the bounded read-only `Thread.legacyArchive` contract above: it preserves unsupported v1/v2 history without widening `Turn` or allowing legacy content into evidence-backed execution. Any implementation discovery that changes a public contract, dependency direction, approved ceiling, provider exposure, durable shape, migration fidelity, or browser behavior must stop work and amend this plan before continuing.
+No implementation-blocking product or architecture questions remain. The approved contextual-answer policy is structured prefix plus `answerTruncated`: Markdown and canonical citation tokens consume the Unicode code-point budget, citations are atomic, text alone may be truncated, and durable answers are unchanged. The selected legacy policy is the bounded read-only `Thread.legacyArchive` contract above: it preserves unsupported v1/v2 history without widening `Turn` or allowing legacy content into evidence-backed execution. Any implementation discovery that changes a public contract, dependency direction, approved ceiling, provider exposure, durable shape, migration fidelity, or browser behavior must stop work and amend this plan before continuing.

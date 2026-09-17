@@ -136,8 +136,9 @@ export const knowledgeUnitV3Schema: z.ZodType<KnowledgeUnit> = z.strictObject({
   unresolvedGapIds: z.array(researchGapIdSchema).max(24),
 });
 
+const contextualAssistantContentSchema = z.strictObject({ parts: z.array(assistantContentPartSchema).max(256) });
 const threadContextTurnSchema = z.discriminatedUnion("outcome", [
-  z.strictObject({ turnId: turnIdSchema, kind: z.literal("research"), request: bounded(1, 2_000), outcome: z.enum(["sufficient", "best_effort"]), answer: assistantContentV3Schema }),
+  z.strictObject({ turnId: turnIdSchema, kind: z.literal("research"), request: bounded(1, 2_000), outcome: z.enum(["sufficient", "best_effort"]), answer: contextualAssistantContentSchema, answerTruncated: z.boolean() }),
   z.strictObject({ turnId: turnIdSchema, kind: z.literal("search"), request: bounded(1, 2_000), outcome: z.literal("search") }),
   z.strictObject({ turnId: turnIdSchema, kind: z.literal("research"), request: bounded(1, 2_000), outcome: z.literal("insufficient") }),
   z.strictObject({ turnId: turnIdSchema, kind: z.enum(["search", "research"]), request: bounded(1, 2_000), outcome: z.enum(["failed", "interrupted"]) }),
