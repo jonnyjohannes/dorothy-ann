@@ -2,11 +2,11 @@
 
 ## Current State
 
-- Status: planning
+- Status: planning — implementability gate not yet passed
 - Last updated: 2026-09-15
-- Current focus: normalize editable LLM system-prompt assets and browser component/interaction contracts, then run the full implementability gate and atomic file-level current → target mapping
+- Current focus: resolve the consistency/implementability gaps found after the architecture, storage, prompt-asset, and browser-contract passes
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: consistency-check `ASSESSOR.md`/`SYNTHESIZER.md` loading and the new browser primitives, prompt suggester/Escape/caret behavior, transcript Markdown contract, conversational synthesis opening, and minimized sticky header before producing the file-level migration sequence
+- Next action: approve or revise the recommended closure bundle for configuration compatibility, then repair the typed assessor/evidence/context/controller contracts and replace the broad implementation outline with an atomic file-level migration sequence
 
 ## Handoff
 
@@ -51,6 +51,8 @@ Decisions made so far:
 - The only target LLM system prompts are editable root assets `ASSESSOR.md` and `SYNTHESIZER.md`. Runtime adapters load them once at startup into a typed `SystemPromptCatalog`; all actual provider `system` parameters use one file unchanged, while dynamic context/schema/retry envelopes remain typed code-owned user input. Prompt edits require local restart or redeploy.
 - Durable/public research failures use compact capability-level codes only. Provider and implementation details remain in sanitized server observability, never turn records, SSE payloads, or client messages.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
+
+Implementability gate result: **not ready yet**. There are no unresolved `TODO` markers and the box/failure coverage is strong, but the current type sketches still conflate model proposals with trusted knowledge, use singular evidence where recursive/batched execution requires collections, omit exact provider input and bounded-context projection contracts, and name several secondary controllers without interfaces. The implementation steps/ledger are milestone-sized rather than atomic/file-level. Configuration names, one-release model fallback, and the repository's Node 22 instruction versus current Node 24 package engine also require closure. See [`## Implementability Gate`](#implementability-gate).
 
 Read this plan, then the completed [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md), `src/domain/types.ts`, `src/domain/schemas.ts`, `src/ports/`, `server/research.ts`, `server/app.ts`, and `src/ui/App.tsx` before implementation. Continue design in this file; do not begin implementation until the remaining box contracts and migration plan are approved.
 
@@ -1843,7 +1845,7 @@ validated expected revision / optional new-thread seed
 
 **Implementation boundary:** transaction mechanism, revision generation, tombstone representation, lazy cleanup scheduling, and remote database technology may vary behind this contract. `StoredThreadRecord` replaces `StoredThreadEnvelopeV2`; it is a persistence adapter record, not a product-level component.
 
-**Current mapping:** `src/ports/storage.ts` exposes broad `save`/`commit` methods and `StoredThreadEnvelopeV2`; `src/infrastructure/browser/indexeddb-thread-store.ts` and the remote adapter implement current persistence/retention/import behavior. The target replaces whole-thread caller writes with the atomic terminal operation while preserving list/delete/backup behavior through typed results.
+**Current mapping:** `src/ports/storage.ts` exposes broad `save`/`commit` methods and `StoredThreadEnvelopeV2`; `src/adapters/browser/local-stores.ts`, `src/adapters/browser/remote-stores.ts`, and `server/remote-thread-store.ts` implement current persistence/retention/import behavior. The target moves concrete adapters under `src/infrastructure/`, replaces whole-thread caller writes with the atomic terminal operation, and preserves list/delete/backup behavior through typed results.
 
 ## Browser Component Vocabulary
 
@@ -2724,6 +2726,42 @@ TurnExecutor owns server-side execution dispatch.
 TurnStreamBoundary owns authenticated HTTP/SSE transport only.
 Layout boxes render typed state and emit semantic intent.
 ```
+
+## Implementability Gate
+
+Current verdict: **not ready**. This section records the latest consistency pass; replace it with a passing result rather than appending another audit after the gaps close.
+
+| Dimension | Result | Finding |
+| --- | --- | --- |
+| No unresolved TODOs | pass | No `TODO`/`TBD` markers remain; the explicit Open Questions are the remaining decision surface. |
+| Current State / Handoff | pass after this update | Resume state now names the failed gate and next closure decision. |
+| Interfaces defined | fail | `ResearchAssessmentInput`/`ResearchSynthesisInput` are referenced but undefined; assessor model output currently contains trusted/application-derived IDs and a full `KnowledgeUnit`; recursive/batched evidence is incorrectly singular in several contracts; bounded `ThreadContext` projection is not algorithmic; `WorkspaceViewState` permits invalid route/box combinations; thread-list/settings/auth/system-boundary controllers are named without interfaces. |
+| Atomic implementation steps | fail | The nine implementation steps and ledger rows are milestones, not independently executable file-level slices. |
+| Plan Ledger | pass, needs refinement | Ledger exists with deliverables/checks, but rows 3–6 must be split or backed by an ordered atomic checklist. |
+| Dependencies explicit | partial | Provider/library/current paths are named, but exact target files, Vercel prompt inclusion/loading, environment migration, and Node target are not closed. One current storage mapping names a non-existent target-style path instead of the actual adapter files. |
+| Edge cases | partial/pass | Turn, recursion, evidence, cancellation, storage, import, keyboard, and accessibility failures are unusually complete; deterministic identity/context truncation and permanently uncommittable terminal-candidate behavior need precision. |
+| Testability | partial | Most boxes have observable assertions, but proposal normalization, identity fixtures, context truncation, prompt deployment inclusion, and secondary-controller contracts lack concrete test vectors. |
+
+### Blocking consistency repairs
+
+1. Separate untrusted model proposals from application-owned state. A `resolved` assessment should return bounded proposition/observation proposals and support refs, never provider-authored `ObservationId`, `PropositionKey`, `KnowledgeUnit`, copied evidence packs, or gap state. Application normalization derives stable identities and joins supplied evidence.
+2. Change recursive knowledge/acquisition evidence from singular `EvidencePack` to deterministic collections. One acquisition call may contain up to three queries, and one root knowledge unit may join evidence from multiple recursive tasks.
+3. Define exact `ResearchAssessmentInput` and `ResearchSynthesisInput`, including immutable system-prompt selection, dynamic protocol fields, budgets, allowed supports/sources, and output bounds.
+4. Define deterministic identity policies for canonical sources, propositions, observations, problems, and gaps. Provider-generated IDs remain untrusted; normalization/hash fixtures must produce byte-stable results in Node and browser runtimes.
+5. Define `buildThreadContext` selection/truncation order, complete char accounting, evidence/source inclusion, and deterministic behavior at every boundary.
+6. Replace optional-field `WorkspaceViewState` with a route-discriminated projection and define the named thread-list, settings, authentication, and system-boundary controller interfaces or explicitly collapse them into an existing owner.
+7. Reconcile the absolute “every terminal persists” product statement with permanent storage/integrity failure: execution must never rerun, retryable candidates remain memory-resident, and non-retryable invalid/integrity state needs one explicit blocking recovery/escalation path.
+8. Correct current → target paths and produce an ordered file-level migration where every present responsibility and compatibility bridge has one temporary and final owner.
+9. Close configuration/deployment decisions: structural versus operator-tunable limits, legacy Anthropic-model fallback lifetime, Node 22 versus the current `package.json` Node 24 engine, and exact Node/Vercel prompt-asset loading/inclusion.
+
+### Recommended closure bundle
+
+- Keep semantic/structural research ceilings fixed in typed code: searches `3`, consumed sources `9`, recursion depth `2`, assessments `8`, children `3`, and candidates/search `5`. Permit environment values only for operational concurrency/time/character/token limits, validated at or below approved maxima.
+- Add canonical operational names while migrating current equivalents: `MAX_CONCURRENT_SEARCHES`, `MAX_CONCURRENT_EXTRACTIONS`, `EXTRACTION_TIMEOUT_MS`, `MAX_EXTRACTED_CHARS_PER_PAGE`, `MAX_EVIDENCE_CHARS_PER_SOURCE`, `MAX_EVIDENCE_CHARS_TOTAL`, `MAX_THREAD_CONTEXT_TURNS`, `MAX_THREAD_CONTEXT_CHARS`, `MAX_ASSESSMENT_OUTPUT_TOKENS`, and `MAX_OUTPUT_TOKENS`. Remove ambiguous legacy `MAX_CONTEXT_CHARS` after mapping it during the v1.1 deployment transition.
+- In v1.1, each missing `ANTHROPIC_ASSESSMENT_MODEL`/`ANTHROPIC_SYNTHESIS_MODEL` falls back independently to `ANTHROPIC_MODEL` with one sanitized startup deprecation notice. New variables win. Remove the fallback in v1.2; never persist the legacy variable name as turn provenance.
+- Follow the repository contract and target Node 22, changing the current `package.json` `engines.node` from `24.x` during scaffold/config migration.
+- Derive canonical IDs with full SHA-256 over explicitly normalized UTF-8 identity material, encoded base64url with a type prefix. Use the Web Crypto API available in Node 22 and browsers behind one async identity policy; store collision material and reject an impossible same-ID/different-canonical-value encounter.
+- Load root prompt assets once in `server/runtime/node.ts` and `api/index.ts` through thin Node/Vercel adapters, inject the catalog into the portable app factory, and add explicit Vercel function asset inclusion plus a deployment smoke assertion. No application/domain/provider module reads files.
 
 ## Implementation Plan
 
