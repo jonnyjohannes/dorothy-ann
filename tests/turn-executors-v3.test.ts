@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AssistantContent, CanonicalSource, IsoTimestamp, ResearchResolutionResult, SufficientResearchResolution, ThreadContext, UserMessage } from "../src/domain/model-v3.js";
+import type { AssistantContent, CanonicalSource, IsoTimestamp, ResearchResolutionResult, SufficientResearchResolution, ThreadContext, UserMessage } from "../src/domain/types.js";
 import { AnswerSynthesizer } from "../src/application/answer-synthesizer.js";
 import { executeSearchTurn } from "../src/application/execute-search-turn.js";
 import { executeResearchTurn } from "../src/application/execute-research-turn.js";

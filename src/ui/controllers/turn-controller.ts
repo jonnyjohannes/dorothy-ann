@@ -10,8 +10,8 @@ import type {
   Turn,
   TurnId,
   UserMessage,
-} from "../../domain/model-v3.js";
-import { turnV3Schema } from "../../domain/schemas-v3.js";
+} from "../../domain/types.js";
+import { turnV3Schema } from "../../domain/schemas.js";
 import type { CommitTerminalTurnInput, StoredThreadRecord, ThreadRevision, ThreadStore, ThreadStoreFailure } from "../../ports/storage-v3.js";
 import type { TurnGateway, TurnGatewayEvent, TurnGatewayOptions, TurnGatewayRequest } from "../../ports/turn-gateway.js";
 import { isGatewayIdentity } from "../../infrastructure/browser/turn-gateway.js";

@@ -1,5 +1,5 @@
 import { normalizeCanonicalUrl } from "../../domain/identity-material.js";
-import type { SourceId } from "../../domain/model-v3.js";
+import type { SourceId } from "../../domain/types.js";
 import type { SearchResult } from "../../domain/types.js";
 import type { SearchOptions, SearchProvider } from "../../ports/providers.js";
 

@@ -9,7 +9,7 @@ import type {
   SupportRef,
   SufficientResearchResolution,
   ThreadContext,
-} from "../domain/model-v3.js";
+} from "../domain/types.js";
 
 export interface ResearchProblemProposal {
   question: string;

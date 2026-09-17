@@ -9,7 +9,7 @@ import type {
   SupportRef,
   ThreadId,
   TurnId,
-} from "../domain/model-v3.js";
+} from "../domain/types.js";
 import type { IdentityHasher } from "../ports/identity.js";
 
 export class IdentityCollisionError extends Error {

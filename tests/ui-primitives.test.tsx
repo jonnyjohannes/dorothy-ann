@@ -8,7 +8,7 @@ import { TextField } from "../src/ui/primitives/TextField";
 import { VisuallyHidden } from "../src/ui/primitives/VisuallyHidden";
 import { rankFuzzyCandidates } from "../src/ui/policies/fuzzy";
 import { rankPromptSuggestions, rankThreads } from "../src/ui/policies/ranking";
-import type { ThreadSummary } from "../src/domain/model-v3";
+import type { ThreadSummary } from "../src/domain/types";
 
 describe("browser semantic primitives", () => {
   it("keeps native action and text-field semantics", () => {

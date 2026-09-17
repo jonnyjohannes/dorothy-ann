@@ -1,5 +1,5 @@
 import type { PromptSuggestion, RankedPromptSuggestion } from "../prompt-types";
-import type { ThreadSummary } from "../../domain/model-v3";
+import type { ThreadSummary } from "../../domain/types";
 import { rankFuzzyCandidates } from "./fuzzy";
 
 export interface RankedThreadSummary {

@@ -6,7 +6,7 @@ import { IdentityPolicy } from "../src/application/identity-policy.js";
 import { EvidenceAcquirer } from "../src/application/evidence-acquirer.js";
 import { ResearchAssessor } from "../src/application/research-assessor.js";
 import { ResearchResolver } from "../src/application/research-resolver.js";
-import type { GapLedger, KnowledgeUnit, ResearchProblem, ThreadContext, TurnId } from "../src/domain/model-v3.js";
+import type { GapLedger, KnowledgeUnit, ResearchProblem, ThreadContext, TurnId } from "../src/domain/types.js";
 import type { ResearchAssessmentProposal } from "../src/application/research-assessor.js";
 import { WebCryptoIdentityHasher } from "../src/infrastructure/identity/web-crypto-hasher.js";
 

@@ -5,7 +5,7 @@ import type {
   ThreadId,
   ThreadSummary,
   Turn,
-} from "../../domain/model-v3";
+} from "../../domain/types";
 
 export type BoxIntent =
   | { type: "new_thread_requested" }

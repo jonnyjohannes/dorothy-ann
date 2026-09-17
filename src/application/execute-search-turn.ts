@@ -4,7 +4,7 @@ import type {
   SearchTurn,
   TurnInterruption,
   UserMessage,
-} from "../domain/model-v3.js";
+} from "../domain/types.js";
 import type { SearchOptions, SearchProvider } from "../ports/providers.js";
 import type { SearchResult } from "../domain/types.js";
 

@@ -1,6 +1,6 @@
 import type { LegacyThreadInput, LegacyTurnInput } from "./legacy-input-schemas.js";
-import type { CanonicalSource, LegacyArchiveDestinationRef, LegacyArchiveEntry, LegacyArchiveEntryId, SearchTurn, SourceId, Thread, ThreadId, ThreadSourceRecord } from "./model-v3.js";
-import { canonicalSourceV3Schema, messageIdSchema, threadIdSchema, threadV3Schema, turnIdSchema } from "./schemas-v3.js";
+import type { CanonicalSource, LegacyArchiveDestinationRef, LegacyArchiveEntry, LegacyArchiveEntryId, SearchTurn, SourceId, Thread, ThreadId, ThreadSourceRecord } from "./types.js";
+import { canonicalSourceV3Schema, messageIdSchema, threadIdSchema, threadV3Schema, turnIdSchema } from "./schemas.js";
 import { normalizeCanonicalUrl } from "./identity-material.js";
 
 export type LegacyMigrationIssueCode =

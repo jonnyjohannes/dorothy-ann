@@ -1,5 +1,5 @@
-import type { Thread, Turn } from "../../domain/model-v3";
-import type { ThreadSummary } from "../../domain/model-v3";
+import type { Thread, Turn } from "../../domain/types";
+import type { ThreadSummary } from "../../domain/types";
 import type { TranscriptItem } from "./box-types";
 
 export function rankThreads(threads: ThreadSummary[], query: string): ThreadSummary[] {

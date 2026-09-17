@@ -4,8 +4,8 @@ import { webcrypto } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { commitTerminalTurn } from "../src/application/commit-terminal-turn";
 import { IdentityPolicy } from "../src/application/identity-policy";
-import type { CanonicalSource, SearchTurn, ThreadId, Turn } from "../src/domain/model-v3";
-import { threadV3Schema } from "../src/domain/schemas-v3";
+import type { CanonicalSource, SearchTurn, ThreadId, Turn } from "../src/domain/types";
+import { threadV3Schema } from "../src/domain/schemas";
 import { WebCryptoIdentityHasher } from "../src/infrastructure/identity/web-crypto-hasher";
 import type { CommitTerminalTurnInput, StoredThreadRecord, ThreadRevision, ThreadStoreResult, CommitTerminalTurnValue } from "../src/ports/storage-v3";
 

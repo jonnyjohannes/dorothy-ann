@@ -7,7 +7,7 @@ import type {
   TurnInterruption,
   UserMessage,
   InterruptedResearchState,
-} from "../domain/model-v3.js";
+} from "../domain/types.js";
 import type { AnswerSynthesizer } from "./answer-synthesizer.js";
 
 export type ResearchResolutionResult = ResearchResolution & {

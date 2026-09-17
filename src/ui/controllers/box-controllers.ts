@@ -1,4 +1,4 @@
-import type { ThreadId, ThreadSummary } from "../../domain/model-v3";
+import type { ThreadId, ThreadSummary } from "../../domain/types";
 import type { BoxIntent } from "../boxes/box-types";
 
 export interface PreferenceStore { read(key: string): string | null; write(key: string, value: string): Promise<void> }

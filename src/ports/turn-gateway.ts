@@ -6,7 +6,7 @@ import type {
   ThreadContext,
   TurnId,
   TurnKind,
-} from "../domain/model-v3.js";
+} from "../domain/types.js";
 export interface TurnGatewaySearchRequest {
   executionId: ExecutionId;
   turnId: TurnId;
@@ -55,12 +55,12 @@ export type TurnGatewayEvent =
 export type TurnGatewayTerminal =
   | {
       kind: "search";
-      outcome: Omit<import("../domain/model-v3.js").SearchTurn, "id" | "kind" | "createdAt" | "finishedAt" | "userMessage">;
+      outcome: Omit<import("../domain/types.js").SearchTurn, "id" | "kind" | "createdAt" | "finishedAt" | "userMessage">;
       sourceRecords: CanonicalSource[];
     }
   | {
       kind: "research";
-      outcome: Omit<import("../domain/model-v3.js").ResearchTurn, "id" | "kind" | "createdAt" | "finishedAt" | "userMessage">;
+      outcome: Omit<import("../domain/types.js").ResearchTurn, "id" | "kind" | "createdAt" | "finishedAt" | "userMessage">;
       sourceRecords: CanonicalSource[];
     };
 

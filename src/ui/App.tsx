@@ -44,7 +44,7 @@ function AuthGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (location.pathname === "/unlock") { setStatus("ready"); return; }
     let cancelled = false;
-    void fetch("/api/providers/status").then(async (response) => {
+    void fetch("/api/status").then(async (response) => {
       if (!response.ok) throw new Error("status");
       return await response.json() as { fixtureMode?: boolean; storage?: boolean };
     }).then(async (provider) => {
@@ -52,7 +52,7 @@ function AuthGate({ children }: { children: ReactNode }) {
         const session = await fetch("/api/auth/session").then((response) => response.json()) as { authenticated?: boolean };
         if (!session.authenticated) { navigate(`/unlock?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`, { replace: true }); return; }
       }
-      if (!cancelled) setStatus(provider.storage === false ? "unavailable" : "ready");
+      if (!cancelled) setStatus(provider.storage === false && provider.fixtureMode !== true ? "unavailable" : "ready");
     }).catch(() => { if (!cancelled) setStatus("unavailable"); });
     return () => { cancelled = true; };
   }, [location.pathname, location.search, navigate]);

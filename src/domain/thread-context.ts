@@ -8,7 +8,7 @@ import type {
   ThreadContext,
   ThreadContextTurn,
   Turn,
-} from "./model-v3.js";
+} from "./types.js";
 
 export interface ThreadContextLimits {
   maxThreadContextTurns: number;

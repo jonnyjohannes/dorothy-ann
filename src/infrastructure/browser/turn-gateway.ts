@@ -1,7 +1,7 @@
 import { createParser } from "eventsource-parser";
 import { z } from "zod";
-import { canonicalSourceV3Schema, researchResolutionV3Schema } from "../../domain/schemas-v3.js";
-import type { ExecutionId, TurnId } from "../../domain/model-v3.js";
+import { canonicalSourceV3Schema, researchResolutionV3Schema } from "../../domain/schemas.js";
+import type { ExecutionId, TurnId } from "../../domain/types.js";
 import type {
   TurnGateway,
   TurnGatewayEvent,
@@ -102,9 +102,9 @@ export function createFetchTurnGateway(options: FetchTurnGatewayOptions = {}): T
   const maxEventBytes = options.maxEventBytes ?? 256_000;
   return {
     async *stream(request: TurnGatewayRequest, gatewayOptions: TurnGatewayOptions, signal: AbortSignal): AsyncIterable<TurnGatewayEvent> {
-      const body = request.kind === "search"
-        ? { ...request, maxResults: gatewayOptions.maxResults }
-        : { ...request, limits: gatewayOptions.researchLimits };
+      // Operational ceilings are injected by the authenticated server boundary;
+      // clients send only the provider-neutral request contract.
+      const body = request;
       const response = await requestFetch(endpoint, { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream" }, body: JSON.stringify(body), signal });
       yield* parseStream(response, maxEventBytes);
     },

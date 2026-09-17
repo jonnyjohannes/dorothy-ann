@@ -1,4 +1,4 @@
-import type { SearchTurn, ResearchTurn } from "../domain/model-v3.js";
+import type { SearchTurn, ResearchTurn } from "../domain/types.js";
 import { executeResearchTurn, type ResearchTurnExecutionInput, type ResearchTurnExecutionResult } from "./execute-research-turn.js";
 import { executeSearchTurn, type SearchTurnExecutionInput, type SearchTurnExecutionResult } from "./execute-search-turn.js";
 

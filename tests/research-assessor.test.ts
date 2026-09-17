@@ -9,7 +9,7 @@ import {
   ResearchAssessor,
   type ResearchAssessorInput,
 } from "../src/application/research-assessor.js";
-import type { GapLedger, KnowledgeUnit, ResearchProblem, ThreadContext, TurnId } from "../src/domain/model-v3.js";
+import type { GapLedger, KnowledgeUnit, ResearchProblem, ThreadContext, TurnId } from "../src/domain/types.js";
 import { WebCryptoIdentityHasher } from "../src/infrastructure/identity/web-crypto-hasher.js";
 
 const uuid = (value: number) => `00000000-0000-4000-8000-${String(value).padStart(12, "0")}` as TurnId;

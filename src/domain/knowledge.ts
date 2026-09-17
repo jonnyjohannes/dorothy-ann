@@ -1,4 +1,4 @@
-import type { EvidencePack, KnowledgeUnit, ResearchGapId, ResearchProblemId, SupportRef, SupportedFinding, SupportedObservation } from "./model-v3.js";
+import type { EvidencePack, KnowledgeUnit, ResearchGapId, ResearchProblemId, SupportRef, SupportedFinding, SupportedObservation } from "./types.js";
 
 export class KnowledgeIntegrityError extends Error {
   constructor() {

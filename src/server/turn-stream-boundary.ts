@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { stream } from "hono/streaming";
 import { z } from "zod";
-import { researchResolutionV3Schema, searchTurnV3Schema, threadContextV3Schema } from "../domain/schemas-v3.js";
+import { researchResolutionV3Schema, searchTurnV3Schema, threadContextV3Schema } from "../domain/schemas.js";
 import type { ResearchLimits } from "../application/evidence-acquirer.js";
 import type {
   CanonicalSource,
@@ -15,7 +15,7 @@ import type {
   TurnId,
   TurnKind,
   ExecutionId,
-} from "../domain/model-v3.js";
+} from "../domain/types.js";
 
 export type TurnPhase = "searching" | "assessing" | "decomposing" | "extracting" | "resolving" | "synthesizing";
 

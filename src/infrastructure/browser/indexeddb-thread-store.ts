@@ -1,6 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { IdentityPolicy } from "../../application/identity-policy.js";
-import type { ThreadId } from "../../domain/model-v3.js";
+import type { ThreadId } from "../../domain/types.js";
 import { WebCryptoIdentityHasher } from "../identity/web-crypto-hasher.js";
 import type { StoredThreadRecord, ThreadRevision } from "../../ports/storage-v3.js";
 import { ThreadStoreBase, type PersistedThreadState, type ThreadTombstone } from "../storage/thread-store-base.js";

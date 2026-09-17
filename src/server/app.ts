@@ -32,7 +32,9 @@ export function createPortableApp(options: PortableAppOptions): Hono {
   if (options.routes?.auth) app.route("/api/auth", options.routes.auth);
   if (options.routes?.status) app.route("/api/status", options.routes.status);
   if (options.routes?.storage) app.route("/api/storage", options.routes.storage);
-  app.route("/api/turn", createTurnStreamBoundary(options));
+  const turnBoundary = createTurnStreamBoundary(options);
+  app.route("/api/turn", turnBoundary);
+  app.route("/api/turn/", turnBoundary);
   return app;
 }
 

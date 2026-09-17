@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { joinKnowledge, KnowledgeIntegrityError } from "../src/domain/knowledge";
-import type { EvidencePack, KnowledgeUnit, ResearchProblemId, SourceId, Thread } from "../src/domain/model-v3";
+import type { EvidencePack, KnowledgeUnit, ResearchProblemId, SourceId, Thread } from "../src/domain/types";
 import { assertTurnRequestBytes, buildThreadContext, TurnRequestTooLargeError } from "../src/domain/thread-context";
-import { threadContextV3Schema } from "../src/domain/schemas-v3";
+import { threadContextV3Schema } from "../src/domain/schemas";
 
 const digest = (prefix: string, character: string) => `${prefix}_${character.repeat(43)}`;
 const uuid = (value: number) => `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;

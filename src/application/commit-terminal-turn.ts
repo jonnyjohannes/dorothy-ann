@@ -1,5 +1,5 @@
-import type { CanonicalSource, KnowledgeUnit, ResearchCheckpoint, ResearchResolution, ResearchTurn, SourceId, Thread, Turn } from "../domain/model-v3.js";
-import { canonicalSourceV3Schema, threadV3Schema, turnV3Schema } from "../domain/schemas-v3.js";
+import type { CanonicalSource, KnowledgeUnit, ResearchCheckpoint, ResearchResolution, ResearchTurn, SourceId, Thread, Turn } from "../domain/types.js";
+import { canonicalSourceV3Schema, threadV3Schema, turnV3Schema } from "../domain/schemas.js";
 import type { CommitTerminalTurnInput, CommitTerminalTurnValue, StoredThreadRecord, ThreadRevision, ThreadStoreFailure, ThreadStoreResult } from "../ports/storage-v3.js";
 
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1_000;

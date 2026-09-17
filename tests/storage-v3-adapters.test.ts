@@ -4,7 +4,7 @@ import { webcrypto } from "node:crypto";
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
 import { IdentityPolicy } from "../src/application/identity-policy";
-import type { CanonicalSource, SearchTurn, ThreadId } from "../src/domain/model-v3";
+import type { CanonicalSource, SearchTurn, ThreadId } from "../src/domain/types";
 import { IndexedDbThreadStore, openDorothyAnnV3Db } from "../src/infrastructure/browser/indexeddb-thread-store";
 import { BrowserRemoteThreadStore } from "../src/infrastructure/browser/remote-thread-store";
 import { WebCryptoIdentityHasher } from "../src/infrastructure/identity/web-crypto-hasher";

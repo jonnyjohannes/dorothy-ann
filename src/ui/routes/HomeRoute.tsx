@@ -1,8 +1,5 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import type { CanonicalSource } from "../../domain/model-v3";
-import { resolveQueryMode } from "../../domain/policies";
-import { EvidenceBox } from "../boxes/EvidenceBox";
 import { PromptBox } from "../boxes/PromptBox";
 import { StickyHeader } from "../boxes/StickyHeader";
 import type { BoxIntent } from "../boxes/box-types";
@@ -13,30 +10,16 @@ export function HomeRoute() {
   const [params] = useSearchParams();
   const [value, setValue] = useState("");
   const [message, setMessage] = useState("");
-  const [sources, setSources] = useState<CanonicalSource[]>([]);
 
   useEffect(() => {
     const query = params.get("q")?.trim();
     if (!query) return;
-    let cancelled = false;
-    void fetch("/api/lookup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query }) })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("lookup unavailable");
-        const body = await response.json() as { results?: CanonicalSource[] };
-        if (!cancelled) setSources(body.results ?? []);
-      })
-      .catch(() => { if (!cancelled) setMessage("Search is unavailable."); });
-    return () => { cancelled = true; };
+    navigate(`/topics/new?q=${encodeURIComponent(query)}`, { replace: true });
   }, [params]);
 
   const onIntent = (intent: BoxIntent) => {
     if (intent.type === "prompt_submitted") {
-      const mode = resolveQueryMode(intent.value);
-      if (mode === "lookup") {
-        void fetch("/api/lookup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: intent.value }) })
-          .then(async (response) => { if (!response.ok) throw new Error("lookup unavailable"); const body = await response.json() as { results?: CanonicalSource[] }; setSources(body.results ?? []); })
-          .catch(() => setMessage("Search is unavailable."));
-      } else navigate(`/topics/new?mode=${mode}&q=${encodeURIComponent(intent.value)}`);
+      navigate(`/topics/new?q=${encodeURIComponent(intent.value)}`);
       return;
     }
     if (intent.type === "command_requested") {
@@ -58,7 +41,6 @@ export function HomeRoute() {
       </div>
       <PromptBox value={value} onChange={setValue} onIntent={onIntent} />
       {message && <p className={styles.commandMessage} role="status">{message}</p>}
-      {sources.length > 0 && <EvidenceBox sources={sources} onIntent={() => undefined} />}
     </section>
   </main>;
 }

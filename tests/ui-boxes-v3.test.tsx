@@ -7,7 +7,7 @@ import { ThreadsBox } from "../src/ui/boxes/ThreadsBox";
 import { UnlockBox } from "../src/ui/boxes/UnlockBox";
 import { TranscriptBox } from "../src/ui/boxes/TranscriptBox";
 import { rankThreads, transcriptItems } from "../src/ui/boxes/box-policies";
-import type { Thread, ThreadSummary } from "../src/domain/model-v3";
+import type { Thread, ThreadSummary } from "../src/domain/types";
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 const source = { sourceId: "src_1" as never, title: "Source", url: "https://example.com", canonicalUrl: "https://example.com", displayUrl: "example.com" };

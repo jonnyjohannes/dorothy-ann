@@ -1,5 +1,5 @@
 import { Hono, type Context } from "hono";
-import { threadIdSchema } from "../domain/schemas-v3.js";
+import { threadIdSchema } from "../domain/schemas.js";
 import type { CommitTerminalTurnInput, ThreadRevision, ThreadStore, ThreadStoreFailure, ThreadStoreResult } from "../ports/storage-v3.js";
 
 const statusFor = (failure: ThreadStoreFailure) => failure.code === "revision_conflict" ? 409

@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { AssistantContentPart, SourceId } from "../../domain/model-v3.js";
+import type { AssistantContentPart, SourceId } from "../../domain/types.js";
 import type {
   LLMProvider,
   ObservationProposal,

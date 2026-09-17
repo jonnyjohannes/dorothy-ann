@@ -1,5 +1,5 @@
 import type { BoxIntent } from "../boxes/box-types";
-import type { ThreadId } from "../../domain/model-v3";
+import type { ThreadId } from "../../domain/types";
 
 export type WorkspaceRoute =
   | { kind: "home" }

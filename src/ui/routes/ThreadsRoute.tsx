@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { IndexedDbThreadStore } from "../../infrastructure/browser/indexeddb-thread-store";
-import type { ThreadId, ThreadSummary } from "../../domain/model-v3";
+import type { ThreadId, ThreadSummary } from "../../domain/types";
 import { ThreadsBox } from "../boxes/ThreadsBox";
 import { StickyHeader } from "../boxes/StickyHeader";
 import type { BoxIntent } from "../boxes/box-types";

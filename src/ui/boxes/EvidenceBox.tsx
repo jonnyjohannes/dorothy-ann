@@ -1,4 +1,4 @@
-import type { CanonicalSource } from "../../domain/model-v3";
+import type { CanonicalSource } from "../../domain/types";
 import styles from "../App.module.css";
 import type { BoxIntent } from "./box-types";
 export function EvidenceBox({ sources, selectedSourceId, onIntent }: { sources: CanonicalSource[]; selectedSourceId?: string; onIntent: (intent: BoxIntent) => void }) {

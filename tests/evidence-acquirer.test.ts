@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EvidenceAcquirer, type EvidenceRequest } from "../src/application/evidence-acquirer.js";
-import type { ResearchBudget } from "../src/domain/model-v3.js";
+import type { ResearchBudget } from "../src/domain/types.js";
 import type { SearchResult } from "../src/domain/types.js";
 
 const request = (problemId: string, priority: 1 | 2 | 3, createdOrder: number): EvidenceRequest => ({

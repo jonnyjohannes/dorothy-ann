@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { legacyThreadInputSchema } from "../src/domain/legacy-input-schemas";
-import { threadV3Schema, turnV3Schema } from "../src/domain/schemas-v3";
+import { threadV3Schema, turnV3Schema } from "../src/domain/schemas";
 
 const uuid = (value: number) => `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
 const hash = (prefix: string, fill: string) => `${prefix}_${fill.repeat(43)}`;

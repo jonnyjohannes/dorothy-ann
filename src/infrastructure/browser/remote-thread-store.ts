@@ -1,5 +1,5 @@
-import { threadV3Schema } from "../../domain/schemas-v3.js";
-import type { ThreadId } from "../../domain/model-v3.js";
+import { threadV3Schema } from "../../domain/schemas.js";
+import type { ThreadId } from "../../domain/types.js";
 import type { CommitTerminalTurnInput, CommitTerminalTurnValue, ImportReport, InspectedThreadImport, RemoveThreadInput, StoredThreadRecord, StoredThreadSummary, ThreadBackup, ThreadStore, ThreadStoreFailure, ThreadStoreResult, ValidatedImportCandidate } from "../../ports/storage-v3.js";
 
 const MAX_RESPONSE_BYTES = 2_000_000;

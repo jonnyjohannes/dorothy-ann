@@ -5,7 +5,7 @@ import type {
   SourceId,
   SufficientResearchResolution,
   ThreadContext,
-} from "../domain/model-v3.js";
+} from "../domain/types.js";
 import type { LLMProvider, ResearchSynthesisInput } from "../ports/llm.js";
 
 export const DEFAULT_SYNTHESIS_MAX_OUTPUT_TOKENS = 4_096;

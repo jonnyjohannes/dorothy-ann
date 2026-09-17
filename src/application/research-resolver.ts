@@ -10,7 +10,7 @@ import type {
   ResearchTaskRecord,
   SupportRef,
   TurnId,
-} from "../domain/model-v3.js";
+} from "../domain/types.js";
 import type {
   ResearchAssessmentProposal,
   ResearchAssessor,
@@ -18,7 +18,7 @@ import type {
 } from "./research-assessor.js";
 import type { EvidenceAcquirer, EvidenceAcquisitionResult, EvidenceRequest } from "./evidence-acquirer.js";
 import type { IdentityPolicy } from "./identity-policy.js";
-import { sourceIdSchema, turnIdSchema } from "../domain/schemas-v3.js";
+import { sourceIdSchema, turnIdSchema } from "../domain/schemas.js";
 
 export const MAX_RESEARCH_DEPTH = 2;
 

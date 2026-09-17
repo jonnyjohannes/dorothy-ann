@@ -1,8 +1,8 @@
 import { commitTerminalTurn, type TerminalCommitIdentity } from "../../application/commit-terminal-turn.js";
 import { legacyStoredThreadInputSchema } from "../../domain/legacy-input-schemas.js";
 import { migrateLegacyThread, type LegacyMigrationIdentities } from "../../domain/migrations.js";
-import type { IsoTimestamp, Thread, ThreadId, ThreadSummary } from "../../domain/model-v3.js";
-import { threadV3Schema } from "../../domain/schemas-v3.js";
+import type { IsoTimestamp, Thread, ThreadId, ThreadSummary } from "../../domain/types.js";
+import { threadV3Schema } from "../../domain/schemas.js";
 import type { CommitTerminalTurnInput, CommitTerminalTurnValue, ImportIssueSummary, ImportReport, InspectedThreadImport, RemoveThreadInput, StoredThreadRecord, StoredThreadSummary, ThreadBackup, ThreadRevision, ThreadStore, ThreadStoreFailure, ThreadStoreResult, ValidatedImportCandidate } from "../../ports/storage-v3.js";
 
 const RETENTION_MS = 7 * 86_400_000;

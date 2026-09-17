@@ -5,7 +5,7 @@ import type {
   IsoTimestamp,
   ResearchBudget,
   ResearchProblemId,
-} from "../domain/model-v3.js";
+} from "../domain/types.js";
 import type {
   ExtractionOutcome,
   SearchResult,

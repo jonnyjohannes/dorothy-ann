@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import styles from "../App.module.css";
-import type { ThreadId } from "../../domain/model-v3";
+import type { ThreadId } from "../../domain/types";
 import type { BoxIntent, ThreadsViewState } from "./box-types";
 import { rankThreads } from "./box-policies";
 export function ThreadsBox({ state, onIntent }: { state: ThreadsViewState; onIntent: (intent: BoxIntent) => void }) {

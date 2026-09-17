@@ -1,4 +1,4 @@
-import type { CanonicalSource, ResearchCheckpoint, ResearchResolution, Turn } from "../../domain/model-v3.js";
+import type { CanonicalSource, ResearchCheckpoint, ResearchResolution, Turn } from "../../domain/types.js";
 import type { TurnGatewayEvent, TurnGatewaySourceOccurrence } from "../../ports/turn-gateway.js";
 
 export interface ActiveTurnProjection {

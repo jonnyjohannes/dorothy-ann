@@ -1,4 +1,4 @@
-import type { CanonicalSource, IsoTimestamp, Thread, ThreadId, ThreadSummary, Turn } from "../domain/model-v3.js";
+import type { CanonicalSource, IsoTimestamp, Thread, ThreadId, ThreadSummary, Turn } from "../domain/types.js";
 
 export type ThreadRevision = string & { readonly __brand: "ThreadRevision" };
 

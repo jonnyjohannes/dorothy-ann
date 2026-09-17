@@ -3,7 +3,7 @@ import { normalizeIdentityText } from "../domain/identity-material.js";
 import {
   sourceIdSchema,
   turnIdSchema,
-} from "../domain/schemas-v3.js";
+} from "../domain/schemas.js";
 import type {
   EvidencePack,
   GapLedger,
@@ -14,7 +14,7 @@ import type {
   SupportedFinding,
   SupportedObservation,
   TurnId,
-} from "../domain/model-v3.js";
+} from "../domain/types.js";
 import type { IdentityPolicy } from "./identity-policy.js";
 
 export const MAX_ASSESSMENTS = 8;
