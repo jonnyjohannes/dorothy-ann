@@ -4,9 +4,9 @@
 
 - Status: planning
 - Last updated: 2026-09-15
-- Current focus: finalize `ThreadStore` revision/retention/import contracts and verify the new controller/transport event unions against every terminal turn variant
+- Current focus: run the full implementability/consistency gate and convert the settled architecture into an atomic file-level current → target migration sequence
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: define the exact atomic `ThreadStore.commitTerminalTurn` input/result plus local/remote idempotency, retention, list/delete, and import/export behavior
+- Next action: map each current source file and responsibility to one target owner, resolve the remaining deployment-variable compatibility questions, then mark architectural contracts complete only if no implementation-blocking ambiguity remains
 
 ## Handoff
 
@@ -28,7 +28,7 @@ Decisions made so far:
 - Initial and follow-up research questions use the same protocol. An empty initial context is assessed through the same interface rather than routed through a separate mandatory-search path.
 - Budget exhaustion with useful supported evidence produces a bounded best-effort synthesis that identifies unresolved uncertainty; no useful supported evidence produces an insufficient-evidence failure.
 - `Thread` and `Turn` remain the central data-model components. Durable `Turn` is a discriminated terminal `SearchTurn | ResearchTurn` union; pending/running execution exists only as controller-owned `ActiveTurn` state. Every observed terminal outcome is persisted, including failed, insufficient, and interrupted attempts.
-- The persistence wrapper currently named `StoredThreadEnvelopeV2` is not a top-level architecture box. Its naming and exact storage contract remain open.
+- The target persistence wrapper is `StoredThreadRecord`: an adapter-only record with an opaque CAS revision and expiry around the complete `Thread`. `ThreadStore` now has settled atomic commit, idempotency, source reconciliation, ordering, retention, deletion-tombstone, and import/export contracts.
 - The agreed visual regions are `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, and `UnlockBox`. Boxes receive typed view state and emit intent; `WorkspaceController` coordinates routes/cross-box projection and delegates effects to owning controllers/capabilities.
 - `Hotkeys` is an explicit layout-control box, not a visible region. It translates unhandled global keyboard events and current layout context into semantic intents without navigating, focusing DOM nodes, cancelling work, or invoking system capabilities directly.
 - `ThreadsBox` has one canonical `/threads` route with aggressive `fzf@0.5.2`-backed filtering and keyboard behavior, not separate route and overlay presentations. The exact package version is pinned behind a pure `rankThreads` policy with fixture-locked ordering. Deletion uses an inline terminal-style confirmation, never `window.confirm`.
@@ -45,6 +45,7 @@ Decisions made so far:
 - `Thread` is the durable context/aggregate root, not a runtime god object. It materializes canonical source metadata once in an append-stable source catalog; terminal turns retain rank/role/support references, and `EvidenceSet`/`ThreadContext` are deterministic bounded projections. Active execution remains controller-owned.
 - Fair source allocation derives a three-selection ownership cap per evidence request from the approved nine-source/three-search ceilings. Concurrent requests receive rank-layer round-robin opportunities in priority/depth/creation order; shared canonical sources consume global budget once, and unused capacity is not released into earlier requests.
 - Controller ownership is split explicitly: `WorkspaceController` owns route/cross-box projection and command delegation; browser `TurnController` owns one `ActiveTurn`, stale-event rejection, terminal construction, and atomic commit; `TurnGateway` adapts the client stream; server `TurnExecutor` dispatches provider-neutral search/research; `TurnStreamBoundary` owns only authenticated HTTP/SSE validation, heartbeat, serialization, and cancellation wiring.
+- `ThreadStore` uses opaque CAS revisions and idempotent atomic terminal commits. It never stores empty threads, inserts raced turns by `(createdAt, id)`, preserves first-admission source metadata, expires seven days from durable `updatedAt`, tombstones explicit deletion, refreshes imported records with new local revisions, and exposes identical local/remote behavior. Execution provenance belongs on each terminal turn, with distinct assessment/synthesis/search refs where applicable.
 - Durable/public research failures use compact capability-level codes only. Provider and implementation details remain in sanitized server observability, never turn records, SSE payloads, or client messages.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
 
@@ -175,8 +176,6 @@ interface Thread {
   title: string;
   createdAt: IsoTimestamp;
   updatedAt: IsoTimestamp;
-  modelRef: string;
-  searchRef: string;
   sources: ThreadSourceRecord[];
   turns: Turn[];
 }
@@ -202,7 +201,7 @@ thread identity + canonical source catalog + ordered terminal turns
 - Schema changes are versioned and migration-safe.
 - A thread is the unit of storage, retention, selection, import, and export.
 
-**Open modeling point:** decide whether `modelRef` and `searchRef` are thread-level provenance or execution metadata that belongs on individual turns.
+Provider-neutral execution provenance belongs to each terminal turn, not `Thread`: configuration may change between requests, retries, or imports, and research uses distinct assessment and synthesis routes. A controller-created interruption may use the explicit `unavailable` marker when no authoritative server terminal supplied route refs; it never guesses configuration.
 
 ### `Turn`
 
@@ -276,6 +275,30 @@ interface TerminalTurnBase<K extends TurnKind> {
   finishedAt: IsoTimestamp;
   userMessage: UserMessage;
 }
+
+interface SearchExecutionProvenance {
+  kind: "recorded";
+  searchRef: string;
+}
+
+interface ResearchExecutionProvenance {
+  kind: "recorded";
+  assessmentModelRef: string;
+  synthesisModelRef: string;
+  searchRef: string;
+}
+
+interface UnavailableExecutionProvenance {
+  kind: "unavailable";
+}
+
+type SearchTerminalBase = TerminalTurnBase<"search"> & {
+  execution: SearchExecutionProvenance | UnavailableExecutionProvenance;
+};
+
+type ResearchTerminalBase = TerminalTurnBase<"research"> & {
+  execution: ResearchExecutionProvenance | UnavailableExecutionProvenance;
+};
 ```
 
 `ActiveTurn` is mutable controller state projected from request execution and lifecycle events; it is never part of a persisted `Thread`. `Turn` is immutable terminal history. Every terminal outcome observed by the controller is committed: completed search/research, insufficient evidence, bounded failure, and interruption. A failed or interrupted first request therefore creates a durable thread and appears in `ThreadsBox`; seven-day retention and explicit deletion bound that history.
@@ -331,15 +354,15 @@ interface TurnInterruption {
 }
 
 type SearchTurn =
-  | (TerminalTurnBase<"search"> & {
+  | (SearchTerminalBase & {
       status: "completed";
       result: SearchTurnResult;
     })
-  | (TerminalTurnBase<"search"> & {
+  | (SearchTerminalBase & {
       status: "failed";
       failure: SearchTurnFailure;
     })
-  | (TerminalTurnBase<"search"> & {
+  | (SearchTerminalBase & {
       status: "interrupted";
       interruption: TurnInterruption;
     });
@@ -366,7 +389,7 @@ current request + prior thread context + macro-selected turn kind
 - A durable turn represents exactly one terminal state: completed, failed, or interrupted; pending/running are `ActiveTurn` concerns.
 - Terminal turns are immutable after commit. Stale stream events and retries cannot overwrite a terminal or newer turn.
 - `retryOfTurnId`, when present, resolves to an earlier terminal turn in the same thread with the same raw request.
-- Provider-specific payloads are never persisted.
+- Provider-specific payloads are never persisted. Server-terminal completed/failed turns carry recorded provider-neutral route refs; `execution.kind: "unavailable"` is legal only for an honestly controller-created interruption that received no authoritative route provenance.
 - Citations reference only sources supplied to synthesis.
 - Every terminal durable turn passes runtime schema validation.
 - The discriminant determines which result fields are valid; search and research result shapes are not mixed through unrelated optional fields.
@@ -386,7 +409,7 @@ interface StoredThreadEnvelopeV2 {
 }
 ```
 
-It exists to keep storage versioning and retention metadata outside product-level `Thread` data. It is not a top-level architecture box and should remain behind `ThreadStore`. Whether to retain this shape and whether to rename it (for example, `StoredThreadRecord`) remain open decisions.
+It exists to keep storage versioning and retention metadata outside product-level `Thread` data. The target renames and reshapes it as the opaque-revision `StoredThreadRecord` defined under `ThreadStore`; it remains an adapter record rather than a top-level product component.
 
 ### `SearchResult`
 
@@ -721,7 +744,7 @@ type ResearchTurnResult =
       usage?: UsageMetadata;
     };
 
-type CompletedResearchTurn = TerminalTurnBase<"research"> & {
+type CompletedResearchTurn = ResearchTerminalBase & {
   status: "completed";
   result: ResearchTurnResult;
 };
@@ -801,7 +824,7 @@ type ResearchExecutionFailure =
     };
 
 type FailedResearchTurn =
-  | (TerminalTurnBase<"research"> & {
+  | (ResearchTerminalBase & {
       status: "failed";
       failure: InsufficientEvidenceFailure;
       researchState: {
@@ -809,7 +832,7 @@ type FailedResearchTurn =
         resolution: InsufficientResearchResolution;
       };
     })
-  | (TerminalTurnBase<"research"> & {
+  | (ResearchTerminalBase & {
       status: "failed";
       failure: SynthesisFailure;
       researchState: {
@@ -819,7 +842,7 @@ type FailedResearchTurn =
           | BestEffortResearchResolution;
       };
     })
-  | (TerminalTurnBase<"research"> & {
+  | (ResearchTerminalBase & {
       status: "failed";
       failure: ResearchExecutionFailure;
       researchState: IncompleteResearchState;
@@ -834,7 +857,7 @@ type InterruptedResearchState =
     }
   | IncompleteResearchState;
 
-type InterruptedResearchTurn = TerminalTurnBase<"research"> & {
+type InterruptedResearchTurn = ResearchTerminalBase & {
   status: "interrupted";
   interruption: TurnInterruption;
   researchState: InterruptedResearchState;
@@ -1366,10 +1389,21 @@ type TurnControllerIntent =
     }
   | { type: "retry_commit"; turnId: TurnId };
 
-type ThreadCommitFailure =
-  | { code: "revision_conflict"; retryable: true }
-  | { code: "storage_unavailable"; retryable: true }
-  | { code: "invalid_record"; retryable: false };
+type ThreadStoreFailure =
+  | {
+      code: "revision_conflict" | "storage_unavailable" | "quota_exceeded";
+      retryable: true;
+    }
+  | {
+      code:
+        | "thread_not_found"
+        | "thread_deleted"
+        | "invalid_record"
+        | "integrity_failure";
+      retryable: false;
+    };
+
+type ThreadCommitFailure = ThreadStoreFailure;
 
 type TurnControllerState =
   | { phase: "idle" }
@@ -1506,7 +1540,7 @@ interface TurnExecutor {
 }
 ```
 
-The executor receives an application cancellation signal and emits typed transport-independent signals before returning its one terminal payload. It does not authenticate HTTP requests, assign SSE sequence numbers, encode SSE, load or persist threads, allocate source ordinals, navigate, or construct `TerminalTurnBase` metadata. `sourceRecords` must contain canonical metadata for every terminal reference not already available in input context; the browser controller performs final reference-closure validation against the durable aggregate.
+The executor receives an application cancellation signal and emits typed transport-independent signals before returning its one terminal payload. It records the configured provider-neutral search and assessment/synthesis route refs in that payload so `TurnController` can preserve per-turn execution provenance. It does not authenticate HTTP requests, assign SSE sequence numbers, encode SSE, load or persist threads, allocate source ordinals, navigate, or construct `TerminalTurnBase` metadata. `sourceRecords` must contain canonical metadata for every terminal reference not already available in input context; the browser controller performs final reference-closure validation against the durable aggregate.
 
 ### `TurnExecutionEvent`
 
@@ -1566,7 +1600,168 @@ It does not classify raw prompt input, build `ThreadContext`, make search/resear
 
 ### `ThreadStore`
 
-`ThreadStore` is the persistence port used by `TurnController` and thread/settings capabilities. Its terminal operation must atomically revision-check the thread, admit canonical sources with deterministic ordinals, append one schema-valid immutable terminal turn, and update metadata. Local IndexedDB and remote adapters must implement the same observable contract. Retention, list/delete, import/export, and exact record/envelope naming remain for the dedicated storage-contract pass.
+**Capability:** persist, retrieve, retain, delete, and transfer complete `Thread` aggregates through one local/remote-parity contract.
+
+The storage-only wrapper is renamed rather than carrying a schema-specific type name:
+
+```ts
+type ThreadRevision = string & { readonly __brand: "ThreadRevision" };
+
+interface StoredThreadRecord {
+  recordVersion: 1;
+  revision: ThreadRevision;
+  expiresAt: IsoTimestamp;
+  thread: Thread;
+}
+
+interface NewThreadSeed {
+  id: ThreadId;
+  title: string;
+  createdAt: IsoTimestamp;
+}
+
+interface CommitTerminalTurnInput {
+  threadId: ThreadId;
+  expectedRevision: ThreadRevision | null;
+  create?: NewThreadSeed;
+  sourceRecords: CanonicalSource[];
+  turn: Turn;
+}
+
+type CommitTerminalTurnValue = {
+  disposition: "committed" | "already_committed";
+  record: StoredThreadRecord;
+};
+
+type ThreadStoreResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; failure: ThreadStoreFailure };
+
+interface StoredThreadSummary {
+  summary: ThreadSummary;
+  revision: ThreadRevision;
+}
+
+interface RemoveThreadInput {
+  threadId: ThreadId;
+  expectedRevision?: ThreadRevision;
+}
+
+interface ThreadBackup {
+  backupVersion: 3;
+  exportedAt: IsoTimestamp;
+  threads: Array<{
+    thread: Thread;
+    expiresAt: IsoTimestamp;
+  }>;
+}
+
+interface ImportIssueSummary {
+  threadId?: ThreadId;
+  code: "unsupported_version" | "invalid_thread" | "invalid_source";
+  message: string;
+}
+
+interface ImportPreview {
+  add: number;
+  conflicts: number;
+  skippedInvalid: number;
+  issues: ImportIssueSummary[];
+}
+
+interface ImportReport {
+  added: ThreadId[];
+  replaced: ThreadId[];
+  skipped: ThreadId[];
+  skippedInvalid: number;
+}
+
+interface ValidatedImportCandidate {
+  readonly __brand: "ValidatedImportCandidate";
+}
+
+interface InspectedThreadImport {
+  preview: ImportPreview;
+  candidate: ValidatedImportCandidate;
+}
+
+interface ThreadStore {
+  list(): Promise<ThreadStoreResult<StoredThreadSummary[]>>;
+  load(threadId: ThreadId): Promise<ThreadStoreResult<StoredThreadRecord | null>>;
+  commitTerminalTurn(
+    input: CommitTerminalTurnInput,
+  ): Promise<ThreadStoreResult<CommitTerminalTurnValue>>;
+  remove(
+    input: RemoveThreadInput,
+  ): Promise<ThreadStoreResult<"removed" | "already_absent">>;
+  exportData(threadIds?: ThreadId[]): Promise<ThreadStoreResult<ThreadBackup>>;
+  inspectImport(value: unknown): Promise<ThreadStoreResult<InspectedThreadImport>>;
+  importData(
+    candidate: ValidatedImportCandidate,
+    options: { onConflict: "keep_existing" | "replace_existing" },
+  ): Promise<ThreadStoreResult<ImportReport>>;
+}
+```
+
+`ThreadRevision` is an opaque compare-and-swap token. Callers compare or return it but never increment, parse, sort, export, or derive product behavior from it. Every successful aggregate mutation receives a fresh token.
+
+**Atomic terminal commit**
+
+```text
+validated expected revision / optional new-thread seed
+                         |
+                         v
+       validate turn + source-reference closure
+                         |
+          idempotency / deletion / CAS checks
+                         |
+       reconcile first-admission source metadata
+                         |
+ assign ordinals + insert immutable turn + update expiry
+                         |
+                         v
+              one StoredThreadRecord
+```
+
+- `expectedRevision: null` with `create` is legal only for a never-persisted thread ID. Empty threads are not persisted; the first terminal attempt creates the thread, admits referenced sources, and inserts the turn in one transaction.
+- Existing threads require their loaded opaque revision. `create` is absent for an existing-thread commit.
+- Idempotency is checked by `turn.id`: an existing deeply equivalent terminal turn returns `already_committed` without mutation even if the supplied revision is stale. Reusing a `turn.id` for different content is `integrity_failure`.
+- Otherwise, a stale revision returns `revision_conflict`. Retry reloads the latest record and submits the same immutable terminal turn with the new revision; provider execution is never repeated.
+- Turns are inserted in deterministic `(createdAt, id)` order, not transaction-completion order. This preserves chronological history when independently active tabs race; “append a retry” means create a new immutable history entry, not blindly push to the end of an array.
+- New source ordinals are assigned contiguously in supplied `sourceRecords` order after filtering identities already in the catalog. That supplied order must already reflect the deterministic turn/source-allocation policy.
+- Every supplied new source must be reachable from the terminal turn, and every terminal destination/citation/support/task/evidence reference must resolve through the resulting catalog. Unreferenced supplied records or missing references are `invalid_record`; no orphan source is admitted.
+- An existing `SourceId` must map to the same canonical URL. A different URL is `integrity_failure`. First admission fixes durable title, original/display URLs, snippet, publication time, and ordinal; later presentation differences are ignored rather than rewriting history.
+- Canonical URL and `SourceId` derivation are revalidated at this untrusted persistence boundary.
+- `updatedAt` advances only for a successful meaningful durable mutation. Terminal commit uses the turn's bounded validated activity time; an added or replaced import uses import time. Reads, failed commits, idempotent commits, export, and inspection do not extend retention.
+
+**Deletion and retention**
+
+- Retention is sliding seven-day expiry from `Thread.updatedAt`. `list`/`load` treat expired records as absent and lazily purge them; adapters may also perform opportunistic background cleanup with identical observable results.
+- `remove` is idempotent: an absent/deleted ID returns `already_absent`. If an expected revision is supplied for an existing record and differs, removal returns `revision_conflict`.
+- Explicit deletion writes an internal non-exported tombstone retained for at least the seven-day retention window and longer than the maximum turn duration. A late commit against that ID returns `thread_deleted`; deletion never allows an active or retried commit to recreate the thread accidentally.
+- Thread IDs are never intentionally reused. Explicit validated `replace_existing` import may restore a deleted ID and clears its tombstone as part of the atomic replacement.
+
+**Backup/import**
+
+- Export contains schema-v3 aggregates and retention timestamps, but never revisions, tombstones, preview handles, credentials, or adapter metadata.
+- Inspection accepts untrusted input, supports the approved v1/v2 compatibility migrations plus v3, validates each resulting aggregate/source identity/reference closure, and returns a sanitized preview plus an opaque in-memory candidate. Legacy thread-level `searchRef` migrates onto every terminal turn; legacy `modelRef` supplies both assessment/synthesis refs for research turns when distinct historical routes are unavailable.
+- `BackupPreviewId` remains settings-controller state mapped to exactly one `ValidatedImportCandidate`; changing the file or completing/cancelling import invalidates it. Layout state never receives the candidate or raw backup.
+- Imported records always receive fresh local revisions. Exported revision-like fields are ignored/rejected as non-contract data.
+- `keep_existing` leaves existing aggregates, revisions, expiry, and tombstones untouched. Every added/replaced aggregate refreshes `updatedAt`/expiry to import time and receives a fresh revision. `replace_existing` installs atomically and may clear an explicit-deletion tombstone.
+- Partial import commits each valid non-conflicting aggregate independently and reports added, replaced, and kept IDs plus the bounded invalid count without rolling back successful siblings.
+
+**Invariants**
+
+- Local IndexedDB and remote adapters pass the same storage contract suite, including CAS, idempotency, ordering, source collision, deletion race, expiry, and import fixtures.
+- Storage records contain complete aggregates; no adapter persists `ActiveTurn`, terminal candidates, active evidence deltas, revisions inside backups, or provider payloads.
+- All writes runtime-validate the complete resulting record before commit.
+- A storage failure cannot partially admit sources, partially replace a thread, or expose backend details.
+
+**Failure contract:** bounded unavailable, quota, revision-conflict, not-found/deleted, invalid-record, and integrity failures only. Adapter exceptions, IndexedDB details, SQL/HTTP payloads, and stack traces remain in sanitized observability. A revision conflict is retryable through reload/rebase; integrity, invalid-record, deleted, and quota failures never trigger provider reruns.
+
+**Implementation boundary:** transaction mechanism, revision generation, tombstone representation, lazy cleanup scheduling, and remote database technology may vary behind this contract. `StoredThreadRecord` replaces `StoredThreadEnvelopeV2`; it is a persistence adapter record, not a product-level component.
+
+**Current mapping:** `src/ports/storage.ts` exposes broad `save`/`commit` methods and `StoredThreadEnvelopeV2`; `src/infrastructure/browser/indexeddb-thread-store.ts` and the remote adapter implement current persistence/retention/import behavior. The target replaces whole-thread caller writes with the atomic terminal operation while preserving list/delete/backup behavior through typed results.
 
 ## Layout Components
 
@@ -1586,7 +1781,7 @@ The agreed layout vocabulary is:
 
 `Box` identifies a visually coherent product region with one presentation capability, a typed state input, and typed user intents. All boxes participate in shared typography, spacing, border, focus, responsive, and color-scheme styling. `UnlockBox` is explicitly included so global box-level visual changes apply to the authentication screen rather than leaving it as unrelated boundary markup.
 
-Layout boxes receive state and emit user intent. They do not directly own navigation, durable persistence, network requests, turn routing, or research orchestration. Ordinary ephemeral interaction state—draft text, fuzzy query, active row, focus, disclosure, and `BrandBox` tagline rotation—may remain local to React. Route/workspace controllers translate intents into application/system calls and project resulting state back into boxes. `Hotkeys` follows the same intent boundary for global keyboard input while box-local keyboard behavior remains with the owning visible box.
+Layout boxes receive state and emit user intent. They do not directly own navigation, durable persistence, network requests, turn routing, or research orchestration. Ordinary ephemeral interaction state—draft text, fuzzy query, active row, focus, disclosure, and `BrandBox` tagline rotation—may remain local to React. `WorkspaceController` translates route/cross-box intents, delegates effects to owning controllers/capabilities, and projects resulting state back into boxes. `Hotkeys` follows the same intent boundary for global keyboard input while box-local keyboard behavior remains with the owning visible box.
 
 ```text
 KeyboardEvent + route/focus/turn context
@@ -2339,7 +2534,7 @@ Layout boxes render typed state and emit semantic intent.
 The implementation plan is intentionally provisional until all boxes and migration decisions are settled.
 
 1. Finalize data-model contracts: discriminated search/research turns, bounded thread context, evidence ownership, research result/provenance, and storage-record boundary.
-2. Finalize remaining system-box contracts: `ThreadStore` revision/idempotency/retention/import behavior and a consistency pass over the settled `WorkspaceController` → `TurnController` → `TurnGateway` → `TurnStreamBoundary` → `TurnExecutor` events/failures.
+2. Run a consistency pass over the settled data/storage/controller chain, including `StoredThreadRecord`, CAS/idempotency/deletion/import behavior, and `WorkspaceController` → `TurnController` → `TurnGateway` → `TurnStreamBoundary` → `TurnExecutor` events/failures.
 3. Finalize layout-box contracts and state/intent ownership.
 4. Record a precise file-level current → target mapping and migration sequence that preserves observable behavior.
 5. Introduce the canonical data model and runtime schemas with compatibility migration and focused domain tests.
@@ -2402,7 +2597,8 @@ The final implementation must prove at least:
 - `UnlockBox` remains buttonless, serializes attempts, never externalizes passphrases beyond immediate submit intent, and clears/refocuses after bounded rejection/unavailability while preserving password-manager and accessibility behavior.
 - `SystemStatusBox` renders only blocking auth-session/provider-status/thread-storage checks or unavailability, preserves the requested route, and retries through intent rather than reload while non-blocking failures remain in their owning boxes.
 - Normalizing the same canonical URL across providers, searches, retries, or ranks yields the same collision-safe `SourceId`; provider rank and result-array position never become durable identity.
-- `Thread` is the sole durable aggregate root: canonical source metadata/ordinal is materialized once, terminal turns retain contextual refs and bounded evidence snapshots, `EvidenceSet`/`ThreadContext` derive deterministically, and terminal source admission plus turn commit is atomic.
+- `Thread` is the sole durable aggregate root: canonical source metadata/ordinal is materialized once, terminal turns retain contextual refs, per-turn execution provenance, and bounded evidence snapshots, `EvidenceSet`/`ThreadContext` derive deterministically, and terminal source admission plus turn commit is atomic.
+- `ThreadStore.commitTerminalTurn` proves opaque-CAS conflict behavior, same-turn idempotency/collision rejection, deterministic raced-turn insertion, first-admission source reconciliation, complete reference closure, atomic first-terminal thread creation, seven-day sliding expiry, deletion tombstones, and fresh-revision import semantics across local and remote contract fixtures.
 - `/threads` is the only `ThreadsBox` presentation; its pinned `fzf@0.5.2` wrapper produces fixture-locked deterministic rankings/highlights, its local keyboard behavior does not conflict with global hotkeys, and deletion requires inline `y`/Enter confirmation that Escape can cancel without closing the route.
 - Existing persistence, export, retention, auth, interruption, stale-request, keyboard, focus, responsive, and accessibility behavior remains green unless this plan explicitly changes it.
 - Fixture and live adapters preserve the same provider-neutral contracts.
@@ -2412,6 +2608,4 @@ The final implementation must prove at least:
 
 - Beyond the approved assessment/synthesis model variables, what environment-variable names expose the explicit balanced `ResearchLimits` while keeping typed names canonical?
 - Should the migration fallback from `ANTHROPIC_ASSESSMENT_MODEL` and `ANTHROPIC_SYNTHESIS_MODEL` to legacy `ANTHROPIC_MODEL` remain permanently or be removed after deployment?
-- Does `modelRef`/`searchRef` remain on `Thread`, move to turns, or become derived execution metadata?
-- Should `StoredThreadEnvelopeV2` be retained as-is, renamed to `StoredThreadRecord`, or reshaped during the model migration?
 - After data/system contracts settle, do any layout controller projections need refinement to preserve the agreed box contracts without duplicating state?
