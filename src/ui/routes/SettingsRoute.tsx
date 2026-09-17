@@ -31,6 +31,7 @@ export function SettingsRoute() {
       localStorage.setItem(storageKey, intent.value);
       if (intent.key === "theme") document.documentElement.dataset.theme = intent.value;
       if (intent.key === "colorScheme") document.documentElement.dataset.colorScheme = intent.value;
+      window.dispatchEvent(new Event("dorothy-ann-preference-change"));
     }
   };
   return <main className={styles.shell}>

@@ -20,6 +20,10 @@ const timestamp = () => new Date().toISOString() as UserMessage["createdAt"];
 const uuid = () => crypto.randomUUID();
 const requestedResearch = (query: string) => query.trimEnd().endsWith("?");
 
+export function ResearchStatus({ answerDraft }: { answerDraft: string }) {
+  return <div className={styles.researchLoader} role="status" aria-live="polite"><span className={styles.loaderBars} aria-hidden="true"><i /><i /><i /></span><span>{answerDraft ? "synthesizing" : "researching"}</span></div>;
+}
+
 function emptyContext(threadId: ThreadId): ThreadContext { return { threadId, turns: [], knownSources: [], availableEvidence: [] }; }
 function sourceRecords(thread: Thread | null, live: CanonicalSource[]): CanonicalSource[] {
   const values = new Map<string, CanonicalSource>();
@@ -81,7 +85,7 @@ export function ThreadRoute() {
   return <main className={styles.shell}>
     <StickyHeader onIntent={onIntent} />
     {message && <p role="alert">{message}</p>}
-    {view.active && <p role="status" aria-live="polite">{view.answerDraft ? "synthesizing" : "researching"}</p>}
+    {view.active && <ResearchStatus answerDraft={view.answerDraft} />}
     {thread && <TranscriptBox thread={thread} sources={sources} onIntent={onIntent} />}
     {view.answerDraft && <p className={styles.answer}>{view.answerDraft}</p>}
     {sources.length > 0 && <EvidenceBox sources={sources} onIntent={onIntent} />}

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { GlobalShortcuts } from "../src/ui/App";
 import { WorkspaceController } from "../src/ui/controllers/workspace-controller";
+import { ResearchStatus } from "../src/ui/routes/ThreadRoute";
 
 afterEach(() => cleanup());
 function LocationProbe() { return <output data-testid="location">{useLocation().pathname}</output>; }
@@ -15,6 +16,11 @@ describe("workspace controller", () => {
     expect(controller.route("/settings")).toEqual({ kind: "settings" });
     expect(controller.route("/unlock")).toEqual({ kind: "unlock" });
     expect(controller.route("/topics/thread-1")).toEqual({ kind: "thread", threadId: "thread-1" });
+  });
+  it("renders an accessible animated research status with a reduced-motion-safe bar structure", () => {
+    render(<ResearchStatus answerDraft="" />);
+    expect(screen.getByRole("status")).toHaveTextContent("researching");
+    expect(screen.getByRole("status").querySelectorAll("i")).toHaveLength(3);
   });
   it("delegates box intents into semantic commands", () => {
     expect(controller.command({ type: "command_requested", command: "/threads" })).toEqual({ type: "navigate", to: "/threads" });

@@ -6,16 +6,30 @@ import { ThreadsRoute } from "./routes/ThreadsRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
 import { UnlockRoute } from "./routes/UnlockRoute";
 import { SystemStatusBox } from "./boxes/SystemStatusBox";
+import { primaryAccentSlot, readColorScheme, readPrimaryAccent } from "./color-scheme";
 
 function applyTheme(theme: string) {
   const prefersDark = typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches;
   document.documentElement.dataset.theme = theme === "auto" ? (prefersDark ? "dark" : "light") : theme;
 }
+function applyPrimaryAccent(schemeValue: string | null, accentValue: string | null) {
+  const scheme = readColorScheme(schemeValue);
+  const accent = readPrimaryAccent(accentValue);
+  const value = accent === "fbf719" ? "#fbf719" : accent === "e068a5" ? "#e068a5" : `var(--accent-${primaryAccentSlot(scheme, accent) + 1})`;
+  document.documentElement.style.setProperty("--accent", value);
+}
+function applyPreferences() {
+  applyTheme(localStorage.getItem("dorothy-ann-theme") ?? "auto");
+  const scheme = localStorage.getItem("dorothy-ann-color-scheme") ?? "mono";
+  document.documentElement.dataset.colorScheme = scheme;
+  applyPrimaryAccent(scheme, localStorage.getItem("dorothy-ann-primary-accent"));
+}
 function ThemeBootstrap() {
   useEffect(() => {
-    const theme = localStorage.getItem("dorothy-ann-theme") ?? "auto";
-    applyTheme(theme);
-    document.documentElement.dataset.colorScheme = localStorage.getItem("dorothy-ann-color-scheme") ?? "mono";
+    applyPreferences();
+    const onPreferenceChange = () => applyPreferences();
+    window.addEventListener("dorothy-ann-preference-change", onPreferenceChange);
+    return () => window.removeEventListener("dorothy-ann-preference-change", onPreferenceChange);
   }, []);
   return null;
 }

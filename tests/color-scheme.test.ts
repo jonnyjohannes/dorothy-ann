@@ -22,6 +22,7 @@ describe("color scheme policy", () => {
     expect(primaryAccentSlot("rose-pine", "3")).toBe(3);
     expect(readPrimaryAccent("9")).toBe("default");
     expect(readPrimaryAccent("e068a5")).toBe("e068a5");
+    expect(readPrimaryAccent("fbf719")).toBe("fbf719");
     expect(primaryAccentSlot("mono", "7")).toBe(0);
     expect(primaryAccentSlot("rose-pine", "e068a5")).toBe(0);
   });
