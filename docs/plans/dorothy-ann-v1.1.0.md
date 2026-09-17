@@ -4,13 +4,13 @@
 
 - Status: implementation in progress
 - Last updated: 2026-09-15
-- Current focus: Plan Ledger item 3 — parallel v3 model and schemas
+- Current focus: Plan Ledger item 4 — identity and migration policy
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: mark item 3 `[~]`, add the parallel v3 model, strict schemas, and private bounded v1/v2 input schemas without cutting over current consumers
+- Next action: mark item 4 `[~]`, implement canonical identity material, cross-runtime SHA-256 adapters, and deterministic v1/v2 conversion into the parallel v3 model
 
 ## Handoff
 
-Implementation is active on `release/v1.1.0`. Plan Ledger item 2 is complete: the repository targets Node 22 with exact `fzf@0.5.2`; `server/runtime/config.ts` owns bounded canonical operational settings plus sanitized one-release legacy fallbacks; root `ASSESSOR.md`/`SYNTHESIZER.md` load exactly once through `FileSystemPromptSource`; Node and Vercel entrypoints await prompt loading; Vercel explicitly includes both assets; and the portable app receives the injected catalog while provider prompt cutover remains deferred to item 8. Focused config/prompt/deployment tests, full lint/typecheck/unit/build, Node startup smoke, `npm ci`, frontend prompt/secret-name scans, and `git diff --check` pass. `npm ci` reports two moderate dependency advisories; no out-of-scope forced audit upgrade was applied. Next implement item 3 only, preserving current consumers behind parallel types/schemas.
+Implementation is active on `release/v1.1.0`. Plan Ledger items 2–3 are complete. Runtime/config/prompt scaffolding targets Node 22, exact `fzf@0.5.2`, bounded canonical/deprecated configuration, startup-loaded root prompts, and schema-valid Vercel brace-glob inclusion (confirmed by `vercel build`). Parallel `model-v3.ts`, strict `schemas-v3.ts`, and private bounded `legacy-input-schemas.ts` now define terminal-only search/research unions, honest execution/research-state combinations, Unicode bounds, complete source/turn support closure, retry/order/timestamp invariants, and archive-only/read-only history while current consumers remain untouched. Full lint/typecheck, 105 tests, build, frontend scans, and `git diff --check` pass. `npm ci` reports two moderate dependency advisories; no out-of-scope forced audit upgrade was applied. Next implement item 4 only: identity material/hash adapters and deterministic migration.
 
 Dorothy Ann v1.0.0 behaves correctly and is the baseline for this architectural pass. The v1.1.0 goal is to refactor the application around named, technically explicit boxes without changing working product behavior accidentally. Each box is documented as typed inputs → one owned capability → typed outputs/events, plus invariants, failure contract, and implementation boundary.
 
@@ -396,9 +396,11 @@ interface ResearchExecutionProvenance {
 interface UnavailableExecutionProvenance {
   kind: "unavailable";
 }
+```
 
 Recorded execution refs are trimmed non-control strings of `1..200` Unicode code points; adapters resolve configuration to these provider-neutral values before execution and migration archives a legacy lookup whose thread-level ref does not satisfy the bound.
 
+```ts
 type SearchTerminalBase = TerminalTurnBase<"search"> & {
   execution: SearchExecutionProvenance | UnavailableExecutionProvenance;
 };
@@ -3136,7 +3138,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 
 - [x] 1. Planning consistency gate — deliverable: approved contracts, closure bundle, legacy-history policy, file map, atomic implementation sequence, and passing implementability audit; verify: no blocking questions/placeholders, balanced fences, `git diff --check`, and checklist review.
 - [x] 2. Runtime/config scaffold — deliverable: Node 22, exact fzf pin, canonical bounded env/deprecations, root prompt assets and startup loaders/Vercel inclusion; verify: config/prompt/deployment/frontend-exclusion tests.
-- [ ] 3. Parallel v3 model/schemas — deliverable: target model, strict schemas, read-only legacy archive, and private bounded v1/v2 input schemas without breaking current consumers; verify: union/archive/bound/reference/archive-only/legacy-input tests.
+- [x] 3. Parallel v3 model/schemas — deliverable: target model, strict schemas, read-only legacy archive, and private bounded v1/v2 input schemas without breaking current consumers; verify: union/archive/bound/reference/archive-only/legacy-input tests.
 - [ ] 4. Identity/migration policy — deliverable: canonical material, cross-runtime SHA-256 IDs, and deterministic v1/v2 conversion; verify: fixed Node/browser vectors plus URL/Unicode/support/ancestry/collision/source-alias/migration tests.
 - [ ] 5. Knowledge/context policies — deliverable: algebraic evidence-collection join and exact bounded thread projection; verify: law, contradiction, ordering, truncation, and byte-bound tests.
 - [ ] 6. Atomic storage policy/port — deliverable: typed CAS/idempotent terminal commit contract and in-memory harness; verify: commit/source/order/expiry/delete/failure contract suite.
