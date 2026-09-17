@@ -4,9 +4,9 @@
 
 - Status: planning
 - Last updated: 2026-09-15
-- Current focus: run the full implementability/consistency gate and convert the settled architecture into an atomic file-level current → target migration sequence
+- Current focus: normalize the browser component/primitives vocabulary and interaction contracts, then run the full implementability gate and atomic file-level current → target mapping
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: map each current source file and responsibility to one target owner, resolve the remaining deployment-variable compatibility questions, then mark architectural contracts complete only if no implementation-blocking ambiguity remains
+- Next action: consistency-check the new shared primitives, prompt command suggester/Escape/caret behavior, transcript Markdown contract, conversational synthesis opening, and minimized sticky header before producing the file-level migration sequence
 
 ## Handoff
 
@@ -31,7 +31,7 @@ Decisions made so far:
 - The target persistence wrapper is `StoredThreadRecord`: an adapter-only record with an opaque CAS revision and expiry around the complete `Thread`. `ThreadStore` now has settled atomic commit, idempotency, source reconciliation, ordering, retention, deletion-tombstone, and import/export contracts.
 - The agreed visual regions are `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, and `UnlockBox`. Boxes receive typed view state and emit intent; `WorkspaceController` coordinates routes/cross-box projection and delegates effects to owning controllers/capabilities.
 - `Hotkeys` is an explicit layout-control box, not a visible region. It translates unhandled global keyboard events and current layout context into semantic intents without navigating, focusing DOM nodes, cancelling work, or invoking system capabilities directly.
-- `ThreadsBox` has one canonical `/threads` route with aggressive `fzf@0.5.2`-backed filtering and keyboard behavior, not separate route and overlay presentations. The exact package version is pinned behind a pure `rankThreads` policy with fixture-locked ordering. Deletion uses an inline terminal-style confirmation, never `window.confirm`.
+- `ThreadsBox` has one canonical `/threads` route with aggressive `fzf@0.5.2`-backed filtering and keyboard behavior, not separate route and overlay presentations. The exact package version is pinned behind one pure generic adapter used by fixture-locked `rankThreads` and `rankPromptSuggestions` policies. Deletion uses an inline terminal-style confirmation, never `window.confirm`.
 - `UnlockBox` is part of the shared box vocabulary so global visual-system changes include authentication. It owns only ephemeral passphrase entry and emits authentication intent without persisting or logging the passphrase.
 - `TranscriptBox` renders durable history and the one active turn through one ordered presentation model. Live progress and streamed answer content occupy the active turn's position and are replaced, not duplicated, when that turn becomes durable.
 - `EvidenceBox` renders one thread-wide append-stable `EvidenceSet`. Canonical sources are deduplicated, durable support uses `SourceId`, display citations use derived one-based ordinals, and role occurrences allow one source to be promoted from search destination to research evidence without duplication.
@@ -46,6 +46,8 @@ Decisions made so far:
 - Fair source allocation derives a three-selection ownership cap per evidence request from the approved nine-source/three-search ceilings. Concurrent requests receive rank-layer round-robin opportunities in priority/depth/creation order; shared canonical sources consume global budget once, and unused capacity is not released into earlier requests.
 - Controller ownership is split explicitly: `WorkspaceController` owns route/cross-box projection and command delegation; browser `TurnController` owns one `ActiveTurn`, stale-event rejection, terminal construction, and atomic commit; `TurnGateway` adapts the client stream; server `TurnExecutor` dispatches provider-neutral search/research; `TurnStreamBoundary` owns only authenticated HTTP/SSE validation, heartbeat, serialization, and cancellation wiring.
 - `ThreadStore` uses opaque CAS revisions and idempotent atomic terminal commits. It never stores empty threads, inserts raced turns by `(createdAt, id)`, preserves first-admission source metadata, expires seven days from durable `updatedAt`, tombstones explicit deletion, refreshes imported records with new local revisions, and exposes identical local/remote behavior. Execution provenance belongs on each terminal turn, with distinct assessment/synthesis/search refs where applicable.
+- Browser UI keeps product-level `*Box` components but standardizes their implementation on a small semantic primitive vocabulary: `Stack`, `Inline`, `Surface`, `Action`, `TextField`, `FuzzyListbox`, `StatusText`, `MarkdownContent`, and `VisuallyHidden`. `PromptBox` gains a pinned-fzf command suggester, layered single/double-Escape behavior, and a native caret whose color cycles discretely through scheme accents; native caret thickness is retained for browser/IME/accessibility safety.
+- Root synthesis begins conversationally rather than with a Markdown title. The canonical synthesis prompt explicitly forbids an opening heading, encourages descriptive Markdown after the opening paragraph, and one streaming-safe leading-line normalizer demotes a violating initial heading without changing internal Markdown.
 - Durable/public research failures use compact capability-level codes only. Provider and implementation details remain in sanitized server observability, never turn records, SSE payloads, or client messages.
 - The completed refactor must leave `README.md` and `AGENTS.md` describing the then-current architecture, not an aspirational target. This plan owns the current → target mapping while work is underway.
 
@@ -72,6 +74,7 @@ This makes meaningful discussion and safe refactoring harder than necessary. We 
 - Separate research assessment, recursive knowledge resolution, evidence acquisition, knowledge joining, and final synthesis responsibilities.
 - Make `Thread` and `Turn` model valid states directly rather than through loosely related optional fields.
 - Preserve provider-neutral domain and application contracts, with Brave and Anthropic remaining concrete adapters.
+- Standardize browser product boxes on a minimal semantic primitive vocabulary while preserving native editing/accessibility, themed liberal Markdown, and the established terminal-like interaction model.
 - Record the current → target implementation mapping while refactoring.
 - Finish with `README.md` and `AGENTS.md` accurately describing the implemented architecture and its working constraints.
 
@@ -83,6 +86,7 @@ This makes meaningful discussion and safe refactoring harder than necessary. We 
 - Replacing Brave or Anthropic as part of the architecture refactor.
 - Changing authentication, retention duration, deployment target, or export behavior unless a settled box contract makes a minimal migration necessary.
 - Prescribing internal implementation details that do not affect a box contract.
+- Replacing the native prompt editor or simulating a custom thick caret at the cost of selection, IME, mobile, undo, or assistive-technology behavior.
 - Adding speculative abstraction layers unrelated to the named boxes.
 
 ## Architectural Method
@@ -1288,14 +1292,23 @@ root question + ThreadContext + final KnowledgeUnit
             streamed AssistantContent
 ```
 
+The canonical synthesis-system-prompt contract includes this instruction:
+
+> Begin directly with a conversational answer. Never start the response with a Markdown heading or title (#, ##, etc.). After the opening paragraph, descriptive Markdown of all kinds are encouraged.
+
+This language lives in one shared synthesis prompt builder used by initial and follow-up research. Prompt changes are holistic: the canonical builder, provider adapter inputs, fixture expectations, behavioral tests, and presentation fallback are updated together rather than patching one call site. Assessment prompts remain separate and do not inherit user-facing style instructions.
+
+Streaming buffers through the first non-empty logical line. If that line's first non-whitespace content is an ATX heading (`#` through `######` followed by whitespace), a deterministic presentation normalizer removes only that leading heading marker before emitting the first answer delta. It does not issue another LLM call, rewrite the heading text, or alter headings anywhere after the opening line.
+
 **Invariants**
 
 - Answers the current question in conversational context.
+- Begins with conversational prose rather than a Markdown heading; descriptive headings, lists, emphasis, quotations, code, tables, and other Markdown remain encouraged after the opening paragraph.
 - Uses only supplied supported findings and evidence for factual support.
 - Cites only source IDs reachable through the final knowledge unit.
 - Assessor directives cannot become direct answer content; internal findings may inform the answer only with their validated support.
 - Empty provider completion becomes a bounded synthesis failure.
-- Research answer opening and presentation policy remain explicit product contracts while retained.
+- The canonical prompt text and leading-line fallback apply identically to initial/follow-up and streamed/durable rendering; a prompt edit cannot silently drift one route or its fixtures.
 
 **Implementation boundary:** model prompting and stream parsing may vary behind the input/output and citation contracts.
 
@@ -1341,6 +1354,8 @@ type AppRoute =
 
 type WorkspaceIntent =
   | { type: "raw_submission"; value: string }
+  | { type: "prompt_focus_requested" }
+  | { type: "prompt_blur_requested" }
   | { type: "cancel_requested" }
   | { type: "route_requested"; route: AppRoute }
   | { type: "new_thread_requested" }
@@ -1763,6 +1778,65 @@ validated expected revision / optional new-thread seed
 
 **Current mapping:** `src/ports/storage.ts` exposes broad `save`/`commit` methods and `StoredThreadEnvelopeV2`; `src/infrastructure/browser/indexeddb-thread-store.ts` and the remote adapter implement current persistence/retention/import behavior. The target replaces whole-thread caller writes with the atomic terminal operation while preserving list/delete/backup behavior through typed results.
 
+## Browser Component Vocabulary
+
+Browser code has two deliberate levels:
+
+```text
+product regions
+  PromptBox  TranscriptBox  EvidenceBox  ThreadsBox
+  SettingsBox  UnlockBox  BrandBox  StickyHeader  SystemStatusBox
+                              |
+                              v
+shared semantic primitives
+  Stack  Inline  Surface  Action  TextField
+  FuzzyListbox  StatusText  MarkdownContent  VisuallyHidden
+```
+
+`*Box` names describe stable product capabilities and own their typed view-state/intent contracts. Primitives standardize HTML semantics, layout, focus, color tokens, and accessibility mechanics; they do not know about threads, turns, research, routes, storage, providers, or controllers.
+
+| Primitive | Narrow responsibility |
+| --- | --- |
+| `Stack` | vertical flow and tokenized gaps |
+| `Inline` | horizontal/wrapping alignment and tokenized gaps |
+| `Surface` | shared border/background/padding shell without product behavior |
+| `Action` | native button/link semantics plus shared action/focus styling |
+| `TextField` | native input/textarea labeling, disabled/error wiring, and shared typography |
+| `FuzzyListbox` | accessible active-option/listbox mechanics over caller-supplied ranked values |
+| `StatusText` | polite status or assertive alert semantics with bounded styling |
+| `MarkdownContent` | one sanitized, color-constellation-aware Markdown rendering path |
+| `VisuallyHidden` | accessible-only labels and instructions |
+
+**Primitive invariants**
+
+- Prefer native elements inside primitives; `Action` does not make a `div` clickable, and `TextField` does not replace native selection, undo, IME, mobile keyboard, or password-manager behavior.
+- Composition stays explicit in JSX. No schema-driven page renderer, universal polymorphic component, global client store, or prop matrix recreates product logic below the box layer.
+- A primitive is introduced only when at least two product regions need the same semantic/accessibility or visual mechanism; one-off structure remains local.
+- Shared focus, spacing, border, typography, reduced-motion, and color tokens have one implementation path. Product boxes may choose tokens but may not fork their mechanics.
+- Primitive APIs expose project-owned types only; React/router/fzf/provider result types do not leak into domain/application contracts.
+
+`FuzzyListbox` does not rank. Ranking stays in pure caller policies over one pinned adapter:
+
+```ts
+interface FuzzyCandidate<TId extends string> {
+  id: TId;
+  searchText: string;
+}
+
+interface FuzzyMatch<TId extends string> {
+  id: TId;
+  score: number;
+  positions: number[];
+}
+
+function rankFuzzyCandidates<TId extends string>(
+  candidates: readonly FuzzyCandidate<TId>[],
+  query: string,
+): FuzzyMatch<TId>[];
+```
+
+`fzf@0.5.2` is approved and pinned by this plan but is not yet installed; installation occurs with the browser component ledger item. `rankFuzzyCandidates` becomes the only module that imports it. `rankThreads` and `rankPromptSuggestions` convert product records into/out of these project-owned values and apply their own deterministic empty-query/equal-score ordering. Rendering receives text and positions and creates text nodes; matcher output is never HTML.
+
 ## Layout Components
 
 The agreed layout vocabulary is:
@@ -1857,33 +1931,68 @@ StickyHeader   -- contextual intents ------> WorkspaceController
 **Capability:** capture one raw user submission while preserving an editable terminal-like draft during active work.
 
 ```ts
+type PromptCommandId = "new" | "threads" | "settings";
+
+interface PromptSuggestion {
+  id: PromptCommandId;
+  command: "/new" | "/threads" | "/settings";
+  description: string;
+  aliases: string[];
+}
+
+interface RankedPromptSuggestion {
+  suggestion: PromptSuggestion;
+  commandPositions: number[];
+  descriptionPositions: number[];
+}
+
 interface PromptBoxViewState {
   initialDraft?: string;
   submission: "available" | "blocked_by_active_turn";
   focusRequestKey: number;
+  blurRequestKey: number;
 }
 
 type PromptBoxIntent = {
   type: "prompt_submitted";
   rawInput: string;
 };
+
+function rankPromptSuggestions(
+  suggestions: readonly PromptSuggestion[],
+  query: string,
+): RankedPromptSuggestion[];
 ```
 
-`PromptBox` owns its ephemeral draft, text composition, and focus state. The controller interprets submitted text as a slash command, trailing-`?` `ResearchTurn`, or macro-less `SearchTurn`; the box does not know those semantics.
+`PromptBox` owns its ephemeral draft, text composition, focus, and command-suggester state. The controller interprets submitted text as a slash command, trailing-`?` `ResearchTurn`, or macro-less `SearchTurn`; the box does not know those semantics. The initial declared-order command registry is:
+
+| Command | Description | Fuzzy aliases |
+| --- | --- | --- |
+| `/new` | start a new thread | `new`, `fresh`, `reset` |
+| `/threads` | browse saved threads | `threads`, `history`, `saved` |
+| `/settings` | change appearance and manage backup | `settings`, `appearance`, `backup` |
+
+Aliases affect matching only and are never submitted as commands. Execution still flows through the same canonical command string, raw-submission intent, and `WorkspaceController` parser.
+
+The suggester opens when trimmed input begins with `/`. `rankPromptSuggestions` delegates fuzzy scoring to `rankFuzzyCandidates`; empty-query ordering is `/new`, `/threads`, `/settings`, and equal scores tie by that declared registry order. `FuzzyListbox` owns accessible active-option mechanics but not command meaning.
 
 **Invariants**
 
-- The prompt has no submit or stop button; Enter submits when available.
-- While a turn is active, the draft remains editable but submission is blocked. There is no hidden queue.
+- The prompt has no submit or stop button. When submission is available, Enter executes the active command suggestion or submits raw input; there is no second command execution path.
+- While a turn is active, the draft and suggester remain editable/navigable but Enter submission/execution is blocked. There is no hidden queue.
+- Arrow keys move the active suggestion only while the listbox is open. Tab completes the active command into the draft without executing it. Escape closes an open suggester, consumes that event, and does not arm global double-Escape.
+- The command popup uses combobox/listbox semantics, an accessible name, `aria-expanded`/`aria-controls`/`aria-activedescendant`, visible active state, safe highlighted text nodes, and scrolls the active option into view.
 - `Ctrl+C` with focus in the prompt and a collapsed selection clears the draft. Selected text retains native copy behavior; `Cmd+C` and copying outside the prompt are never intercepted.
-- A changed `focusRequestKey` focuses the prompt without a controller querying its DOM.
-- Empty or composition-in-progress input is not submitted.
+- A changed `focusRequestKey` focuses the prompt and a changed `blurRequestKey` blurs it to passive page focus without a controller querying its DOM.
+- Empty or composition-in-progress input is not submitted or completed.
+- The underlying prompt remains a native textarea/text field. Its native caret width is not replaced or simulated; CSS cannot portably thicken it without risking selection, IME, mobile keyboard, undo, and assistive-technology behavior.
+- Each color scheme exposes a bounded ordered caret-accent token list. While focused, `caret-color` cycles discretely through those selected-scheme accents on a slow CSS `steps(1, end)` animation; unsupported animation falls back to the primary accent, and `prefers-reduced-motion` uses one static accent.
 
 **Failure contract:** blocked or invalid submission remains local and non-destructive; a failed turn does not become a prompt-rendering failure.
 
-**Implementation boundary:** controlled versus locally owned draft representation, input versus textarea rendering, and concrete focus-ref mechanics may vary while keyboard, composition, submission, and accessibility behavior remain intact.
+**Implementation boundary:** controlled versus locally owned draft representation, native input versus textarea rendering, popup positioning, and concrete focus-ref mechanics may vary while command ranking, keyboard precedence, native editing behavior, discrete scheme-caret styling, composition, submission, and accessibility contracts remain intact.
 
-**Current mapping:** `PromptBox`, draft state, macro/command handling, and submission callbacks are interleaved in `src/ui/App.tsx`. The target keeps draft interaction in `PromptBox` and moves interpretation and effects to the controller.
+**Current mapping:** `PromptBox`, draft state, macro/command handling, and submission callbacks are interleaved in `src/ui/App.tsx`; no command completion list exists. The target keeps draft/suggester interaction in `PromptBox`, delegates matching through the shared pinned-fzf policy, and moves interpretation/effects to the controller.
 
 ### `Hotkeys`
 
@@ -1900,6 +2009,7 @@ interface HotkeysContext {
 
 type HotkeyIntent =
   | { type: "prompt_focus_requested" }
+  | { type: "prompt_blur_requested" }
   | { type: "turn_cancellation_requested" }
   | { type: "new_thread_requested" }
   | { type: "threads_requested" }
@@ -1909,10 +2019,12 @@ type HotkeyIntent =
 **Invariants**
 
 - Unmodified `:` emits `prompt_focus_requested` only when a `PromptBox` is mounted, focus is passive, and composition is inactive. It is a no-op on `/threads`, `/settings`, and `/unlock`.
-- Escape during an active turn emits only `turn_cancellation_requested` and does not count toward the idle double-Escape shortcut.
-- Two unhandled Escapes within the retained bounded interval request a new thread only while no turn is active.
+- Escape precedence is deterministic: the global handler observes only unhandled events after box-local handling (it must not use capture to preempt the owner); a box-local open suggester/confirmation/disclosure consumes Escape first; otherwise an active turn emits only `turn_cancellation_requested`; otherwise a focused prompt emits `prompt_blur_requested` and arms the idle double-Escape detector; otherwise passive focus may arm/complete that detector.
+- `prompt_blur_requested` increments `PromptBoxViewState.blurRequestKey`; `Hotkeys` emits semantic focus intent and never calls `.blur()` itself.
+- Two eligible unhandled Escapes within 500 ms emit `new_thread_requested` only while no turn is active. A suggester-close, confirmation-close, active-turn cancellation, composing/editable child consumption, route-close, or modified Escape never arms/counts toward it.
+- This yields the paired navigation behavior `:` passive → prompt focus, one eligible Escape prompt → passive, and idle `Escape Escape` → new thread.
 - Retained global thread/settings shortcuts emit route intents; `Hotkeys` does not navigate.
-- Box-local bindings remain local: `PromptBox` owns `Ctrl+C` and submission; `ThreadsBox` owns filtering, arrows, Enter, Delete, and route-close Escape.
+- Box-local bindings remain local: `PromptBox` owns `Ctrl+C`, suggestion navigation/completion/close, and submission; `ThreadsBox` owns filtering, arrows, Enter, Delete, confirmation Escape, and route-close Escape.
 - Editable or interactive targets, modifier combinations, composition, and already-handled events are not stolen unless a documented binding explicitly requires them.
 - `Hotkeys` never queries/focuses box DOM, aborts a request, accesses storage, or invokes application/system capabilities.
 
@@ -1999,13 +2111,16 @@ durable turns + active lifecycle/answer deltas
 - Initial and follow-up requests use the same rendering path.
 - A `SearchTurn` presents its request and bounded result summary without inventing an assistant answer; ranked destinations remain in `EvidenceBox`.
 - A `ResearchTurn` may show bounded safe progress and streamed root-answer content in place. Raw assessor payloads, hidden reasoning, and provider diagnostics are never rendered.
+- Every active and durable research answer uses the same `MarkdownContent` primitive. Paragraphs, internal headings, lists, nested lists, emphasis, blockquotes, links, citations, inline/fenced code, tables, and thematic breaks remain available rather than being flattened into a lowest-common-denominator transcript format.
+- `MarkdownContent` sanitizes/escapes untrusted markup and protocols while preserving the application's color-constellation typography for headings, emphasis, quotations, code, tables, links, and citations. Rendering a streamed answer and its committed replacement produces equivalent structure once content matches.
+- The leading conversational-opening normalizer runs before Markdown rendering; it may demote only a violating first ATX heading and never removes internal headings or other descriptive formatting.
 - Progress announcements are polite and phase-level; token deltas are not individually announced to screen readers. Completion and terminal status remain perceivable.
 - Citation activation emits typed evidence intent. The box does not query, focus, or mutate `EvidenceBox` DOM.
 - Retry is emitted only for a retryable terminal presentation; the box does not restart work itself.
 
 **Failure contract:** an empty transcript renders an intentional empty state. A terminal turn remains in sequence with its bounded public message and preserves earlier successful turns. Unsupported or stale evidence references remain inert rather than causing the transcript to fail.
 
-**Implementation boundary:** item components, markdown rendering, virtualization, and live-delta buffering may vary while ordering, replacement, accessibility, citation, and no-duplication contracts remain intact.
+**Implementation boundary:** item decomposition, Markdown parser/sanitizer internals, virtualization, and live-delta buffering may vary while the single `MarkdownContent` path, liberal supported formatting, color-constellation presentation, ordering, replacement, accessibility, citation, and no-duplication contracts remain intact.
 
 **Current mapping:** `TurnTranscriptBox` currently receives a domain `Thread` and renders only `renderThreadScrollback(thread)`. `Topic` separately renders live research plans/loaders, a conditional initial streamed answer, and a separate follow-up answer in `src/ui/App.tsx`. The target replaces those fragmented paths with one controller-projected `TranscriptBoxViewState`; durable completion replaces the matching active view without duplicate output.
 
@@ -2111,9 +2226,14 @@ type StickyHeaderIntent =
   | { type: "header_action_requested"; actionId: HeaderActionId };
 ```
 
-Canonical action projection is route-owned:
+Canonical action projection is route-owned and deliberately minimal:
 
 ```text
+StickyHeader = one Surface
+  `-- one Inline
+        |-- BrandBox
+        `-- zero or more currently relevant Actions
+
 home     -> BrandBox
 thread   -> BrandBox + available copy/export actions
 threads  -> BrandBox + close
@@ -2121,10 +2241,13 @@ settings -> BrandBox + close
 unlock   -> BrandBox
 ```
 
+It is not a second navigation bar or status dashboard. Page titles, route descriptions, turn progress, settings state, auth state, and evidence state remain in their owning page/box.
+
 **Invariants**
 
 - Every canonical page uses the same sticky header and nested `BrandBox`; pages do not reproduce private header markup.
-- The controller supplies only actions valid for current route/state. Disabled actions cannot emit intent.
+- The component uses the smallest shared structure that preserves semantics: one header landmark, one `Surface`/`Inline` composition, `BrandBox`, applicable actions, and at most one bounded feedback region. Decorative wrapper depth and page-specific header variants are removed.
+- The controller supplies only actions valid for current route/state. Irrelevant actions are omitted; disabled state is reserved for an otherwise applicable action with a transient in-flight restriction, and disabled actions cannot emit intent.
 - The header emits semantic action IDs and performs no navigation, clipboard, file export, cancellation, persistence, or auth effects.
 - Feedback such as copied/exported status is bounded, non-blocking, and announced through one polite status region without shifting primary controls unpredictably.
 - Sticky positioning respects safe areas, narrow layouts, zoom, focus visibility, anchor targets, and the fixed `PromptBox`; it never makes page content unreachable.
@@ -2132,7 +2255,7 @@ unlock   -> BrandBox
 
 **Failure contract:** an unavailable contextual capability is omitted or disabled rather than causing header failure. Failed effects return bounded controller state/feedback while the header and brand remain usable.
 
-**Implementation boundary:** CSS stickiness, backdrop treatment, action overflow, compact responsive rendering, and component composition may vary while landmark, action, feedback, accessibility, and no-effects boundaries remain intact.
+**Implementation boundary:** CSS stickiness, restrained backdrop treatment, action overflow, and compact responsive rendering may vary while minimal structure, landmark, action, feedback, accessibility, and no-effects boundaries remain intact.
 
 **Current mapping:** sticky CSS exists in `src/ui/App.module.css`, while `Home`, `Topic`, `Unlock`, and `SecondaryLayout` repeat header markup in `src/ui/App.tsx`. Copy/export effects and feedback are interleaved in `Topic`. The target composes one `StickyHeader` on every canonical page and moves effects to the controller.
 
@@ -2182,7 +2305,7 @@ function rankThreads(
 ): RankedThreadSummary[];
 ```
 
-`rankThreads` uses exactly pinned `fzf@0.5.2` with its synchronous `extendedMatch`, `fuzzy: "v2"`, `casing: "smart-case"`, and `normalize: true` behavior. The selector searches title followed by last-turn preview; the wrapper maps returned positions back to those two fields for safe highlighting. An empty query sorts by `updatedAt` descending then `ThreadId` ascending. Non-empty equal-score results use the same deterministic tie-break order.
+`rankThreads` delegates to the sole `rankFuzzyCandidates` adapter over exactly pinned `fzf@0.5.2` with synchronous `extendedMatch`, `fuzzy: "v2"`, `casing: "smart-case"`, and `normalize: true` behavior. The selector searches title followed by last-turn preview; the wrapper maps returned positions back to those two fields for safe highlighting. An empty query sorts by `updatedAt` descending then `ThreadId` ascending. Non-empty equal-score results use the same deterministic tie-break order.
 
 ```text
 ThreadSummary[] + local query
@@ -2191,16 +2314,19 @@ ThreadSummary[] + local query
          rankThreads
               |
               v
+   rankFuzzyCandidates
+              |
+              v
      pinned fzf matcher
               |
               v
  RankedThreadSummary[]
               |
               v
-          ThreadsBox
+ FuzzyListbox in ThreadsBox
 ```
 
-The dependency is intentionally used instead of maintaining a home-rolled approximation of fzf's scoring, smart case, normalization, extended syntax, and match positions. Pinning plus behavioral fixtures protects Dorothy Ann from accidental ranking changes or package drift; `ThreadsBox` and its controller never depend on package result types directly.
+The dependency is intentionally used instead of maintaining a home-rolled approximation of fzf's scoring, smart case, normalization, extended syntax, and match positions. Pinning plus behavioral fixtures protects Dorothy Ann from accidental ranking changes or package drift; only the adapter imports fzf, while `rankThreads`, `rankPromptSuggestions`, `FuzzyListbox`, boxes, and controllers never depend on package result types directly.
 
 **Invariants**
 
@@ -2502,7 +2628,7 @@ server/research.ts
 
 TARGET
 
-layout boxes
+layout boxes ──> shared semantic browser primitives
      |
 WorkspaceController
      |
@@ -2535,7 +2661,7 @@ The implementation plan is intentionally provisional until all boxes and migrati
 
 1. Finalize data-model contracts: discriminated search/research turns, bounded thread context, evidence ownership, research result/provenance, and storage-record boundary.
 2. Run a consistency pass over the settled data/storage/controller chain, including `StoredThreadRecord`, CAS/idempotency/deletion/import behavior, and `WorkspaceController` → `TurnController` → `TurnGateway` → `TurnStreamBoundary` → `TurnExecutor` events/failures.
-3. Finalize layout-box contracts and state/intent ownership.
+3. Finalize browser component vocabulary, shared primitive contracts, prompt fuzzy-suggestion/Escape/caret behavior, transcript Markdown presentation, and layout-box state/intent ownership.
 4. Record a precise file-level current → target mapping and migration sequence that preserves observable behavior.
 5. Introduce the canonical data model and runtime schemas with compatibility migration and focused domain tests.
 6. Extract provider-neutral `SearchTurn` and `ResearchTurn` application orchestration, including the recursive directive interpreter, assessor, knowledge join, evidence acquisition, and synthesizer boxes.
@@ -2552,7 +2678,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [ ] 3. Data-model migration — deliverable: schema-v3 `Thread` aggregate with canonical source catalog, terminal `search | research` discriminated turns, deterministic context/evidence projections, and compatibility migration; verify: domain, schema, storage, import/export, source-identity, and projection tests.
 - [ ] 4. System-box refactor — deliverable: `SearchTurn` execution and standardized `ResearchTurn` composed from recursive resolver, typed assessor directives, algebraic knowledge join, evidence acquisition, and synthesis boxes; verify: focused application/provider/orchestration tests across all explicit limits, algebraic laws, and stop conditions.
 - [ ] 5. Boundary adaptation — deliverable: `WorkspaceController`, browser `TurnController`, `TurnGateway`, transport-only `TurnStreamBoundary`, server `TurnExecutor`, persistence, and concrete provider adapters use the new contracts; verify: app, storage, event-schema, stale-event, cancellation, commit-retry, UI, interruption, and fixture parity tests.
-- [ ] 6. Layout-box refactor — deliverable: agreed layout components consume state and emit intent through explicit interfaces; verify: component, keyboard, focus, responsive, and accessibility tests.
+- [ ] 6. Browser component refactor — deliverable: agreed `*Box` components consume state/emit intent and compose the minimal shared semantic primitives; `PromptBox` uses pinned-fzf command suggestions plus settled Escape/caret behavior, `TranscriptBox` preserves one liberal themed Markdown path, and `StickyHeader` uses minimal structure; verify: component, fuzzy-ranking, keyboard precedence, focus, IME, reduced-motion, Markdown/sanitization, responsive, and accessibility tests.
 - [ ] 7. Vocabulary cleanup — deliverable: obsolete `lookup`/`chat` mode names and accidental compatibility paths removed while preserving the trailing-`?` `ResearchTurn` macro; verify: repository search plus full typecheck/test/build.
 - [ ] 8. Architecture documentation — deliverable: `README.md` human architecture overview and `AGENTS.md` implementation boundaries describe implemented current state; verify: diagrams/contracts match code and links resolve.
 - [ ] 9. Acceptance — deliverable: verified v1.1.0 refactor and refreshed plan completion state; verify: lint, typecheck, unit/integration tests, build, e2e, `git diff --check`, and secret inspection.
@@ -2582,17 +2708,23 @@ The final implementation must prove at least:
 - Budget exhaustion with useful evidence produces best-effort synthesis with uncertainty; no useful evidence produces insufficient-evidence failure.
 - Partial sibling failures preserve viable evidence and provenance.
 - Synthesis receives typed bounded thread context and the final root knowledge unit, emits only citations reachable through that unit, and fails on empty output.
+- One canonical synthesis prompt builder instructs every initial/follow-up answer to begin conversationally without an opening Markdown heading and encourages descriptive Markdown after the opening paragraph; prompt edits update builder, adapters, fixtures, behavioral tests, and the streaming leading-line fallback together.
+- The streaming fallback buffers through the first non-empty line and demotes only a violating leading ATX marker; it performs no second synthesis and leaves all internal Markdown untouched.
 - Search and research failures cross boxes as bounded typed failures without provider payloads.
+- Shared browser primitives standardize native semantics, layout, focus, status, fuzzy-listbox, Markdown, and visual tokens without importing product/controller/storage/provider behavior; product-level `*Box` contracts remain explicit.
 - `WorkspaceController` alone coordinates route/cross-box projections and slash commands, while non-command requests pass unchanged to `TurnController`; neither layout boxes nor workspace routing execute or persist turns.
 - `TurnController` allows one execution/commit candidate with no queue, rejects stale/duplicate/gapped events deterministically, validates terminal source-reference closure, persists interruption on cancellation/connection loss, and retries commit without rerunning providers.
 - `TurnGateway` validates decoded public events; `TurnStreamBoundary` owns authenticated HTTP/SSE framing, contiguous sequencing, heartbeat comments, and cancellation wiring only; `TurnExecutor` dispatches exactly one provider-neutral search/research execution without loading or writing `Thread`.
 - Exactly one legal terminal condition is authoritative: a validated pre-cancellation server terminal or one controller-created interruption; active answer/source deltas never become an independent persistence or rendering path.
-- `PromptBox` remains buttonless, keeps its draft editable while one active turn blocks submission, has no queue, clears a collapsed-selection draft with focused `Ctrl+C`, and preserves native copy for selected text and all `Cmd+C` use.
-- `Hotkeys` is installed once, emits semantic intents rather than effects, focuses a mounted prompt with passive unmodified `:`, emits cancellation for active-turn Escape, and never steals editable/composing input or invokes navigation/system capabilities directly.
-- `TranscriptBox` renders durable and active turns through one ordered view model; active progress/streaming is replaced by matching durable completion without duplicate requests or answers, and initial/follow-up requests use the same path.
+- `PromptBox` remains buttonless, keeps its draft/suggester editable while one active turn blocks execution, has no queue, clears a collapsed-selection draft with focused `Ctrl+C`, and preserves native copy for selected text and all `Cmd+C` use.
+- `rankPromptSuggestions` and `rankThreads` share the sole pinned-`fzf@0.5.2` adapter while retaining product-specific deterministic tie-breaks; `FuzzyListbox` provides accessible active-option mechanics without owning ranking or command/thread effects.
+- Prompt command suggestions open for `/`, support arrows plus Tab completion and Enter execution, and consume their own Escape before global handling. One eligible idle Escape blurs a focused prompt and arms the 500 ms detector; a second requests a new thread, while cancellation/confirmation/composition/modified Escapes never count.
+- Prompt caret color cycles discretely through selected-scheme accent tokens using the native caret, falls back safely, and becomes static under reduced motion; no simulated thick caret compromises native editing/IME/accessibility.
+- `Hotkeys` is installed once, emits semantic intents rather than effects, focuses a mounted prompt with passive unmodified `:`, follows the settled box-local/cancel/blur/double-Escape precedence, never steals unrelated editable or composing input, and never invokes navigation/system capabilities directly.
+- `TranscriptBox` renders durable and active turns through one ordered view model and one sanitized `MarkdownContent` primitive; active progress/streaming is replaced by matching durable completion without duplicate requests or answers, liberal internal Markdown and color-constellation styling are preserved, and initial/follow-up requests use the same path.
 - `EvidenceBox` renders one thread-wide canonical set; duplicate sources retain one application-derived stable `SourceId` and display ordinal, citations resolve by ID, occurrences preserve turn/rank/role provenance, and destination-to-evidence promotion does not duplicate an entry.
 - `BrandBox` exposes one keyboard/pointer-equivalent activation target and emits only `new_thread_requested`; tagline rotation is non-live and respects reduced motion.
-- Every canonical page composes the same `StickyHeader`; its typed contextual actions and feedback remain accessible and never perform effects directly.
+- Every canonical page composes the same minimal `StickyHeader`: one landmark with one `Surface`/`Inline`, `BrandBox`, only applicable contextual actions, and at most one feedback region; actions remain accessible and never perform effects directly.
 - `SettingsBox` has no aggregate Save/Cancel action: each valid preference applies immediately, persists independently through the controller, and remains active but visibly `session_only` when persistence fails. Backup import uses an inline validated preview, safe-default keep/replace policy, opaque stale-safe confirmation ID, and explicit partial report without `window.confirm`.
 - `UnlockBox` remains buttonless, serializes attempts, never externalizes passphrases beyond immediate submit intent, and clears/refocuses after bounded rejection/unavailability while preserving password-manager and accessibility behavior.
 - `SystemStatusBox` renders only blocking auth-session/provider-status/thread-storage checks or unavailability, preserves the requested route, and retries through intent rather than reload while non-blocking failures remain in their owning boxes.
