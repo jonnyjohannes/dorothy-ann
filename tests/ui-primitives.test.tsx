@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { Action } from "../src/ui/primitives/Action";
 import { FuzzyListbox } from "../src/ui/primitives/FuzzyListbox";
 import { MarkdownContent } from "../src/ui/primitives/MarkdownContent";
@@ -49,8 +49,12 @@ describe("browser semantic primitives", () => {
     expect(document.body.innerHTML).not.toContain("javascript:alert(1)");
   });
   it("renders citation markers as numbered links to evidence cards", () => {
-    render(<MarkdownContent markdown="Definition [cite:src_test]" resolveCitation={() => ({ label: "Source", href: "https://example.com", sourceId: "src_test", number: 1 })} />);
-    expect(screen.getByRole("link", { name: "[1]" })).toHaveAttribute("href", "#source-src_test");
+    const onCitationSelect = vi.fn();
+    render(<MarkdownContent markdown="Definition [cite:src_test]" resolveCitation={() => ({ label: "Source", href: "https://example.com", sourceId: "src_test", number: 1 })} onCitationSelect={onCitationSelect} />);
+    const citation = screen.getByRole("link", { name: "[1]" });
+    expect(citation).toHaveAttribute("href", "#source-src_test");
+    fireEvent.click(citation);
+    expect(onCitationSelect).toHaveBeenCalledWith("src_test");
   });
 });
 

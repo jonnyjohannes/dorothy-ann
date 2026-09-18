@@ -58,7 +58,7 @@ export function MarkdownContent({ markdown, className, threadSeed = "", resolveC
         blockquote: ({ children, ...props }) => <blockquote {...props} className="ui-markdown__blockquote">{children}</blockquote>,
         a: ({ href, children, ...props }) => {
           const sourceId = href?.startsWith("#source-") ? href.slice("#source-".length) : undefined;
-          return <a {...props} href={href} className={sourceId ? "ui-markdown__citation" : undefined} style={sourceId ? customAccent(citationAccentSlot?.(sourceId) ?? 0) : undefined} onClick={sourceId ? () => onCitationSelect?.(sourceId) : props.onClick}>{children}</a>;
+          return <a {...props} href={href} className={sourceId ? "ui-markdown__citation" : undefined} style={sourceId ? customAccent(citationAccentSlot?.(sourceId) ?? 0) : undefined} onClick={sourceId ? (event) => { event.preventDefault(); onCitationSelect?.(sourceId); } : props.onClick}>{children}</a>;
         },
       }}
     >{answer}</ReactMarkdown>
