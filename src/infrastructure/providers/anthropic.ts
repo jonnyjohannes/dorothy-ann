@@ -27,65 +27,85 @@ interface MessagesClient {
     messages: Message[];
     stream?: boolean;
     output_config?: { format: { type: "json_schema"; schema: unknown } };
-  }): Promise<MessageResponse | MessageStream>;
+  }, options?: { signal?: AbortSignal }): Promise<MessageResponse | MessageStream>;
 }
+
+const boundedString = (maxLength: number) => ({ type: "string", minLength: 1, maxLength } as const);
+const supportSchema = {
+  anyOf: [
+    { type: "object", additionalProperties: false, properties: { type: { const: "source" }, sourceId: boundedString(64) }, required: ["type", "sourceId"] },
+    { type: "object", additionalProperties: false, properties: { type: { const: "turn" }, turnId: boundedString(64) }, required: ["type", "turnId"] },
+  ],
+} as const;
 
 const assessmentOutputSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
     directive: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        kind: { type: "string", enum: ["search", "resolved", "decompose"] },
-        query: { type: "string" },
-        purpose: { type: "string" },
-        successCriterion: { type: "string" },
-        priority: { type: "integer", enum: [1, 2, 3] },
-        observations: {
-          type: "array",
-          items: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              proposition: { type: "string" },
-              statement: { type: "string" },
-              stance: { type: "string", enum: ["supports", "contradicts", "qualifies"] },
-              support: {
-                type: "array",
-                items: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    type: { type: "string", enum: ["source", "turn"] },
-                    sourceId: { type: "string" },
-                    turnId: { type: "string" },
-                  },
-                  required: ["type"],
+      anyOf: [
+        {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            kind: { const: "search" },
+            query: boundedString(500),
+            purpose: boundedString(240),
+            successCriterion: boundedString(500),
+            priority: { type: "integer", enum: [1, 2, 3] },
+          },
+          required: ["kind", "query", "purpose", "successCriterion", "priority"],
+        },
+        {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            kind: { const: "resolved" },
+            observations: {
+              type: "array",
+              minItems: 1,
+              maxItems: 24,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  proposition: boundedString(240),
+                  statement: boundedString(1_000),
+                  stance: { type: "string", enum: ["supports", "contradicts", "qualifies"] },
+                  support: { type: "array", minItems: 1, maxItems: 24, items: supportSchema },
                 },
+                required: ["proposition", "statement", "stance", "support"],
               },
             },
-            required: ["proposition", "statement", "stance", "support"],
           },
+          required: ["kind", "observations"],
         },
-        operator: { type: "string", enum: ["all", "any"] },
-        problems: {
-          type: "array",
-          items: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              question: { type: "string" },
-              purpose: { type: "string" },
-              successCriterion: { type: "string" },
-              priority: { type: "integer", enum: [1, 2, 3] },
+        {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            kind: { const: "decompose" },
+            operator: { type: "string", enum: ["all", "any"] },
+            problems: {
+              type: "array",
+              minItems: 1,
+              maxItems: 3,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  question: boundedString(2_000),
+                  purpose: boundedString(240),
+                  successCriterion: boundedString(500),
+                  priority: { type: "integer", enum: [1, 2, 3] },
+                },
+                required: ["question", "purpose", "successCriterion", "priority"],
+              },
             },
-            required: ["question", "purpose", "successCriterion", "priority"],
           },
+          required: ["kind", "operator", "problems"],
         },
-      },
-      required: ["kind"],
+      ],
     },
   },
   required: ["directive"],
@@ -95,6 +115,7 @@ export type AnthropicFailureCode =
   | "provider_rate_limited"
   | "provider_unavailable"
   | "provider_interrupted"
+  | "provider_bad_request"
   | "provider_failed"
   | "assessment_invalid_response"
   | "synthesis_invalid_response";
@@ -148,12 +169,12 @@ export class AnthropicProvider implements LLMProvider {
           messages: [{ role: "user", content: assessmentEnvelope(input, correction) }],
           ...(structuredOutput ? { output_config: { format: { type: "json_schema" as const, schema: assessmentOutputSchema } } } : {}),
         };
-        const response = await this.create(request);
+        const response = await this.create(request, input.signal);
         const text = responseText(response);
-        const proposal = parseProposal(text);
+        const proposal = parseProposal(text, input.allowedSupportRefs);
         if (proposal) return proposal;
       } catch (error) {
-        if (error instanceof AnthropicProviderError && error.code === "provider_failed" && structuredOutput) {
+        if (error instanceof AnthropicProviderError && error.code === "provider_bad_request" && structuredOutput) {
           structuredOutput = false;
           continue;
         }
@@ -199,16 +220,17 @@ export class AnthropicProvider implements LLMProvider {
     }
   }
 
-  private create(input: Parameters<MessagesClient["create"]>[0]): Promise<MessageResponse | MessageStream> {
-    return this.messages.create(input).catch((error: unknown) => { throw normalizeAnthropicError(error); });
+  private create(input: Parameters<MessagesClient["create"]>[0], signal?: AbortSignal): Promise<MessageResponse | MessageStream> {
+    return this.messages.create(input, signal ? { signal } : undefined).catch((error: unknown) => { throw normalizeAnthropicError(error); });
   }
 }
 
 /** Exported for adapter and boundary tests; it never exposes SDK details. */
 export function normalizeAnthropicError(error: unknown): AnthropicProviderError {
   const candidate = error as { status?: number; name?: string } | null;
+  if (candidate?.status === 400) return new AnthropicProviderError("provider_bad_request", false);
   if (candidate?.status === 429) return new AnthropicProviderError("provider_rate_limited", true);
-  if (candidate?.name === "AbortError") return new AnthropicProviderError("provider_interrupted", true);
+  if (candidate?.name && /abort/iu.test(candidate.name)) return new AnthropicProviderError("provider_interrupted", true);
   if (candidate?.status !== undefined && candidate.status >= 500) return new AnthropicProviderError("provider_unavailable", true);
   return new AnthropicProviderError("provider_failed", false);
 }
@@ -223,20 +245,78 @@ function responseText(response: MessageResponse | MessageStream): string {
   return (response.content ?? []).filter((block) => block.type === "text").map((block) => block.text ?? "").join("");
 }
 
+function compactProblem(problem: ResearchAssessmentInput["problem"]) {
+  return {
+    id: problem.id,
+    parentId: problem.parentId,
+    question: problem.question,
+    purpose: problem.purpose,
+    successCriterion: problem.successCriterion,
+    depth: problem.depth,
+  };
+}
+
+function compactEvidence(evidence: ResearchAssessmentInput["knowledge"]["evidence"]) {
+  return evidence.map((pack) => ({
+    problemId: pack.problemId,
+    query: pack.query,
+    sources: pack.sources.map((source) => ({
+      sourceId: source.sourceId,
+      text: source.page.text,
+      extractedAt: source.page.extractedAt,
+    })),
+  }));
+}
+
 function assessmentEnvelope(input: ResearchAssessmentInput, correction?: string): string {
+  const admissibleSourceIds = new Set([
+    ...input.problem.context.availableEvidence,
+    ...input.knowledge.evidence,
+  ].flatMap((pack) => pack.sources.map((source) => source.sourceId)));
   const payload = {
     task: "research_assessment",
-    problem: input.problem,
-    knowledge: input.knowledge,
-    ledger: input.ledger,
+    problem: compactProblem(input.problem),
+    context: {
+      turns: input.problem.context.turns,
+      availableEvidence: compactEvidence(input.problem.context.availableEvidence),
+      sources: input.problem.context.knownSources
+        .filter((source) => admissibleSourceIds.has(source.sourceId))
+        .map((source) => ({
+          sourceId: source.sourceId,
+          title: source.title,
+          canonicalUrl: source.canonicalUrl,
+          publishedAt: source.publishedAt,
+        })),
+    },
+    knowledge: {
+      problemId: input.knowledge.problemId,
+      findings: input.knowledge.findings.map((finding) => ({
+        proposition: finding.proposition,
+        status: finding.status,
+        observations: finding.observations.map((observation) => ({
+          statement: observation.statement,
+          stance: observation.stance,
+          support: observation.support,
+        })),
+      })),
+      evidence: compactEvidence(input.knowledge.evidence),
+      unresolvedGapIds: input.knowledge.unresolvedGapIds,
+    },
+    ledger: {
+      gaps: input.ledger.gaps.map((gap) => ({
+        id: gap.id,
+        problem: compactProblem(gap.problem),
+        operatorFromParent: gap.operatorFromParent,
+        status: gap.status,
+        support: gap.support,
+        createdOrder: gap.createdOrder,
+      })),
+      assessmentsUsed: input.ledger.assessmentsUsed,
+      searchesUsed: input.ledger.searchesUsed,
+      sourcesConsumed: input.ledger.sourcesConsumed,
+    },
     budget: input.budget,
     allowedSupportRefs: input.allowedSupportRefs,
-    outputSchema: {
-      directive: "one of resolved, search, or decompose",
-      resolved: { observations: "1..24 items with proposition, statement, stance, support" },
-      search: { query: "string", purpose: "string", successCriterion: "string", priority: "1..3" },
-      decompose: { operator: "all|any", problems: "1..3 items" },
-    },
     outputInstruction: "Return exactly one valid JSON object now. Do not explain, reason aloud, use Markdown, use a code fence, or return any text before or after the object.",
     correction,
   };
@@ -283,7 +363,7 @@ function jsonObjectCandidates(text: string): unknown[] {
   return candidates;
 }
 
-function parseProposal(text: string): ResearchAssessmentProposal | undefined {
+function parseProposal(text: string, allowedSupportRefs: ResearchAssessmentInput["allowedSupportRefs"]): ResearchAssessmentProposal | undefined {
   for (const raw of jsonObjectCandidates(text)) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
     const root = raw as Record<string, unknown>;
@@ -293,7 +373,7 @@ function parseProposal(text: string): ResearchAssessmentProposal | undefined {
     const directive = objectValue(candidate.directive) ?? candidate;
     const kind = declaredKind ?? normalizeKind(directive.kind ?? directive.type ?? directive.action);
     if (kind === "resolved") {
-      const result = parseResolved(directive);
+      const result = parseResolved(directive, allowedSupportRefs);
       if (result) return result;
     }
     if (kind === "search") {
@@ -308,7 +388,7 @@ function parseProposal(text: string): ResearchAssessmentProposal | undefined {
   return undefined;
 }
 
-function parseResolved(value: Record<string, unknown>): ResearchAssessmentProposal | undefined {
+function parseResolved(value: Record<string, unknown>, allowedSupportRefs: ResearchAssessmentInput["allowedSupportRefs"]): ResearchAssessmentProposal | undefined {
   const raw = Array.isArray(value.observations) ? value.observations : Array.isArray(value.findings) ? value.findings : undefined;
   if (!raw || raw.length < 1 || raw.length > 24) return undefined;
   const observations: ObservationProposal[] = [];
@@ -316,7 +396,7 @@ function parseResolved(value: Record<string, unknown>): ResearchAssessmentPropos
     const item = objectValue(entry);
     if (!item || !bounded(item.proposition, 240) || !bounded(item.statement, 1_000)) return undefined;
     const stance = item.stance === "supports" || item.stance === "contradicts" || item.stance === "qualifies" ? item.stance : undefined;
-    const support = parseSupport(item.support);
+    const support = parseSupport(item.support, allowedSupportRefs);
     if (!stance || !support) return undefined;
     observations.push({ proposition: item.proposition as string, statement: item.statement as string, stance, support });
   }
@@ -346,12 +426,19 @@ function parseDecompose(value: Record<string, unknown>): ResearchAssessmentPropo
   return { directive: { kind: "decompose", operator, problems } };
 }
 
-function parseSupport(value: unknown): ResearchAssessmentInput["allowedSupportRefs"] | undefined {
-  if (!Array.isArray(value) || value.length > 64) return undefined;
+function parseSupport(value: unknown, allowedSupportRefs: ResearchAssessmentInput["allowedSupportRefs"]): ResearchAssessmentInput["allowedSupportRefs"] | undefined {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 24) return undefined;
+  const allowed = new Set(allowedSupportRefs.map((ref) => ref.type === "turn" ? `turn:${ref.turnId}` : `source:${ref.sourceId}`));
   const refs = value.map((entry) => {
     const item = objectValue(entry);
-    if (!item || (item.type !== "turn" && item.type !== "source") || typeof item.turnId !== "string" && typeof item.sourceId !== "string") return undefined;
-    return item.type === "turn" && typeof item.turnId === "string" ? { type: "turn" as const, turnId: item.turnId as never } : { type: "source" as const, sourceId: item.sourceId as SourceId };
+    if (!item) return undefined;
+    if (item.type === "turn" && typeof item.turnId === "string" && Object.keys(item).every((key) => key === "type" || key === "turnId")) {
+      return allowed.has(`turn:${item.turnId}`) ? { type: "turn" as const, turnId: item.turnId as never } : undefined;
+    }
+    if (item.type === "source" && typeof item.sourceId === "string" && Object.keys(item).every((key) => key === "type" || key === "sourceId")) {
+      return allowed.has(`source:${item.sourceId}`) ? { type: "source" as const, sourceId: item.sourceId as SourceId } : undefined;
+    }
+    return undefined;
   });
   return refs.every(Boolean) ? refs as ResearchAssessmentInput["allowedSupportRefs"] : undefined;
 }

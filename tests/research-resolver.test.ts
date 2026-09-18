@@ -34,6 +34,7 @@ describe("ResearchResolver", () => {
   it("searches, reassesses the parent, and returns one sufficient resolution", async () => {
     const input = await makeInput();
     let calls = 0;
+    const phases: string[] = [];
     const resolver = new ResearchResolver({
       identities,
       assessor: new ResearchAssessor(identities),
@@ -44,9 +45,12 @@ describe("ResearchResolver", () => {
       },
       acquirer: new EvidenceAcquirer({ fixture: true }),
     });
-    const result = await resolver.resolve(input);
+    const result = await resolver.resolve({ ...input, onPhase: (phase) => { phases.push(phase); } });
     expect(result.kind).toBe("resolution");
     if (result.kind !== "resolution") return;
+    expect(phases.filter((phase, index) => phase !== phases[index - 1])).toEqual([
+      "resolving", "searching", "extracting", "resolving", "assessing", "resolving",
+    ]);
     expect(result.resolution.status).toBe("sufficient");
     expect(result.resolution.ledger.searchesUsed).toBe(1);
     expect(result.resolution.tasks).toHaveLength(1);
@@ -97,6 +101,42 @@ describe("ResearchResolver", () => {
       searchRef: "search",
     });
     expect(execution.turn.status).toBe("completed");
+  });
+
+  it("leaves an unavailable assessment visibly in the assessing phase", async () => {
+    const input = await makeInput();
+    input.problem.depth = 1;
+    const phases: string[] = [];
+    const resolver = new ResearchResolver({
+      identities,
+      assessor: new ResearchAssessor(identities),
+      assess: async () => { throw new Error("provider_unavailable"); },
+      acquirer: new EvidenceAcquirer({ fixture: true }),
+    });
+    const result = await resolver.resolve({ ...input, onPhase: (phase) => { phases.push(phase); } });
+    expect(result.kind).toBe("resolution");
+    if (result.kind === "resolution") expect(result.resolution.stopReason).toBe("provider_unavailable");
+    expect(phases.at(-1)).toBe("assessing");
+  });
+
+  it("forwards cancellation to assessment without starting another operation", async () => {
+    const input = await makeInput();
+    input.problem.depth = 1;
+    const controller = new AbortController();
+    let received: AbortSignal | undefined;
+    const resolver = new ResearchResolver({
+      identities,
+      assessor: new ResearchAssessor(identities),
+      assess: async ({ signal }) => {
+        received = signal;
+        controller.abort();
+        signal?.throwIfAborted();
+        throw new Error("unreachable");
+      },
+      acquirer: new EvidenceAcquirer({ fixture: true }),
+    });
+    await expect(resolver.resolve({ ...input, signal: controller.signal })).rejects.toThrow();
+    expect(received).toBe(controller.signal);
   });
 
   it("returns insufficient evidence when the explicit search budget is exhausted", async () => {

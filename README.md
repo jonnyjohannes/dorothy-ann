@@ -67,6 +67,12 @@ npm run test:e2e
 
 Fixture mode is the default. Live provider credentials are optional for local implementation and must never be exposed through `VITE_*` variables or browser assets.
 
+### research timing logs
+
+Set `RESEARCH_TIMING_LOGS=true` to emit one server-side JSON summary per research execution. Logging is off by default. The versioned record contains only `event`, `schema_version`, bounded terminal/resolution/stop enums, integer `execution_ms`, optional `resolution_ms` and `first_answer_signal_ms`, ledger counts, and aggregate `search`, `extraction`, `assessment`, and `synthesis` stage timings (`calls`, `succeeded`, `failed`, `cumulative_ms`, `max_ms`, and optional `first_output_ms`). Concurrent call durations overlap, so use execution/resolution wall time for critical-path latency and cumulative stage time only as workload data.
+
+These records never contain request or prompt text, extracted content, URLs/source metadata, provider/model names, execution/turn IDs, credentials, provider payloads, or error messages/stacks. Keep normal production log access and retention controls in place because even bounded timing/count metadata is operationally sensitive. Timing data is not added to SSE, `/api/status`, durable turns, or browser storage.
+
 ## documentation
 
 - [v1.1.0 architecture plan](docs/plans/dorothy-ann-v1.1.0.md) — implemented boxes, contracts, migration policy, verification, and handoff

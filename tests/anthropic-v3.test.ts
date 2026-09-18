@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MessageResponse, MessageStream } from "../src/infrastructure/providers/anthropic.js";
-import { AnthropicProvider, AnthropicProviderError } from "../src/infrastructure/providers/anthropic.js";
+import { AnthropicProvider, AnthropicProviderError, normalizeAnthropicError } from "../src/infrastructure/providers/anthropic.js";
 import type { ResearchAssessmentInput, ResearchSynthesisInput } from "../src/ports/llm.js";
 
 const source = "src_test" as never;
@@ -25,9 +25,18 @@ const baseSynthesis = {
 
 function client(responses: Array<MessageResponse | MessageStream>) {
   const systems: string[] = [];
+  const requests: Array<Record<string, unknown>> = [];
+  const options: unknown[] = [];
   return {
     systems,
-    messages: { create: async (input: { system: string }) => { systems.push(input.system); return responses.shift() as MessageResponse | MessageStream; } },
+    requests,
+    options,
+    messages: { create: async (input: Record<string, unknown>, requestOptions?: unknown) => {
+      systems.push(input.system as string);
+      requests.push(input);
+      options.push(requestOptions);
+      return responses.shift() as MessageResponse | MessageStream;
+    } },
   };
 }
 
@@ -47,6 +56,52 @@ describe("AnthropicProvider v3", () => {
     const result = await provider.assessResearch(baseAssessment);
     expect(result.directive.kind).toBe("resolved");
     expect(fake.systems).toEqual(["ASSESSOR EXACT", "ASSESSOR EXACT"]);
+    expect(((fake.requests[1].messages as Array<{ content: string }>)[0].content)).toContain("previous response failed validation");
+    expect(fake.requests.every((request) => request.max_tokens === 800)).toBe(true);
+  });
+
+  it("projects one compact assessment context without repeated gap contexts or storage identities", async () => {
+    const evidenceText = "UNTRUSTED_EVIDENCE_VALUE ".repeat(20);
+    const rich = structuredClone(baseAssessment) as ResearchAssessmentInput;
+    const pack = {
+      problemId: rich.problem.id,
+      requestOrder: 7,
+      query: "private query",
+      sources: [{ sourceId: source, page: { text: evidenceText, extractedAt: "2026-01-01T00:00:00.000Z", characterCount: evidenceText.length } }],
+      createdAt: "2026-01-01T00:00:00.000Z",
+    } as never;
+    rich.problem.context.availableEvidence = [pack];
+    rich.problem.context.knownSources = [{ sourceId: source, title: "Evidence title", url: "https://example.test/path", canonicalUrl: "https://example.test/path", displayUrl: "example.test", snippet: "unsupported snippet" }] as never;
+    rich.problem.context.turns = [{ turnId: "turn_test", kind: "research", request: "earlier", outcome: "sufficient", answer: { parts: [{ type: "text", markdown: "earlier answer" }] }, answerTruncated: false }] as never;
+    rich.ledger.gaps = [0, 1, 2].map((createdOrder) => ({ id: `gap_${createdOrder}`, problem: rich.problem, status: "open", support: [], fingerprint: `SECRET_FINGERPRINT_${createdOrder}`, createdOrder })) as never;
+    rich.knowledge.findings = [{ propositionKey: "SECRET_HASH", proposition: "Finding", status: "supported", observations: [{ id: "SECRET_OBSERVATION", propositionKey: "SECRET_HASH", statement: "Statement", stance: "supports", support: [{ type: "source", sourceId: source }] }] }] as never;
+    const fake = client([{ content: [{ type: "text", text: JSON.stringify({ directive: { kind: "search", query: "next", purpose: "verify", successCriterion: "supported", priority: 1 } }) }] }]);
+    const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: fake });
+
+    await provider.assessResearch(rich);
+    const content = (fake.requests[0].messages as Array<{ content: string }>)[0].content;
+    const envelope = JSON.parse(content) as {
+      context: {
+        turns: Array<{ answer: { parts: Array<{ markdown: string }> } }>;
+        availableEvidence: Array<{ sources: Array<{ text: string }> }>;
+        sources: unknown[];
+      };
+      problem: { context?: unknown };
+      ledger: { gaps: Array<{ problem: { context?: unknown } }> };
+      outputSchema?: unknown;
+    };
+    expect(envelope.context.turns[0].answer.parts[0].markdown).toBe("earlier answer");
+    expect(envelope.context.availableEvidence[0].sources[0].text).toBe(evidenceText);
+    expect(envelope.context.sources[0]).toEqual({ sourceId: source, title: "Evidence title", canonicalUrl: "https://example.test/path" });
+    expect(envelope.problem.context).toBeUndefined();
+    expect(envelope.ledger.gaps.every((gap) => gap.problem.context === undefined)).toBe(true);
+    expect(content).not.toContain("SECRET_FINGERPRINT");
+    expect(content).not.toContain("SECRET_HASH");
+    expect(content).not.toContain("SECRET_OBSERVATION");
+    expect(content).not.toContain("unsupported snippet");
+    expect(envelope.outputSchema).toBeUndefined();
+    expect((content.match(/UNTRUSTED_EVIDENCE_VALUE/g) ?? [])).toHaveLength(20);
+    expect(fake.systems).toEqual(["ASSESSOR EXACT"]);
   });
 
   it("accepts the assessor's named directive wrapper", async () => {
@@ -54,6 +109,47 @@ describe("AnthropicProvider v3", () => {
     const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: fake });
     const result = await provider.assessResearch(baseAssessment);
     expect(result.directive).toMatchObject({ kind: "search", query: "independent reporting", priority: 1 });
+  });
+
+  it("falls back without structured output only for a classified 400 response", async () => {
+    const requests: Array<Record<string, unknown>> = [];
+    const provider = new AnthropicProvider({
+      assessmentModel: "high",
+      synthesisModel: "balanced",
+      client: { messages: { create: async (input: Record<string, unknown>) => {
+        requests.push(input);
+        if (requests.length === 1) throw { status: 400, message: "private provider payload" };
+        return { content: [{ type: "text", text: JSON.stringify({ directive: { kind: "search", query: "q", purpose: "p", successCriterion: "s", priority: 1 } }) }] };
+      } } },
+    });
+    await expect(provider.assessResearch(baseAssessment)).resolves.toMatchObject({ directive: { kind: "search" } });
+    expect(requests).toHaveLength(2);
+    expect(requests[0].output_config).toBeDefined();
+    expect(requests[1].output_config).toBeUndefined();
+  });
+
+  it.each([401, 403, 404, 422])("does not replay permanent HTTP %s failures", async (status) => {
+    let calls = 0;
+    const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: { messages: { create: async () => { calls += 1; throw { status, message: "private" }; } } } });
+    await expect(provider.assessResearch(baseAssessment)).rejects.toMatchObject({ code: "provider_failed" });
+    expect(calls).toBe(1);
+  });
+
+  it("forwards the assessment abort signal and recognizes SDK-style abort errors", async () => {
+    const controller = new AbortController();
+    const fake = client([{ content: [{ type: "text", text: JSON.stringify({ directive: { kind: "search", query: "q", purpose: "p", successCriterion: "s", priority: 1 } }) }] }]);
+    const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: fake });
+    await provider.assessResearch({ ...baseAssessment, signal: controller.signal });
+    expect(fake.options).toEqual([{ signal: controller.signal }]);
+    expect(normalizeAnthropicError({ name: "APIUserAbortError" })).toMatchObject({ code: "provider_interrupted" });
+  });
+
+  it("uses the corrective retry for structurally invalid or unauthorized support", async () => {
+    const invalid = JSON.stringify({ directive: { kind: "resolved", observations: [{ proposition: "p", statement: "s", stance: "supports", support: [{ type: "source", sourceId: "not-allowed" }] }] } });
+    const fake = client([{ content: [{ type: "text", text: invalid }] }, { content: [{ type: "text", text: invalid }] }]);
+    const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: fake });
+    await expect(provider.assessResearch(baseAssessment)).rejects.toMatchObject({ code: "assessment_invalid_response", retryable: true });
+    expect(fake.requests).toHaveLength(2);
   });
 
   it("streams citations only when they are reachable through allowed source IDs", async () => {

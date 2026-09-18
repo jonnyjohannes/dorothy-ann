@@ -24,18 +24,16 @@ const timestamp = () => new Date().toISOString() as UserMessage["createdAt"];
 const uuid = () => crypto.randomUUID();
 
 function researchStage(answerDraft: string, events: TurnControllerView["events"]): string {
-  if (answerDraft) return "synthesizing";
-  const latest = events.at(-1);
-  if (latest?.type === "source_delta") return "sources found";
-  if (latest?.type === "research_state" && latest.state.kind === "resolution") return "synthesizing";
   const phase = [...events].reverse().find((event) => event.type === "phase");
-  if (!phase || phase.type !== "phase") return "researching";
-  if (phase.phase === "assessing") return "assessing research";
-  if (phase.phase === "decomposing") return "research direction";
-  if (phase.phase === "extracting") return "extracting evidence";
-  if (phase.phase === "resolving") return "resolving evidence";
-  if (phase.phase === "synthesizing") return "synthesizing";
-  return "researching";
+  if (phase?.type === "phase") {
+    if (phase.phase === "searching") return "searching sources";
+    if (phase.phase === "extracting") return "extracting evidence";
+    if (phase.phase === "assessing") return "assessing research";
+    if (phase.phase === "decomposing") return "research direction";
+    if (phase.phase === "resolving") return "resolving evidence";
+    if (phase.phase === "synthesizing") return "synthesizing";
+  }
+  return answerDraft ? "synthesizing" : "researching";
 }
 
 export function ResearchStatus({ answerDraft, events = [] }: { answerDraft: string; events?: TurnControllerView["events"] }) {

@@ -48,7 +48,7 @@ export type TurnExecutionSignal =
   | { type: "answer_delta"; delta: string };
 
 export interface TurnExecutor {
-  execute(request: TurnExecutionRequest, onSignal: (signal: TurnExecutionSignal) => void, signal: AbortSignal): Promise<TurnExecutionTerminal>;
+  execute(request: TurnExecutionRequest, onSignal: (signal: TurnExecutionSignal) => void | Promise<void>, signal: AbortSignal): Promise<TurnExecutionTerminal>;
 }
 
 export interface TurnExecutionEventBase {
@@ -130,8 +130,10 @@ async function readBoundedJson(request: Request, maximum: number): Promise<{ ok:
   }
 }
 
+const researchPhases = new Set<TurnPhase>(["searching", "extracting", "assessing", "decomposing", "resolving", "synthesizing"]);
+
 function validateSignal(signal: TurnExecutionSignal, request: TurnExecutionRequest): boolean {
-  if (signal.type === "phase") return request.kind === "research" || signal.phase === "searching";
+  if (signal.type === "phase") return request.kind === "research" ? researchPhases.has(signal.phase) : signal.phase === "searching";
   if (signal.type === "answer_delta") return request.kind === "research" && signal.delta.length <= 64_000;
   if (signal.type === "research_state") {
     if (request.kind !== "research") return false;

@@ -46,6 +46,33 @@ describe("portable turn stream boundary", () => {
     expect(body).toContain("id: 3");
   });
 
+  it("validates and sequences every legal research phase while awaiting async writes", async () => {
+    const phases = ["searching", "extracting", "assessing", "decomposing", "resolving", "synthesizing"] as const;
+    const app = appFor({
+      async execute(_request, onSignal) {
+        for (const phase of phases) await onSignal({ type: "phase", phase });
+        return { kind: "research", outcome: {}, sourceRecords: [] } as never;
+      },
+    });
+    const response = await app.request("http://localhost/", { method: "POST", body: JSON.stringify({ executionId, turnId, kind: "research", question: "hello", context: { threadId: "123e4567-e89b-12d3-a456-426614174002", turns: [], knownSources: [], availableEvidence: [] } }) });
+    const events = (await response.text()).split("\n").filter((line) => line.startsWith("data: ")).map((line) => JSON.parse(line.slice(6)) as { type: string; phase?: string; sequence: number });
+    expect(events.filter((event) => event.type === "phase").map((event) => event.phase)).toEqual(phases);
+    expect(events.map((event) => event.sequence)).toEqual(events.map((_, index) => index + 1));
+  });
+
+  it("rejects an invalid cast research phase before it reaches SSE", async () => {
+    const app = appFor({
+      async execute(_request, onSignal) {
+        await onSignal({ type: "phase", phase: "private_invalid_phase" } as never);
+        return { kind: "research", outcome: {}, sourceRecords: [] } as never;
+      },
+    });
+    const response = await app.request("http://localhost/", { method: "POST", body: JSON.stringify({ executionId, turnId, kind: "research", question: "hello", context: { threadId: "123e4567-e89b-12d3-a456-426614174002", turns: [], knownSources: [], availableEvidence: [] } }) });
+    const body = await response.text();
+    expect(body).toContain('"code":"invalid_event"');
+    expect(body).not.toContain("private_invalid_phase");
+  });
+
   it("rejects malformed, oversized, unauthenticated, and cross-origin requests before streaming", async () => {
     const app = appFor({ execute: async () => terminal }, { authenticate: () => false });
     const unauthenticated = await app.request("http://localhost/", { method: "POST", body: "{}" });

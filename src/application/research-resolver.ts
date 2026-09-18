@@ -23,12 +23,16 @@ import { sourceIdSchema, turnIdSchema } from "../domain/schemas.js";
 
 export const MAX_RESEARCH_DEPTH = 2;
 
+export type ResearchProgressPhase = "searching" | "extracting" | "assessing" | "decomposing" | "resolving";
+export type ResearchProgressObserver = (phase: ResearchProgressPhase) => void | Promise<void>;
+
 export interface ResearchAssessmentRequest {
   problem: ResearchProblem;
   knowledge: KnowledgeUnit;
   ledger: GapLedger;
   budget: ResearchBudget;
   allowedSupportRefs: SupportRef[];
+  signal?: AbortSignal;
 }
 
 export interface ResearchResolverDependencies {
@@ -46,6 +50,8 @@ export interface ResearchResolverInput {
   knowledge: KnowledgeUnit;
   ledger: GapLedger;
   budget: ResearchBudget;
+  signal?: AbortSignal;
+  onPhase?: ResearchProgressObserver;
 }
 
 export type ResearchResolverOutcome =
@@ -63,7 +69,22 @@ const useful = (knowledge: KnowledgeUnit): boolean => knowledge.findings.length 
 const key = (knowledge: KnowledgeUnit): string => JSON.stringify(knowledge);
 const normalized = (value: string): string => value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLowerCase();
 const isUnavailable = (error: unknown): boolean => error instanceof Error && /provider_unavailable|search_unavailable|unavailable/iu.test(error.message);
-const isInterrupted = (error: unknown): boolean => error instanceof Error && /abort|interrupt|cancel/iu.test(error.message);
+const isInterrupted = (error: unknown): boolean => error instanceof Error && /abort|interrupt|cancel/iu.test(`${error.name} ${error.message}`);
+
+class ResearchProgressError extends Error {
+  constructor(readonly cause: unknown) {
+    super("research_progress_observer_failed");
+    this.name = "ResearchProgressError";
+  }
+}
+
+async function emitPhase(observer: ResearchProgressObserver | undefined, phase: ResearchProgressPhase): Promise<void> {
+  try {
+    await observer?.(phase);
+  } catch (error) {
+    throw new ResearchProgressError(error);
+  }
+}
 
 function refsFor(problem: ResearchProblem, knowledge: KnowledgeUnit): SupportRef[] {
   const refs = new Map<string, SupportRef>();
@@ -99,18 +120,22 @@ export class ResearchResolver {
       tasks: [] as ResearchTaskRecord[],
       admittedSources: [] as CanonicalSource[],
       activeFingerprints: new Set<string>(),
+      signal: input.signal,
+      onPhase: input.onPhase,
     };
     try {
+      input.signal?.throwIfAborted();
+      await emitPhase(input.onPhase, "resolving");
       await this.ensureGap(input.problem, state.ledger);
       const result = await this.resolveProblem(input.turnId, input.problem, state.knowledge, state, undefined);
       if (result.kind === "checkpoint") return result;
       return { kind: "resolution", resolution: this.resolution(result.knowledge, state, result.stopReason) };
     } catch (error) {
-      const reason = isInterrupted(error) ? "interrupted" : "execution_failure";
+      if (error instanceof ResearchProgressError || input.signal?.aborted || isInterrupted(error)) throw error;
       return {
         kind: "checkpoint",
         checkpoint: {
-          reason,
+          reason: "execution_failure",
           knowledge: state.knowledge,
           ledger: state.ledger,
           tasks: state.tasks,
@@ -146,9 +171,11 @@ export class ResearchResolver {
     turnId: TurnId,
     problem: ResearchProblem,
     startingKnowledge: KnowledgeUnit,
-    state: { ledger: GapLedger; budget: ResearchBudget; knowledge: KnowledgeUnit; tasks: ResearchTaskRecord[]; admittedSources: CanonicalSource[]; activeFingerprints: Set<string> },
+    state: { ledger: GapLedger; budget: ResearchBudget; knowledge: KnowledgeUnit; tasks: ResearchTaskRecord[]; admittedSources: CanonicalSource[]; activeFingerprints: Set<string>; signal?: AbortSignal; onPhase?: ResearchProgressObserver },
     operatorFromParent: "all" | "any" | undefined,
   ): Promise<{ kind: "resolution"; knowledge: KnowledgeUnit; stopReason: ResearchResolution["stopReason"] } | { kind: "checkpoint"; checkpoint: ResearchCheckpoint }> {
+    state.signal?.throwIfAborted();
+    await emitPhase(state.onPhase, "resolving");
     const gap = await this.ensureGap(problem, state.ledger, operatorFromParent);
     if (state.activeFingerprints.has(gap.fingerprint)) {
       gap.status = "blocked";
@@ -255,6 +282,7 @@ export class ResearchResolver {
         return this.resolveProblem(turnId, problem, afterSearch, state, operatorFromParent);
       }
 
+      await emitPhase(state.onPhase, "decomposing");
       gap.status = "decomposed";
       let combined = before;
       let completedChild = false;
@@ -303,15 +331,18 @@ export class ResearchResolver {
     }
   }
 
-  private async assess(turnId: TurnId, problem: ResearchProblem, knowledge: KnowledgeUnit, state: { ledger: GapLedger; budget: ResearchBudget },): Promise<ResearchAssessment> {
+  private async assess(turnId: TurnId, problem: ResearchProblem, knowledge: KnowledgeUnit, state: { ledger: GapLedger; budget: ResearchBudget; signal?: AbortSignal; onPhase?: ResearchProgressObserver },): Promise<ResearchAssessment> {
+    state.signal?.throwIfAborted();
     const request: ResearchAssessmentRequest = {
       problem,
       knowledge,
       ledger: state.ledger,
       budget: state.budget,
       allowedSupportRefs: refsFor(problem, knowledge),
+      signal: state.signal,
     };
     let proposal: ResearchAssessmentProposal;
+    await emitPhase(state.onPhase, "assessing");
     try {
       proposal = await this.dependencies.assess(request);
     } catch (error) {
@@ -326,10 +357,11 @@ export class ResearchResolver {
     });
     state.budget.assessmentsRemaining -= 1;
     state.ledger.assessmentsUsed += 1;
+    await emitPhase(state.onPhase, "resolving");
     return assessment;
   }
 
-  private async acquire(problem: ResearchProblem, directive: Extract<ResearchAssessment["directive"], { kind: "search" }>, state: { budget: ResearchBudget; ledger: GapLedger }): Promise<EvidenceAcquisitionResult> {
+  private async acquire(problem: ResearchProblem, directive: Extract<ResearchAssessment["directive"], { kind: "search" }>, state: { budget: ResearchBudget; ledger: GapLedger; signal?: AbortSignal; onPhase?: ResearchProgressObserver }): Promise<EvidenceAcquisitionResult> {
     const request: EvidenceRequest = {
       problemId: problem.id,
       query: directive.query,
@@ -345,7 +377,9 @@ export class ResearchResolver {
       availableEvidenceSourceIds: problem.context.availableEvidence.flatMap((pack) => pack.sources.map((source) => source.sourceId)),
       budget: state.budget,
       limits: this.dependencies.acquisitionLimits ?? {},
+      onStage: (stage) => emitPhase(state.onPhase, stage),
     });
+    await emitPhase(state.onPhase, "resolving");
     const searches = state.budget.searchesRemaining - result.budget.searchesRemaining;
     const sources = state.budget.sourcesRemaining - result.budget.sourcesRemaining;
     state.budget = result.budget;

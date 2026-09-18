@@ -7,11 +7,12 @@ import type { AppConfig } from "./runtime/config.js";
 import type { SystemPromptCatalog } from "../src/ports/system-prompts.js";
 import type { LLMProvider, ResearchAssessmentInput, ResearchAssessmentProposal, ResearchSynthesisInput } from "../src/ports/llm.js";
 import type { SearchProvider } from "../src/ports/providers.js";
-import type { AssistantContentPart, CanonicalSource, KnowledgeUnit, ResearchProblem, Turn, UserMessage } from "../src/domain/types.js";
+import type { AssistantContentPart, CanonicalSource, GapLedger, KnowledgeUnit, ResearchProblem, ResearchResolution, Turn, UserMessage } from "../src/domain/types.js";
 import { IdentityPolicy } from "../src/application/identity-policy.js";
 import { WebCryptoIdentityHasher } from "../src/infrastructure/identity/web-crypto-hasher.js";
 import { BraveSearchProvider } from "../src/infrastructure/providers/brave.js";
 import { SafeContentExtractor } from "../src/infrastructure/extraction/safe-content-extractor.js";
+import type { ContentExtractor } from "../src/ports/extraction.js";
 import { AnthropicProvider } from "../src/infrastructure/providers/anthropic.js";
 import { EvidenceAcquirer } from "../src/application/evidence-acquirer.js";
 import { ResearchAssessor } from "../src/application/research-assessor.js";
@@ -23,6 +24,7 @@ import { createPortableApp } from "../src/server/app.js";
 import type { TurnExecutor, TurnExecutionRequest, TurnExecutionTerminal } from "../src/server/turn-stream-boundary.js";
 import { createThreadStorageRoutes } from "../src/server/thread-storage-routes.js";
 import type { ThreadStore } from "../src/ports/storage-v3.js";
+import { jsonResearchTimingSink, ResearchTimingCollector, type ResearchTimingSink } from "./runtime/research-timing.js";
 
 class UnavailableSearchProvider implements SearchProvider {
   async search(): Promise<import("../src/domain/types.js").SearchResult[]> { throw new Error("provider_unavailable"); }
@@ -65,17 +67,16 @@ function terminalFor(result: { turn: Turn; sources: CanonicalSource[] }): TurnEx
   return { kind, outcome: outcome as never, sourceRecords: result.sources } as TurnExecutionTerminal;
 }
 
-function createExecutor(config: AppConfig, prompts: SystemPromptCatalog, identities: IdentityPolicy, search: SearchProvider, llm: LLMProvider, extractor: SafeContentExtractor | undefined): TurnExecutor {
+function createExecutor(
+  config: AppConfig,
+  prompts: SystemPromptCatalog,
+  identities: IdentityPolicy,
+  search: SearchProvider,
+  llm: LLMProvider,
+  extractor: ContentExtractor | undefined,
+  researchTimingSink?: ResearchTimingSink,
+): TurnExecutor {
   const assessor = new ResearchAssessor(identities);
-  const acquirer = new EvidenceAcquirer({ search, extractor, fixture: config.DOROTHY_FIXTURE_MODE });
-  const resolver = new ResearchResolver({
-    identities,
-    assessor,
-    acquirer,
-    acquisitionLimits: { maxCandidatesPerSearch: config.MAX_SEARCH_RESULTS, maxSourcesPerRequest: 3, maxConcurrentSearches: config.MAX_CONCURRENT_SEARCHES, maxConcurrentExtractions: config.MAX_CONCURRENT_EXTRACTIONS, extractionMaxCharacters: config.MAX_EXTRACTED_CHARS_PER_PAGE, extractionTimeoutMs: config.EXTRACTION_TIMEOUT_MS },
-    assess: (request) => llm.assessResearch({ systemPrompt: prompts.assessor, problem: request.problem, knowledge: request.knowledge, ledger: request.ledger, budget: request.budget, allowedSupportRefs: request.allowedSupportRefs, maxOutputTokens: config.MAX_ASSESSMENT_OUTPUT_TOKENS }),
-  });
-  const synthesizer = new AnswerSynthesizer(llm, prompts.synthesizer, config.MAX_OUTPUT_TOKENS);
   return {
     async execute(request, onSignal, signal) {
       if (request.kind === "search") {
@@ -84,30 +85,84 @@ function createExecutor(config: AppConfig, prompts: SystemPromptCatalog, identit
         if (result.sources.length) await onSignal({ type: "source_delta", sources: result.sources, occurrences: result.sources.map((source) => ({ sourceId: source.sourceId, role: "search_destination" as const, rank: result.turn.status === "completed" && result.turn.result.completion === "results" ? result.turn.result.destinations.find((destination) => destination.sourceId === source.sourceId)?.rank : undefined })) });
         return terminalFor(result);
       }
-      await onSignal({ type: "phase", phase: "assessing" });
-      const context = request.context;
-      const problemId = await identities.problemId({ turnId: request.turnId, question: request.question, purpose: "answer the user question", successCriterion: "provide a supported answer" });
-      const problem: ResearchProblem = { id: problemId, question: request.question, purpose: "answer the user question", successCriterion: "provide a supported answer", context, depth: 0 };
-      const root = await resolver.resolve({ turnId: request.turnId, problem, knowledge: emptyKnowledge(problemId), ledger: { gaps: [], assessmentsUsed: 0, searchesUsed: 0, sourcesConsumed: 0 }, budget: { searchesRemaining: 3, sourcesRemaining: 9, assessmentsRemaining: 8, depthRemaining: 2 } });
-      const resolution = root.kind === "resolution" ? root.resolution : { checkpoint: root.checkpoint };
-      if (root.kind === "resolution") {
-        // Canonical source metadata is carried by the terminal/source delta contract;
-        // keep the live resolution state focused on the validated research shape.
-        const { sources: _sources, ...streamResolution } = root.resolution;
-        void _sources;
-        await onSignal({ type: "research_state", state: { kind: "resolution", resolution: streamResolution } });
+
+      const timing = researchTimingSink ? new ResearchTimingCollector(researchTimingSink) : undefined;
+      let timingResolution: ResearchResolution | undefined;
+      let timingLedger: GapLedger | undefined;
+      let timingTerminalStatus: "completed" | "failed" | "interrupted" | "executor_error" = "executor_error";
+      try {
+        let lastPhase: string | undefined;
+        const emitResearchPhase = async (phase: "searching" | "extracting" | "assessing" | "decomposing" | "resolving" | "synthesizing") => {
+          if (phase === lastPhase) return;
+          lastPhase = phase;
+          await onSignal({ type: "phase", phase });
+        };
+        await emitResearchPhase("resolving");
+
+        const timedSearch = timing?.decorateSearch(search) ?? search;
+        const timedExtractor = extractor && timing ? timing.decorateExtractor(extractor) : extractor;
+        const timedLlm = timing?.decorateLlm(llm) ?? llm;
+        const acquirer = new EvidenceAcquirer({ search: timedSearch, extractor: timedExtractor, fixture: config.DOROTHY_FIXTURE_MODE });
+        const resolver = new ResearchResolver({
+          identities,
+          assessor,
+          acquirer,
+          acquisitionLimits: { maxCandidatesPerSearch: config.MAX_SEARCH_RESULTS, maxSourcesPerRequest: 3, maxConcurrentSearches: config.MAX_CONCURRENT_SEARCHES, maxConcurrentExtractions: config.MAX_CONCURRENT_EXTRACTIONS, extractionMaxCharacters: config.MAX_EXTRACTED_CHARS_PER_PAGE, extractionTimeoutMs: config.EXTRACTION_TIMEOUT_MS },
+          assess: (assessment) => timedLlm.assessResearch({ systemPrompt: prompts.assessor, problem: assessment.problem, knowledge: assessment.knowledge, ledger: assessment.ledger, budget: assessment.budget, allowedSupportRefs: assessment.allowedSupportRefs, maxOutputTokens: config.MAX_ASSESSMENT_OUTPUT_TOKENS, signal: assessment.signal }),
+        });
+        const synthesizer = new AnswerSynthesizer(timedLlm, prompts.synthesizer, config.MAX_OUTPUT_TOKENS);
+        const phaseSynthesizer: Pick<AnswerSynthesizer, "synthesize"> = {
+          synthesize: async (input) => {
+            await emitResearchPhase("synthesizing");
+            return synthesizer.synthesize(input);
+          },
+        };
+
+        const context = request.context;
+        const problemId = await identities.problemId({ turnId: request.turnId, question: request.question, purpose: "answer the user question", successCriterion: "provide a supported answer" });
+        const problem: ResearchProblem = { id: problemId, question: request.question, purpose: "answer the user question", successCriterion: "provide a supported answer", context, depth: 0 };
+        const resolveRoot = () => resolver.resolve({ turnId: request.turnId, problem, knowledge: emptyKnowledge(problemId), ledger: { gaps: [], assessmentsUsed: 0, searchesUsed: 0, sourcesConsumed: 0 }, budget: { searchesRemaining: 3, sourcesRemaining: 9, assessmentsRemaining: 8, depthRemaining: 2 }, signal, onPhase: emitResearchPhase });
+        const root = timing ? await timing.measureResolution(resolveRoot) : await resolveRoot();
+        timingLedger = root.kind === "resolution" ? root.resolution.ledger : root.checkpoint.ledger;
+        if (root.kind === "resolution") timingResolution = root.resolution;
+        const resolution = root.kind === "resolution" ? root.resolution : { checkpoint: root.checkpoint };
+        if (root.kind === "resolution") {
+          // Canonical source metadata is carried by the terminal/source delta contract;
+          // keep the live resolution state focused on the validated research shape.
+          const { sources: _sources, ...streamResolution } = root.resolution;
+          void _sources;
+          await onSignal({ type: "research_state", state: { kind: "resolution", resolution: streamResolution } });
+        } else {
+          await onSignal({ type: "research_state", state: { kind: "checkpoint", checkpoint: root.checkpoint } });
+        }
+        const result = await executeResearchTurn({ turnId: request.turnId, userMessage: requestMessage(request), createdAt: new Date().toISOString() as never, context, resolver: { resolve: async () => resolution as ResearchResolutionResult }, synthesizer: phaseSynthesizer, assessmentModelRef: "assessment", synthesisModelRef: "synthesis", searchRef: "brave", signal });
+        timingTerminalStatus = result.turn.status;
+        if (result.turn.status === "completed") {
+          let firstAnswer = true;
+          for (const part of result.turn.result.answer.parts) if (part.type === "text") {
+            if (firstAnswer) {
+              timing?.markFirstAnswerSignal();
+              firstAnswer = false;
+            }
+            await onSignal({ type: "answer_delta", delta: part.markdown });
+          }
+        }
+        return terminalFor(result);
+      } finally {
+        timing?.emit({ terminalStatus: timingTerminalStatus, resolution: timingResolution, ledger: timingLedger });
       }
-      else await onSignal({ type: "research_state", state: { kind: "checkpoint", checkpoint: root.checkpoint } });
-      const result = await executeResearchTurn({ turnId: request.turnId, userMessage: requestMessage(request), createdAt: new Date().toISOString() as never, context, resolver: { resolve: async () => resolution as ResearchResolutionResult }, synthesizer, assessmentModelRef: "assessment", synthesisModelRef: "synthesis", searchRef: "brave", signal });
-      if (result.turn.status === "completed") for (const part of result.turn.result.answer.parts) if (part.type === "text") await onSignal({ type: "answer_delta", delta: part.markdown });
-      return terminalFor(result);
     },
   };
 }
 
-export interface AppDependencies { config: AppConfig; systemPrompts: SystemPromptCatalog; threadStoreV3?: ThreadStore }
+export interface AppDependencies {
+  config: AppConfig;
+  systemPrompts: SystemPromptCatalog;
+  threadStoreV3?: ThreadStore;
+  researchTimingSink?: ResearchTimingSink;
+}
 
-export function createApp({ config, systemPrompts, threadStoreV3: injectedStore }: AppDependencies) {
+export function createApp({ config, systemPrompts, threadStoreV3: injectedStore, researchTimingSink }: AppDependencies) {
   const identities = new IdentityPolicy(new WebCryptoIdentityHasher());
   const searchReady = config.DOROTHY_FIXTURE_MODE || Boolean(config.BRAVE_SEARCH_API_KEY);
   const llmReady = config.DOROTHY_FIXTURE_MODE || Boolean(config.ANTHROPIC_API_KEY && config.ANTHROPIC_ASSESSMENT_MODEL && config.ANTHROPIC_SYNTHESIS_MODEL);
@@ -122,7 +177,8 @@ export function createApp({ config, systemPrompts, threadStoreV3: injectedStore 
     : config.ANTHROPIC_API_KEY && config.ANTHROPIC_ASSESSMENT_MODEL && config.ANTHROPIC_SYNTHESIS_MODEL
       ? new AnthropicProvider({ apiKey: config.ANTHROPIC_API_KEY, assessmentModel: config.ANTHROPIC_ASSESSMENT_MODEL, synthesisModel: config.ANTHROPIC_SYNTHESIS_MODEL })
       : new UnavailableLlmProvider();
-  const executor = createExecutor(config, systemPrompts, identities, search, llm, extractor);
+  const timingSink = researchTimingSink ?? (config.RESEARCH_TIMING_LOGS ? jsonResearchTimingSink : undefined);
+  const executor = createExecutor(config, systemPrompts, identities, search, llm, extractor, timingSink);
   const auth = config.APP_PASSPHRASE_SCRYPT_HASH && config.SESSION_SIGNING_KEYS ? new SessionAuth(config.APP_PASSPHRASE_SCRYPT_HASH, config.SESSION_SIGNING_KEYS) : undefined;
   const limiter: LoginAttemptLimiter = config.UPSTASH_REDIS_REST_URL && config.UPSTASH_REDIS_REST_TOKEN ? new UpstashLoginLimiter(config.UPSTASH_REDIS_REST_URL, config.UPSTASH_REDIS_REST_TOKEN) : new InMemoryLoginLimiter();
   const authenticate = async (context: Context) => {

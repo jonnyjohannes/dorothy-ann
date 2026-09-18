@@ -40,12 +40,15 @@ export interface ResearchLimits {
   now?: () => IsoTimestamp;
 }
 
+export type EvidenceAcquisitionStage = "searching" | "extracting";
+
 export interface EvidenceAcquisitionInput {
   requests: EvidenceRequest[];
   knownSources: CanonicalSource[];
   availableEvidenceSourceIds: CanonicalSource["sourceId"][];
   budget: ResearchBudget;
   limits: ResearchLimits;
+  onStage?: (stage: EvidenceAcquisitionStage) => void | Promise<void>;
 }
 
 export type EvidenceRequestFailure =
@@ -231,6 +234,7 @@ export class EvidenceAcquirer {
       }
     };
     const searchWorkers = Math.max(1, Math.min(3, input.limits.maxConcurrentSearches ?? 3, requests.length || 1));
+    if (searchCapacity > 0) await input.onStage?.("searching");
     await Promise.all(Array.from({ length: searchWorkers }, () => searchWorker()));
 
     const available = new Set(input.availableEvidenceSourceIds);
@@ -330,6 +334,7 @@ export class EvidenceAcquirer {
         extractionByKey.set(canonicalKey(source)!, outcome);
       }
     };
+    if (selected.length > 0) await input.onStage?.("extracting");
     await Promise.all(Array.from({ length: extractionConcurrency }, () => worker()));
 
     const extractions = selected

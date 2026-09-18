@@ -46,6 +46,7 @@ export interface ResearchAssessmentInput {
   budget: ResearchBudget;
   allowedSupportRefs: SupportRef[];
   maxOutputTokens: number;
+  signal?: AbortSignal;
 }
 
 export interface ResearchSynthesisInput {

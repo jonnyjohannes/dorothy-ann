@@ -45,6 +45,29 @@ const extractor = async (candidate: SearchResult) => ({
 });
 
 describe("EvidenceAcquirer", () => {
+  it.each([
+    { name: "selected source", searchesRemaining: 1, results: [source("selected", 1)], extractionFails: false, expected: ["searching", "extracting"] },
+    { name: "empty search", searchesRemaining: 1, results: [], extractionFails: false, expected: ["searching"] },
+    { name: "exhausted search budget", searchesRemaining: 0, results: [source("unused", 1)], extractionFails: false, expected: [] },
+    { name: "failed extraction", searchesRemaining: 1, results: [source("failed", 1)], extractionFails: true, expected: ["searching", "extracting"] },
+  ])("emits real acquisition stages for $name", async ({ searchesRemaining, results, extractionFails, expected }) => {
+    const stages: string[] = [];
+    await new EvidenceAcquirer({
+      search: { search: async () => results },
+      extractor: { extract: async (candidate) => extractionFails
+        ? { sourceId: candidate.sourceId, status: "failed", code: "extract_failed", retryable: true }
+        : extractor(candidate) },
+    }).acquire({
+      requests: [request("phase", 1, 0)],
+      knownSources: [],
+      availableEvidenceSourceIds: [],
+      budget: budget({ searchesRemaining }),
+      limits: {},
+      onStage: (stage) => { stages.push(stage); },
+    });
+    expect(stages).toEqual(expected);
+  });
+
   it("allocates rank layers fairly and performs one search per request", async () => {
     const calls: string[] = [];
     const result = await new EvidenceAcquirer({

@@ -19,6 +19,7 @@ const optionalNonNegativeInt = (maximum: number) => z.preprocess(
 
 const environmentSchema = z.object({
   DOROTHY_FIXTURE_MODE: z.string().default("true").transform((value) => value !== "false"),
+  RESEARCH_TIMING_LOGS: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   ANTHROPIC_API_KEY: optionalString,
   ANTHROPIC_ASSESSMENT_MODEL: optionalRef,
   ANTHROPIC_SYNTHESIS_MODEL: optionalRef,
@@ -67,6 +68,7 @@ type ParsedEnvironment = z.infer<typeof environmentSchema>;
 
 export interface AppConfig {
   DOROTHY_FIXTURE_MODE: boolean;
+  RESEARCH_TIMING_LOGS: boolean;
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_ASSESSMENT_MODEL?: string;
   ANTHROPIC_SYNTHESIS_MODEL?: string;
@@ -154,6 +156,7 @@ export function loadConfig(
 
   return {
     DOROTHY_FIXTURE_MODE: parsed.DOROTHY_FIXTURE_MODE,
+    RESEARCH_TIMING_LOGS: parsed.RESEARCH_TIMING_LOGS,
     ANTHROPIC_API_KEY: parsed.ANTHROPIC_API_KEY,
     ANTHROPIC_ASSESSMENT_MODEL: assessmentModel,
     ANTHROPIC_SYNTHESIS_MODEL: synthesisModel,

@@ -6,6 +6,7 @@ describe("runtime configuration", () => {
     const config = loadConfig({}, { onDeprecation: vi.fn() });
 
     expect(config).toMatchObject({
+      RESEARCH_TIMING_LOGS: false,
       MAX_SEARCH_RESULTS: 10,
       MAX_CONCURRENT_SEARCHES: 3,
       MAX_CONCURRENT_EXTRACTIONS: 3,
@@ -19,6 +20,12 @@ describe("runtime configuration", () => {
       MAX_OUTPUT_TOKENS: 4_096,
       MAX_TURN_REQUEST_BYTES: 128_000,
     });
+  });
+
+  it("accepts only explicit research timing log booleans", () => {
+    expect(loadConfig({ RESEARCH_TIMING_LOGS: "true" }, { onDeprecation: vi.fn() }).RESEARCH_TIMING_LOGS).toBe(true);
+    expect(loadConfig({ RESEARCH_TIMING_LOGS: "false" }, { onDeprecation: vi.fn() }).RESEARCH_TIMING_LOGS).toBe(false);
+    expect(() => loadConfig({ RESEARCH_TIMING_LOGS: "TRUE_PRIVATE_VALUE" }, { onDeprecation: vi.fn() })).toThrow("invalid configuration: RESEARCH_TIMING_LOGS");
   });
 
   it("accepts lowered canonical operational values", () => {
