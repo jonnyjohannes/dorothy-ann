@@ -15,13 +15,12 @@ export type WorkspaceCommand =
   | { type: "retry" };
 
 function explicitTurn(command: string): WorkspaceCommand | undefined {
-  const match = command.match(/^\/(search|research)(?:\s+([\s\S]*))?$/u);
+  const match = command.match(/^\/search(?:\s+([\s\S]*))?$/u);
   if (!match) return undefined;
-  const kind = match[1] as "search" | "research";
-  const value = match[2]?.trim() ?? "";
+  const value = match[1]?.trim() ?? "";
   return value
-    ? { type: "submit", value, kind }
-    : { type: "invalid", message: `Usage: /${kind} <${kind === "search" ? "query" : "question"}>` };
+    ? { type: "submit", value, kind: "search" }
+    : { type: "invalid", message: "Usage: /search <query>" };
 }
 
 export function turnLocation(value: string, kind: "search" | "research"): string {

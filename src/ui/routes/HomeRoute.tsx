@@ -33,8 +33,7 @@ export function HomeRoute() {
       <h1 className={styles.pageTitle}><code>/new</code></h1>
       <div className={styles.commandList} aria-label="Commands">
         <p><Link to="/"><code>/new</code></Link><span><code>&lt;esc&gt;&lt;esc&gt;</code></span></p>
-        <p><code>/search &lt;query&gt;</code><span>ranked links</span></p>
-        <p><code>/research &lt;question&gt;</code><span>explicit default</span></p>
+        <p><code>/search &lt;query&gt;</code><span><code>&lt;alt&gt;+a</code></span></p>
         <p><Link to="/settings"><code>/settings</code></Link><span><code>&lt;alt&gt;+c</code></span></p>
         <p><Link to="/threads"><code>/threads</code></Link><span><code>&lt;alt&gt;+s</code></span></p>
       </div>

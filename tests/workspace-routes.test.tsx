@@ -32,7 +32,6 @@ describe("workspace controller", () => {
     expect(controller.command({ type: "prompt_submitted", value: "what" })).toEqual({ type: "submit", value: "what", kind: "research" });
     expect(controller.command({ type: "prompt_submitted", value: "what?" })).toEqual({ type: "submit", value: "what?", kind: "research" });
     expect(controller.command({ type: "command_requested", command: "/search  apollo 11 landing  " })).toEqual({ type: "submit", value: "apollo 11 landing", kind: "search" });
-    expect(controller.command({ type: "command_requested", command: "/research why did it happen?" })).toEqual({ type: "submit", value: "why did it happen?", kind: "research" });
     expect(controller.command({ type: "command_requested", command: "/search" })).toEqual({ type: "invalid", message: "Usage: /search <query>" });
     expect(controller.command({ type: "new_thread_requested" })).toEqual({ type: "navigate", to: "/", replace: true });
   });

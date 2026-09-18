@@ -44,6 +44,7 @@ export function GlobalShortcuts() {
       if (event.isComposing) return;
       if (event.altKey && event.code === "KeyS" && !isEditable) { event.preventDefault(); navigate("/threads"); return; }
       if (event.altKey && event.code === "KeyC" && !isEditable) { event.preventDefault(); navigate("/settings"); return; }
+      if (event.altKey && event.code === "KeyA" && !event.ctrlKey && !event.metaKey) { event.preventDefault(); window.dispatchEvent(new Event("dorothy-ann-search-shortcut")); return; }
       if (event.key === ":" && !event.ctrlKey && !event.altKey && !event.metaKey && !isEditable) {
         const prompt = document.querySelector<HTMLInputElement>('input[aria-label="Search query"]:not(:disabled)');
         if (prompt) { event.preventDefault(); prompt.focus(); return; }
