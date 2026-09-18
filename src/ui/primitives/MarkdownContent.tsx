@@ -18,6 +18,7 @@ export interface MarkdownContentProps {
   threadSeed?: string;
   resolveCitation?: (sourceId: string) => MarkdownCitation | undefined;
   citationAccentSlot?: (sourceId: string) => number | undefined;
+  onCitationSelect?: (sourceId: string) => void;
 }
 
 const PALETTE_SIZE = 8;
@@ -33,7 +34,7 @@ function citationMarkdown(markdown: string, resolveCitation?: MarkdownContentPro
   });
 }
 
-export function MarkdownContent({ markdown, className, threadSeed = "", resolveCitation, citationAccentSlot }: MarkdownContentProps) {
+export function MarkdownContent({ markdown, className, threadSeed = "", resolveCitation, citationAccentSlot, onCitationSelect }: MarkdownContentProps) {
   let headingIndex = 0;
   let inlineIndex = 0;
   const answer = citationMarkdown(markdown, resolveCitation);
@@ -57,7 +58,7 @@ export function MarkdownContent({ markdown, className, threadSeed = "", resolveC
         blockquote: ({ children, ...props }) => <blockquote {...props} className="ui-markdown__blockquote">{children}</blockquote>,
         a: ({ href, children, ...props }) => {
           const sourceId = href?.startsWith("#source-") ? href.slice("#source-".length) : undefined;
-          return <a {...props} href={href} className={sourceId ? "ui-markdown__citation" : undefined} style={sourceId ? customAccent(citationAccentSlot?.(sourceId) ?? 0) : undefined}>{children}</a>;
+          return <a {...props} href={href} className={sourceId ? "ui-markdown__citation" : undefined} style={sourceId ? customAccent(citationAccentSlot?.(sourceId) ?? 0) : undefined} onClick={sourceId ? () => onCitationSelect?.(sourceId) : props.onClick}>{children}</a>;
         },
       }}
     >{answer}</ReactMarkdown>
