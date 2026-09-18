@@ -68,7 +68,7 @@ const cloneLedger = (ledger: GapLedger): GapLedger => ({
 const useful = (knowledge: KnowledgeUnit): boolean => knowledge.findings.length > 0 || knowledge.evidence.some((pack) => pack.sources.length > 0);
 const key = (knowledge: KnowledgeUnit): string => JSON.stringify(knowledge);
 const normalized = (value: string): string => value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLowerCase();
-const isUnavailable = (error: unknown): boolean => error instanceof Error && /provider_unavailable|search_unavailable|unavailable/iu.test(error.message);
+const isUnavailable = (error: unknown): boolean => error instanceof Error && /(?:provider|assessment|search)_(?:unavailable|failed|bad_request|rate_limited|invalid_response)|unavailable/iu.test(error.message);
 const isInterrupted = (error: unknown): boolean => error instanceof Error && /abort|interrupt|cancel/iu.test(`${error.name} ${error.message}`);
 
 class ResearchProgressError extends Error {

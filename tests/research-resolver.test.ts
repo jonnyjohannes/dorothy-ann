@@ -103,6 +103,21 @@ describe("ResearchResolver", () => {
     expect(execution.turn.status).toBe("completed");
   });
 
+  it("returns useful searched evidence as best effort when assessment output is invalid", async () => {
+    const input = await makeInput();
+    const resolver = new ResearchResolver({
+      identities,
+      assessor: new ResearchAssessor(identities),
+      assess: async () => { throw new Error("assessment_invalid_response"); },
+      acquirer: new EvidenceAcquirer({ fixture: true }),
+    });
+    const result = await resolver.resolve(input);
+    expect(result.kind).toBe("resolution");
+    if (result.kind !== "resolution") return;
+    expect(result.resolution).toMatchObject({ status: "best_effort", stopReason: "provider_unavailable", ledger: { searchesUsed: 1, assessmentsUsed: 0 } });
+    expect(result.resolution.knowledge.evidence).toHaveLength(1);
+  });
+
   it("leaves an unavailable assessment visibly in the assessing phase", async () => {
     const input = await makeInput();
     input.problem.depth = 1;

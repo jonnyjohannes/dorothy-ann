@@ -32,6 +32,15 @@ describe("TurnController", () => {
     expect(await duplicate.run(input())).toMatchObject({ ok: false, error: "invalid_event" });
   });
 
+  it("distinguishes malformed terminals from incomplete source metadata", async () => {
+    const malformed = new TurnController(gatewayFor([accepted, { ...terminal, terminal: { ...terminal.terminal, outcome: {} as never } }]), storeWith(async () => { throw new Error("must not commit"); }));
+    await expect(malformed.run(input())).resolves.toMatchObject({ ok: false, error: "invalid_terminal", message: "Research returned malformed terminal data." });
+
+    const sourceId = `src_${"A".repeat(43)}` as never;
+    const incomplete = new TurnController(gatewayFor([accepted, { ...terminal, terminal: { ...terminal.terminal, outcome: { status: "completed", result: { completion: "results", destinations: [{ sourceId, rank: 1 }] }, execution: { kind: "recorded", searchRef: "fixture" } } } }]), storeWith(async () => { throw new Error("must not commit"); }));
+    await expect(incomplete.run(input())).resolves.toMatchObject({ ok: false, error: "invalid_terminal", message: "Research returned incomplete source metadata." });
+  });
+
   it("returns sanitized server errors instead of mapping them to a generic interruption", async () => {
     const error = { executionId, turnId, sequence: 2, type: "error" as const, code: "invalid_terminal" as const, message: "Turn execution returned an invalid result." };
     const store = storeWith(async () => { throw new Error("must not commit"); });

@@ -1,6 +1,7 @@
 import { Hono, type Context } from "hono";
 import { stream } from "hono/streaming";
 import { z } from "zod";
+import { collectTurnSourceIds } from "../application/commit-terminal-turn.js";
 import { researchResolutionV3Schema, researchTurnV3Schema, searchTurnV3Schema, threadContextV3Schema } from "../domain/schemas.js";
 import type { ResearchLimits } from "../application/evidence-acquirer.js";
 import type {
@@ -153,7 +154,10 @@ function validateTerminal(terminal: TurnExecutionTerminal, kind: TurnKind, reque
   if (!terminal.sourceRecords.every((source) => sourceSchema.safeParse(source).success)) return false;
   const timestamp = new Date(0).toISOString();
   const candidate = { ...terminal.outcome, id: request.turnId, kind, createdAt: timestamp, finishedAt: timestamp, userMessage: { id: request.turnId, role: "user", content: "request", createdAt: timestamp } };
-  return kind === "search" ? searchTurnV3Schema.safeParse(candidate).success : researchTurnV3Schema.safeParse(candidate).success;
+  const parsed = kind === "search" ? searchTurnV3Schema.safeParse(candidate) : researchTurnV3Schema.safeParse(candidate);
+  if (!parsed.success) return false;
+  const supplied = new Set(terminal.sourceRecords.map((source) => String(source.sourceId)));
+  return supplied.size === terminal.sourceRecords.length && [...collectTurnSourceIds(parsed.data)].every((sourceId) => supplied.has(String(sourceId)));
 }
 
 function eventName(type: TurnExecutionEvent["type"]): string {

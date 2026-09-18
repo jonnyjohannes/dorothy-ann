@@ -114,6 +114,28 @@ describe("v3 answer and turn executors", () => {
     expect(result.sources).toEqual([extraSource, source]);
   });
 
+  it("closes checkpoint evidence with checkpoint-admitted source metadata", async () => {
+    const checkpoint = {
+      reason: "execution_failure" as const,
+      knowledge: resolution.knowledge,
+      ledger: resolution.ledger,
+      tasks: resolution.tasks,
+      sources: [source],
+    };
+    const result = await executeResearchTurn({
+      turnId: id("turn-checkpoint"),
+      userMessage,
+      createdAt: userMessage.createdAt,
+      context: { ...context, knownSources: [] },
+      resolver: { resolve: async () => ({ checkpoint }) },
+      synthesizer: { synthesize: async () => { throw new Error("must not synthesize"); } },
+      ...executionRefs,
+      finishedAt: fixedClock,
+    });
+    expect(result.turn.status).toBe("failed");
+    expect(result.sources).toEqual([source]);
+  });
+
   it("persists bounded synthesis failure without provider details", async () => {
     const resolver = { resolve: async (): Promise<ResearchResolutionResult> => resolution };
     const synthesizer = { synthesize: async (): Promise<AssistantContent> => { throw Object.assign(new Error("secret payload"), { code: "refused" }); } };

@@ -98,17 +98,17 @@ function sourceRecords(context: ThreadContext, admitted: CanonicalSource[] = [])
 }
 
 function sourceClosure(
-  resolution: ResearchResolution & { sources?: CanonicalSource[] },
+  state: ResearchResolution | ResearchCheckpoint,
   context: ThreadContext,
 ): CanonicalSource[] {
   const byId = new Map<string, CanonicalSource>();
-  for (const source of sourceRecords(context, resolution.sources)) byId.set(source.sourceId, source);
-  for (const source of resolution.sources ?? []) {
+  for (const source of sourceRecords(context, state.sources)) byId.set(source.sourceId, source);
+  for (const source of state.sources ?? []) {
     const previous = byId.get(source.sourceId);
     if (previous && previous.canonicalUrl !== source.canonicalUrl) throw new Error("source_reference_conflict");
     byId.set(source.sourceId, source);
   }
-  const required = collectResearchStateSourceIds(resolution);
+  const required = collectResearchStateSourceIds(state);
   for (const sourceId of required) if (!byId.has(sourceId)) throw new Error("source_reference_missing");
   return [...required].map((sourceId) => byId.get(sourceId)!).sort((left, right) => left.sourceId.localeCompare(right.sourceId));
 }
@@ -158,7 +158,7 @@ export async function executeResearchTurn(input: ResearchTurnExecutionInput): Pr
           failure: { kind: "execution_failure", stage: "resolution", code: "resolution_invalid", message: "Research execution stopped before a validated answer was available.", retryable: false },
           researchState: { kind: "checkpoint", checkpoint: resolution.checkpoint },
         },
-        sources: sourceRecords(input.context, resolution.sources),
+        sources: sourceClosure(resolution.checkpoint, input.context),
       };
     }
     if (input.signal?.aborted) {

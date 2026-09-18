@@ -60,6 +60,13 @@ describe("portable turn stream boundary", () => {
     expect(events.map((event) => event.sequence)).toEqual(events.map((_, index) => index + 1));
   });
 
+  it("rejects terminal source-record closure before emission", async () => {
+    const sourceId = `src_${"A".repeat(43)}` as never;
+    const app = appFor({ execute: async () => ({ kind: "search", outcome: { status: "completed", result: { completion: "results", destinations: [{ sourceId, rank: 1 }] }, execution: { kind: "recorded", searchRef: "fixture" } }, sourceRecords: [] }) });
+    const response = await app.request("http://localhost/", { method: "POST", body: JSON.stringify({ executionId, turnId, kind: "search", query: "hello" }) });
+    expect(await response.text()).toContain('"code":"invalid_terminal"');
+  });
+
   it("rejects an invalid research terminal at the server boundary", async () => {
     const app = appFor({ execute: async () => ({ kind: "research", outcome: {}, sourceRecords: [] }) as never });
     const response = await app.request("http://localhost/", { method: "POST", body: JSON.stringify({ executionId, turnId, kind: "research", question: "hello", context: { threadId: "123e4567-e89b-12d3-a456-426614174002", turns: [], knownSources: [], availableEvidence: [] } }) });

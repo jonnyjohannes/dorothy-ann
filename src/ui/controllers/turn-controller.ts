@@ -125,8 +125,8 @@ export class TurnController {
         this.emit();
         if (event.type === "terminal") {
           const candidate = this.buildTerminal(active, event);
-          if (!candidate) { protocolError = "invalid_terminal"; protocolMessage = controllerErrorMessage("invalid_terminal"); abort.abort(); break; }
-          terminal = candidate;
+          if (!candidate.ok) { protocolError = "invalid_terminal"; protocolMessage = candidate.message; abort.abort(); break; }
+          terminal = candidate.turn;
           break;
         }
       }
@@ -171,15 +171,15 @@ export class TurnController {
     return { ok: true };
   }
 
-  private buildTerminal(active: ActiveRun, event: Extract<TurnGatewayEvent, { type: "terminal" }>): Turn | undefined {
+  private buildTerminal(active: ActiveRun, event: Extract<TurnGatewayEvent, { type: "terminal" }>): { ok: true; turn: Turn } | { ok: false; message: string } {
     const base = { id: active.input.turnId, kind: active.input.kind, createdAt: active.input.createdAt, finishedAt: this.clock(), userMessage: active.input.userMessage };
     const candidate = { ...base, ...event.terminal.outcome } as Turn;
-    if (candidate.kind !== active.input.kind) return undefined;
-    if (!sourceClosure(candidate, event.terminal.sourceRecords)) return undefined;
-    active.terminalSources = event.terminal.sourceRecords;
+    if (candidate.kind !== active.input.kind) return { ok: false, message: "Research returned the wrong turn kind." };
     const parsed = turnV3Schema.safeParse(candidate);
-    if (!parsed.success) return undefined;
-    return candidate;
+    if (!parsed.success) return { ok: false, message: "Research returned malformed terminal data." };
+    if (!sourceClosure(parsed.data, event.terminal.sourceRecords)) return { ok: false, message: "Research returned incomplete source metadata." };
+    active.terminalSources = event.terminal.sourceRecords;
+    return { ok: true, turn: parsed.data };
   }
 
   private sourcesForTerminal(active: ActiveRun, turn: Turn): CanonicalSource[] {
