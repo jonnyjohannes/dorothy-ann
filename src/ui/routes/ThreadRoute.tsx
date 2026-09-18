@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { CanonicalSource, Thread, ThreadContext, ThreadId, TurnId, UserMessage } from "../../domain/types";
+import { projectCitationsToMarkdown } from "../../domain/citations";
 import { buildThreadContext } from "../../domain/thread-context";
 import { IndexedDbThreadStore } from "../../infrastructure/browser/indexeddb-thread-store";
 import { createFetchTurnGateway } from "../../infrastructure/browser/turn-gateway";
@@ -9,6 +10,7 @@ import { EvidenceBox } from "../boxes/EvidenceBox";
 import { PromptBox } from "../boxes/PromptBox";
 import { StickyHeader } from "../boxes/StickyHeader";
 import { TranscriptBox } from "../boxes/TranscriptBox";
+import { MarkdownContent } from "../primitives/MarkdownContent";
 import type { BoxIntent } from "../boxes/box-types";
 import styles from "../App.module.css";
 
@@ -31,6 +33,20 @@ function sourceRecords(thread: Thread | null, live: CanonicalSource[]): Canonica
   for (const source of live) values.set(String(source.sourceId), source);
   return [...values.values()];
 }
+function threadMarkdown(thread: Thread): string {
+  return thread.turns.map((turn) => {
+    const answer = turn.kind === "research" && turn.status === "completed" ? projectCitationsToMarkdown(turn.result.answer) : turn.status === "failed" ? turn.failure.message : turn.status === "interrupted" ? turn.interruption.message : turn.kind === "search" && turn.status === "completed" ? turn.result.destinations.map((destination) => `[${destination.sourceId}]`).join(" ") : "";
+    return `## ${turn.userMessage.content}\n\n${answer}`;
+  }).join("\n\n---\n\n");
+}
+function downloadMarkdown(markdown: string, filename: string): void {
+  const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
 
 export function ThreadRoute() {
   const { threadId: routeThreadId } = useParams();
@@ -44,6 +60,7 @@ export function ThreadRoute() {
   const [view, setView] = useState<TurnControllerView>({ active: false, lastSequence: 0, events: [], answerDraft: "", sources: [] });
   const [value, setValue] = useState("");
   const [message, setMessage] = useState("");
+  const [exportMessage, setExportMessage] = useState("");
   const controller = useRef<TurnController | undefined>(undefined);
   const started = useRef(false);
 
@@ -75,19 +92,24 @@ export function ThreadRoute() {
     void run(query, requestedKind);
   }, [query, requestedKind, run]);
 
+  const copyThread = async () => {
+    if (!thread) return;
+    try { await navigator.clipboard.writeText(threadMarkdown(thread)); setExportMessage("Copied."); } catch { setExportMessage("Copy unavailable."); }
+  };
+  const exportThread = () => { if (thread) { downloadMarkdown(threadMarkdown(thread), "dorothy-ann-thread.md"); setExportMessage("Exported."); } };
   const onIntent = (intent: BoxIntent) => {
     if (intent.type === "prompt_submitted") { setValue(""); void run(intent.value, requestedResearch(intent.value) ? "research" : "search"); }
-    else if (intent.type === "command_requested") { if (intent.command === "/new") navigate("/new", { replace: true }); else if (intent.command === "/threads") navigate("/threads"); else if (intent.command === "/settings") navigate("/settings"); }
-    else if (intent.type === "new_thread_requested") navigate("/new", { replace: true });
+    else if (intent.type === "command_requested") { if (intent.command === "/new") navigate("/", { replace: true }); else if (intent.command === "/threads") navigate("/threads"); else if (intent.command === "/settings") navigate("/settings"); }
+    else if (intent.type === "new_thread_requested") navigate("/", { replace: true });
     else if (intent.type === "retry_requested") void controller.current?.retryCommit();
   };
   const sources = sourceRecords(thread, view.sources);
   return <main className={styles.shell}>
-    <StickyHeader onIntent={onIntent} />
+    <StickyHeader onIntent={onIntent} actions={thread ? <div className={styles.headerActions} aria-label="Thread actions"><button className={styles.iconButton} type="button" onClick={() => void copyThread()} aria-label="Copy thread" title="Copy thread"><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="8" y="8" width="11" height="11" rx="1.5" /><path d="M16 8V6.5A1.5 1.5 0 0 0 14.5 5h-7A1.5 1.5 0 0 0 6 6.5v7A1.5 1.5 0 0 0 7.5 15H8" /></svg></button><button className={styles.iconButton} type="button" onClick={exportThread} aria-label="Export thread" title="Export thread"><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg></button></div> : undefined} feedback={exportMessage} />
     {message && <p role="alert">{message}</p>}
     {view.active && <ResearchStatus answerDraft={view.answerDraft} />}
     {thread && <TranscriptBox thread={thread} sources={sources} onIntent={onIntent} />}
-    {view.answerDraft && <p className={styles.answer}>{view.answerDraft}</p>}
+    {view.active && view.answerDraft && <MarkdownContent markdown={view.answerDraft} threadSeed={String(threadId)} />}
     {sources.length > 0 && <EvidenceBox sources={sources} onIntent={onIntent} />}
     <PromptBox value={value} disabled={view.active} onChange={setValue} onIntent={onIntent} />
   </main>;

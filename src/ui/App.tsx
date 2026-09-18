@@ -55,7 +55,7 @@ export function GlobalShortcuts() {
       }
       if (isEditable) return;
       const current = Date.now();
-      if (current - lastEscape.current < 500) { event.preventDefault(); navigate("/new", { replace: true }); }
+      if (current - lastEscape.current < 500) { event.preventDefault(); navigate("/", { replace: true }); }
       lastEscape.current = current;
     };
     window.addEventListener("keydown", onKey);
@@ -91,7 +91,7 @@ export function App() {
     <Route path="/settings" element={<SettingsRoute />} />
     <Route path="/threads" element={<ThreadsRoute />} />
     <Route path="/topics/:threadId" element={<ThreadRoute />} />
-    <Route path="/new" element={<ThreadRoute />} />
+    <Route path="/new" element={<HomeRoute />} />
     <Route path="*" element={<HomeRoute />} />
   </Routes></AuthGate></>;
 }

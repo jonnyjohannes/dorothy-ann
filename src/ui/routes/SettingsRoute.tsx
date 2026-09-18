@@ -15,16 +15,16 @@ export function SettingsRoute() {
     primaryAccent: localStorage.getItem("dorothy-ann-primary-accent") ?? "default",
   }));
   const onIntent = (intent: BoxIntent) => {
-    if (intent.type === "new_thread_requested") navigate("/new", { replace: true });
+    if (intent.type === "new_thread_requested") navigate("/", { replace: true });
     if (intent.type === "route_escape_requested") { navigate("/", { replace: true }); return; }
     if (intent.type === "prompt_submitted") { navigate(`/topics/new?q=${encodeURIComponent(intent.value)}`); return; }
     if (intent.type === "command_requested") {
-      if (intent.command === "/new") navigate("/new", { replace: true });
+      if (intent.command === "/new") navigate("/", { replace: true });
       else if (intent.command === "/threads") navigate("/threads");
       else if (intent.command === "/settings") setPrompt("");
       return;
     }
-    if (intent.type === "new_thread_requested") { navigate("/new", { replace: true }); return; }
+    if (intent.type === "new_thread_requested") { navigate("/", { replace: true }); return; }
     if (intent.type === "preference_changed") {
       setValues((current) => ({ ...current, [intent.key]: intent.value }));
       const storageKey = intent.key === "colorScheme" ? "dorothy-ann-color-scheme" : intent.key === "primaryAccent" ? "dorothy-ann-primary-accent" : "dorothy-ann-theme";
@@ -36,7 +36,10 @@ export function SettingsRoute() {
   };
   return <main className={styles.shell}>
     <StickyHeader onIntent={onIntent} />
-    <SettingsBox values={values} persistence="saved" onIntent={onIntent} />
+    <section className={styles.routeLayout}>
+      <h1 className={styles.pageTitle}><code>/settings</code></h1>
+      <SettingsBox values={values} persistence="saved" onIntent={onIntent} />
+    </section>
     <PromptBox value={prompt} onChange={setPrompt} onIntent={onIntent} />
   </main>;
 }

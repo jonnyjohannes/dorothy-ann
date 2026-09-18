@@ -25,7 +25,7 @@ describe("workspace controller", () => {
   it("delegates box intents into semantic commands", () => {
     expect(controller.command({ type: "command_requested", command: "/threads" })).toEqual({ type: "navigate", to: "/threads" });
     expect(controller.command({ type: "prompt_submitted", value: "what?" })).toEqual({ type: "submit", value: "what?" });
-    expect(controller.command({ type: "new_thread_requested" })).toEqual({ type: "navigate", to: "/new", replace: true });
+    expect(controller.command({ type: "new_thread_requested" })).toEqual({ type: "navigate", to: "/", replace: true });
   });
   it.each(["/threads", "/settings"])("uses unmodified : to focus the prompt from %s", (path) => {
     render(<MemoryRouter initialEntries={[path]}><GlobalShortcuts /><input aria-label="Search query" /></MemoryRouter>);

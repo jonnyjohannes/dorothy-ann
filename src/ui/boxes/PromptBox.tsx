@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from "react";
 import styles from "../App.module.css";
 import type { BoxIntent } from "./box-types";
 
@@ -8,7 +8,12 @@ export function PromptBox({ value, disabled = false, onChange, onIntent }: { val
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [escapeArmed, setEscapeArmed] = useState(false);
+  const [caretAccent, setCaretAccent] = useState(0);
   useEffect(() => { if (!value.startsWith("/")) setSuggestionsOpen(false); else setSuggestionsOpen(true); }, [value]);
+  useEffect(() => {
+    const interval = window.setInterval(() => setCaretAccent((current) => (current + 1) % 8), 1500);
+    return () => window.clearInterval(interval);
+  }, []);
   const suggestions = COMMANDS.filter((command) => command.startsWith(value));
   const submit = (event?: FormEvent) => { event?.preventDefault(); const next = suggestions[active] ?? value.trim(); if (!next) return; if (next.startsWith("/")) onIntent({ type: "command_requested", command: next }); else onIntent({ type: "prompt_submitted", value: next }); setSuggestionsOpen(false); };
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -21,5 +26,6 @@ export function PromptBox({ value, disabled = false, onChange, onIntent }: { val
     }
     else if (event.key === "c" && (event.ctrlKey || event.metaKey) && input.current && input.current === document.activeElement && input.current.selectionStart === input.current.selectionEnd) { event.preventDefault(); onChange(""); }
   };
-  return <form className={styles.promptBox} onSubmit={submit}><input ref={input} className="prompt-caret-cycle" aria-label="Search query" value={value} disabled={disabled} placeholder="...? for research" onChange={(event) => { onChange(event.target.value); setActive(0); }} onKeyDown={onKeyDown} />{suggestionsOpen && suggestions.length > 0 && <ul role="listbox" aria-label="Commands">{suggestions.map((command, index) => <li key={command} role="option" aria-selected={index === active} onMouseDown={(event) => { event.preventDefault(); onChange(command); submit(); }}>{command}</li>)}</ul>}</form>;
+  const caretStyle = { caretColor: `var(--accent-${caretAccent + 1})` } as CSSProperties;
+  return <form className={styles.promptBox} onSubmit={submit}><input ref={input} className="prompt-caret-cycle" style={caretStyle} aria-label="Search query" value={value} disabled={disabled} placeholder="...? for research" onChange={(event) => { onChange(event.target.value); setActive(0); }} onKeyDown={onKeyDown} />{suggestionsOpen && suggestions.length > 0 && <ul role="listbox" aria-label="Commands">{suggestions.map((command, index) => <li key={command} role="option" aria-selected={index === active} onMouseDown={(event) => { event.preventDefault(); onChange(command); submit(); }}>{command}</li>)}</ul>}</form>;
 }

@@ -166,9 +166,12 @@ export class TurnController {
   private buildTerminal(active: ActiveRun, event: Extract<TurnGatewayEvent, { type: "terminal" }>): Turn | undefined {
     const base = { id: active.input.turnId, kind: active.input.kind, createdAt: active.input.createdAt, finishedAt: this.clock(), userMessage: active.input.userMessage };
     const candidate = { ...base, ...event.terminal.outcome } as Turn;
-    if (candidate.kind !== active.input.kind || !sourceClosure(candidate, event.terminal.sourceRecords)) return undefined;
+    if (candidate.kind !== active.input.kind) return undefined;
+    if (!sourceClosure(candidate, event.terminal.sourceRecords)) return undefined;
     active.terminalSources = event.terminal.sourceRecords;
-    return turnV3Schema.safeParse(candidate).success ? candidate : undefined;
+    const parsed = turnV3Schema.safeParse(candidate);
+    if (!parsed.success) return undefined;
+    return candidate;
   }
 
   private sourcesForTerminal(active: ActiveRun, turn: Turn): CanonicalSource[] {

@@ -25,17 +25,18 @@ export function HomeRoute() {
     if (intent.type === "command_requested") {
       if (intent.command === "/settings") navigate("/settings");
       else if (intent.command === "/threads") navigate("/threads");
-      else if (intent.command === "/new") { setValue(""); navigate("/new", { replace: true }); }
+      else if (intent.command === "/new") { setValue(""); navigate("/", { replace: true }); }
       else setMessage(`Unknown command: ${intent.command}`);
     }
-    if (intent.type === "new_thread_requested") { setValue(""); navigate("/new", { replace: true }); }
+    if (intent.type === "new_thread_requested") { setValue(""); navigate("/", { replace: true }); }
   };
 
   return <main className={styles.shell}>
     <StickyHeader onIntent={onIntent} />
-    <section className={styles.hero}>
+    <section className={styles.routeLayout}>
+      <h1 className={styles.pageTitle}><code>/new</code></h1>
       <div className={styles.commandList} aria-label="Commands">
-        <p><Link to="/new"><code>/new</code></Link><span><code>&lt;esc&gt;&lt;esc&gt;</code></span></p>
+        <p><Link to="/"><code>/new</code></Link><span><code>&lt;esc&gt;&lt;esc&gt;</code></span></p>
         <p><Link to="/settings"><code>/settings</code></Link><span><code>&lt;alt&gt;+c</code></span></p>
         <p><Link to="/threads"><code>/threads</code></Link><span><code>&lt;alt&gt;+s</code></span></p>
       </div>

@@ -21,7 +21,7 @@ export function UnlockRoute() {
       .catch(() => setMessage("That passphrase did not work."));
   };
   return <main className={styles.unlockShell}>
-    <header className={styles.header}><BrandBox onIntent={() => navigate("/new", { replace: true })} /></header>
+    <header className={styles.header}><BrandBox onIntent={() => navigate("/", { replace: true })} /></header>
     <UnlockBox message={message} onIntent={onIntent} />
   </main>;
 }

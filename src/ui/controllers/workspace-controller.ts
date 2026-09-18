@@ -27,9 +27,9 @@ export class WorkspaceController {
   command(intent: BoxIntent): WorkspaceCommand | undefined {
     switch (intent.type) {
       case "new_thread_requested":
-        return { type: "navigate", to: "/new", replace: true };
+        return { type: "navigate", to: "/", replace: true };
       case "command_requested":
-        if (intent.command === "/new") return { type: "navigate", to: "/new", replace: true };
+        if (intent.command === "/new") return { type: "navigate", to: "/", replace: true };
         if (intent.command === "/settings") return { type: "navigate", to: "/settings" };
         if (intent.command === "/threads") return { type: "navigate", to: "/threads" };
         return undefined;
