@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { CanonicalSource, Thread, ThreadContext, ThreadId, TurnId, UserMessage } from "../../domain/types";
 import { projectCitationsToMarkdown } from "../../domain/citations";
 import { buildThreadContext } from "../../domain/thread-context";
-import { IndexedDbThreadStore } from "../../infrastructure/browser/indexeddb-thread-store";
+import { getBrowserThreadStore } from "../../infrastructure/browser/thread-store";
 import { createFetchTurnGateway } from "../../infrastructure/browser/turn-gateway";
 import { TurnController, type TurnControllerView } from "../controllers/turn-controller";
 import { EvidenceBox } from "../boxes/EvidenceBox";
@@ -16,8 +16,6 @@ import type { BoxIntent } from "../boxes/box-types";
 import { workspaceController } from "../controllers/workspace-controller";
 import styles from "../App.module.css";
 
-let store: IndexedDbThreadStore | undefined;
-const getStore = () => store ??= new IndexedDbThreadStore();
 const gateway = createFetchTurnGateway();
 const contextLimits = { maxThreadContextTurns: 8, maxThreadContextChars: 24_000, maxEvidenceCharsPerSource: 48_000, maxEvidenceCharsTotal: 96_000, maxTurnRequestBytes: 128_000 } as const;
 const timestamp = () => new Date().toISOString() as UserMessage["createdAt"];
@@ -89,7 +87,7 @@ export function ThreadRoute() {
 
   useEffect(() => {
     let cancelled = false;
-    void getStore().load(threadId).then((result) => { if (!cancelled && result.ok) { threadRef.current = result.value?.thread ?? null; setThread(threadRef.current); } });
+    void getBrowserThreadStore().then((store) => store.load(threadId)).then((result) => { if (!cancelled && result.ok) { threadRef.current = result.value?.thread ?? null; setThread(threadRef.current); } });
     return () => { cancelled = true; };
   }, [threadId]);
 
@@ -101,8 +99,9 @@ export function ThreadRoute() {
     const executionId = uuid() as never;
     const current = threadRef.current;
     const context = kind === "research" ? (current ? buildThreadContext(current, contextLimits) : emptyContext(threadId)) : undefined;
-    const record = current ? await getStore().load(threadId) : null;
-    const activeController = new TurnController(gateway, getStore(), timestamp, setView);
+    const store = await getBrowserThreadStore();
+    const record = current ? await store.load(threadId) : null;
+    const activeController = new TurnController(gateway, store, timestamp, setView);
     controller.current = activeController;
     setMessage("");
     const result = await activeController.run({ threadId, turnId, executionId, kind, request, userMessage, createdAt, expectedRevision: record && record.ok ? record.value?.revision ?? null : null, create: current ? undefined : { id: threadId, title: request.slice(0, 60), createdAt }, context, gatewayOptions: { maxResults: 5, researchLimits: {} } });
