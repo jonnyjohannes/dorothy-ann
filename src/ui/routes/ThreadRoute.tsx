@@ -22,8 +22,23 @@ const contextLimits = { maxThreadContextTurns: 8, maxThreadContextChars: 24_000,
 const timestamp = () => new Date().toISOString() as UserMessage["createdAt"];
 const uuid = () => crypto.randomUUID();
 
-export function ResearchStatus({ answerDraft }: { answerDraft: string }) {
-  return <div className={styles.researchLoader} role="status" aria-live="polite"><span className={styles.loaderBars} aria-hidden="true"><i /><i /><i /></span><span>{answerDraft ? "synthesizing" : "researching"}</span></div>;
+function researchStage(answerDraft: string, events: TurnControllerView["events"]): string {
+  if (answerDraft) return "synthesizing";
+  const latest = events.at(-1);
+  if (latest?.type === "source_delta") return "sources found";
+  if (latest?.type === "research_state" && latest.state.kind === "resolution") return "synthesizing";
+  const phase = [...events].reverse().find((event) => event.type === "phase");
+  if (!phase || phase.type !== "phase") return "researching";
+  if (phase.phase === "assessing") return "assessing research";
+  if (phase.phase === "decomposing") return "research direction";
+  if (phase.phase === "extracting") return "extracting evidence";
+  if (phase.phase === "resolving") return "resolving evidence";
+  if (phase.phase === "synthesizing") return "synthesizing";
+  return "researching";
+}
+
+export function ResearchStatus({ answerDraft, events = [] }: { answerDraft: string; events?: TurnControllerView["events"] }) {
+  return <div className={styles.researchLoader} role="status" aria-live="polite"><span className={styles.loaderBars} aria-hidden="true"><i /><i /><i /></span><span>{researchStage(answerDraft, events)}</span></div>;
 }
 
 function emptyContext(threadId: ThreadId): ThreadContext { return { threadId, turns: [], knownSources: [], availableEvidence: [] }; }
@@ -126,7 +141,7 @@ export function ThreadRoute() {
     {message && <p role="alert">{message}</p>}
     {thread && <TranscriptBox thread={thread} sources={sources} onIntent={onIntent} />}
     {view.active && activeRequest && <article className={styles.scrollback}><blockquote className={styles.userTurn}>{activeRequest}</blockquote></article>}
-    {view.active && <ResearchStatus answerDraft={view.answerDraft} />}
+    {view.active && <ResearchStatus answerDraft={view.answerDraft} events={view.events} />}
     {view.active && view.answerDraft && <MarkdownContent markdown={view.answerDraft} threadSeed={String(threadId)} />}
     {sources.length > 0 && <EvidenceBox sources={sources} onIntent={onIntent} />}
     <PromptBox value={value} disabled={view.active} onChange={setValue} onIntent={onIntent} />

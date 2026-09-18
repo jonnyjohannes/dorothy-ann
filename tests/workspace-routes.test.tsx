@@ -23,6 +23,10 @@ describe("workspace controller", () => {
     expect(screen.getByRole("status")).toHaveTextContent("researching");
     expect(screen.getByRole("status").querySelectorAll("i")).toHaveLength(3);
   });
+  it("surfaces the current research phase in the loader", () => {
+    render(<ResearchStatus answerDraft="" events={[{ type: "phase", phase: "extracting", executionId: "123e4567-e89b-12d3-a456-426614174001" as never, turnId: "123e4567-e89b-12d3-a456-426614174000" as never, sequence: 2 }]} />);
+    expect(screen.getByRole("status")).toHaveTextContent("extracting evidence");
+  });
   it("defaults ordinary input to research and reserves search for an explicit utility", () => {
     expect(controller.command({ type: "command_requested", command: "/threads" })).toEqual({ type: "navigate", to: "/threads" });
     expect(controller.command({ type: "prompt_submitted", value: "what" })).toEqual({ type: "submit", value: "what", kind: "research" });
