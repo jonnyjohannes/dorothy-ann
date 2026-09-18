@@ -1,11 +1,11 @@
 # Dorothy Ann
 
-Dorothy Ann is a browser-based information resolver and researcher. A macro-less request creates a ranked `SearchTurn`; a request ending in `?` creates a recursively resolved `ResearchTurn` with bounded evidence and one synthesized answer.
+Dorothy Ann is a browser-based information resolver and researcher. Ordinary requests create recursively resolved `ResearchTurn`s with bounded evidence and one synthesized answer. Use `/search <query>` when you want ranked links without research synthesis; `/research <question>` is an explicit alias for the default behavior.
 
 ## what it does
 
-- ⚡ **search turns** return ranked, normalized sources without LLM synthesis
-- 🔎 **research turns** recursively resolve evidence gaps within explicit search, source, depth, branch, and assessment ceilings
+- ⚡ **`/search <query>`** returns ranked, normalized sources without extraction or LLM synthesis
+- 🔎 **ordinary requests** research by default, recursively resolving evidence gaps within explicit search, source, depth, branch, and assessment ceilings
 - 🧾 **thread history** keeps terminal turns, canonical source metadata, evidence projections, and read-only migrated legacy archive entries
 - 🗂️ **browser workspace** provides focused home, thread, thread-list, settings, and unlock routes backed by typed product boxes
 - 🔐 **private research desk** keeps authentication, storage, provider, and extraction implementations behind ports

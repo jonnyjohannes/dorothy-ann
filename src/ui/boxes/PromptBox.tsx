@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type K
 import styles from "../App.module.css";
 import type { BoxIntent } from "./box-types";
 
-const COMMANDS = ["/new", "/settings", "/threads"] as const;
+const COMMANDS = ["/new", "/search", "/research", "/settings", "/threads"] as const;
 export function PromptBox({ value, disabled = false, onChange, onIntent }: { value: string; disabled?: boolean; onChange: (value: string) => void; onIntent: (intent: BoxIntent) => void }) {
   const input = useRef<HTMLInputElement>(null);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
@@ -27,5 +27,5 @@ export function PromptBox({ value, disabled = false, onChange, onIntent }: { val
     else if (event.key === "c" && (event.ctrlKey || event.metaKey) && input.current && input.current === document.activeElement && input.current.selectionStart === input.current.selectionEnd) { event.preventDefault(); onChange(""); }
   };
   const caretStyle = { caretColor: `var(--accent-${caretAccent + 1})` } as CSSProperties;
-  return <form className={styles.promptBox} onSubmit={submit}><input ref={input} className="prompt-caret-cycle" style={caretStyle} aria-label="Search query" value={value} disabled={disabled} placeholder="...? for research" onChange={(event) => { onChange(event.target.value); setActive(0); }} onKeyDown={onKeyDown} />{suggestionsOpen && suggestions.length > 0 && <ul role="listbox" aria-label="Commands">{suggestions.map((command, index) => <li key={command} role="option" aria-selected={index === active} onMouseDown={(event) => { event.preventDefault(); onChange(command); submit(); }}>{command}</li>)}</ul>}</form>;
+  return <form className={styles.promptBox} onSubmit={submit}><input ref={input} className="prompt-caret-cycle" style={caretStyle} aria-label="Search query" value={value} disabled={disabled} placeholder="ask anything · /search for ranked links" onChange={(event) => { onChange(event.target.value); setActive(0); }} onKeyDown={onKeyDown} />{suggestionsOpen && suggestions.length > 0 && <ul role="listbox" aria-label="Commands">{suggestions.map((command, index) => <li key={command} role="option" aria-selected={index === active} onMouseDown={(event) => { event.preventDefault(); onChange(command); submit(); }}>{command}</li>)}</ul>}</form>;
 }

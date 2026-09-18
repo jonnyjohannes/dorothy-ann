@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { PromptBox } from "../boxes/PromptBox";
 import { StickyHeader } from "../boxes/StickyHeader";
 import type { BoxIntent } from "../boxes/box-types";
+import { turnLocation, workspaceController } from "../controllers/workspace-controller";
 import styles from "../App.module.css";
 
 export function HomeRoute() {
@@ -14,21 +15,16 @@ export function HomeRoute() {
   useEffect(() => {
     const query = params.get("q")?.trim();
     if (!query) return;
-    navigate(`/topics/new?q=${encodeURIComponent(query)}`, { replace: true });
-  }, [params]);
+    const kind = params.get("kind") === "search" ? "search" : "research";
+    navigate(turnLocation(query, kind), { replace: true });
+  }, [navigate, params]);
 
   const onIntent = (intent: BoxIntent) => {
-    if (intent.type === "prompt_submitted") {
-      navigate(`/topics/new?q=${encodeURIComponent(intent.value)}`);
-      return;
-    }
-    if (intent.type === "command_requested") {
-      if (intent.command === "/settings") navigate("/settings");
-      else if (intent.command === "/threads") navigate("/threads");
-      else if (intent.command === "/new") { setValue(""); navigate("/", { replace: true }); }
-      else setMessage(`Unknown command: ${intent.command}`);
-    }
-    if (intent.type === "new_thread_requested") { setValue(""); navigate("/", { replace: true }); }
+    const command = workspaceController.command(intent);
+    if (!command) return;
+    if (command.type === "navigate") { if (intent.type === "new_thread_requested" || intent.type === "command_requested" && intent.command === "/new") setValue(""); navigate(command.to, { replace: command.replace }); }
+    else if (command.type === "submit") { setMessage(""); navigate(turnLocation(command.value, command.kind)); }
+    else if (command.type === "invalid") setMessage(command.message);
   };
 
   return <main className={styles.shell}>
@@ -37,6 +33,8 @@ export function HomeRoute() {
       <h1 className={styles.pageTitle}><code>/new</code></h1>
       <div className={styles.commandList} aria-label="Commands">
         <p><Link to="/"><code>/new</code></Link><span><code>&lt;esc&gt;&lt;esc&gt;</code></span></p>
+        <p><code>/search &lt;query&gt;</code><span>ranked links</span></p>
+        <p><code>/research &lt;question&gt;</code><span>explicit default</span></p>
         <p><Link to="/settings"><code>/settings</code></Link><span><code>&lt;alt&gt;+c</code></span></p>
         <p><Link to="/threads"><code>/threads</code></Link><span><code>&lt;alt&gt;+s</code></span></p>
       </div>

@@ -4,9 +4,10 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { GlobalShortcuts } from "../src/ui/App";
 import { WorkspaceController } from "../src/ui/controllers/workspace-controller";
 import { ResearchStatus } from "../src/ui/routes/ThreadRoute";
+import { HomeRoute } from "../src/ui/routes/HomeRoute";
 
 afterEach(() => cleanup());
-function LocationProbe() { return <output data-testid="location">{useLocation().pathname}</output>; }
+function LocationProbe() { const location = useLocation(); return <output data-testid="location">{location.pathname}{location.search}</output>; }
 
 describe("workspace controller", () => {
   const controller = new WorkspaceController();
@@ -22,10 +23,28 @@ describe("workspace controller", () => {
     expect(screen.getByRole("status")).toHaveTextContent("researching");
     expect(screen.getByRole("status").querySelectorAll("i")).toHaveLength(3);
   });
-  it("delegates box intents into semantic commands", () => {
+  it("defaults ordinary input to research and reserves search for an explicit utility", () => {
     expect(controller.command({ type: "command_requested", command: "/threads" })).toEqual({ type: "navigate", to: "/threads" });
-    expect(controller.command({ type: "prompt_submitted", value: "what?" })).toEqual({ type: "submit", value: "what?" });
+    expect(controller.command({ type: "prompt_submitted", value: "what" })).toEqual({ type: "submit", value: "what", kind: "research" });
+    expect(controller.command({ type: "prompt_submitted", value: "what?" })).toEqual({ type: "submit", value: "what?", kind: "research" });
+    expect(controller.command({ type: "command_requested", command: "/search  apollo 11 landing  " })).toEqual({ type: "submit", value: "apollo 11 landing", kind: "search" });
+    expect(controller.command({ type: "command_requested", command: "/research why did it happen?" })).toEqual({ type: "submit", value: "why did it happen?", kind: "research" });
+    expect(controller.command({ type: "command_requested", command: "/search" })).toEqual({ type: "invalid", message: "Usage: /search <query>" });
     expect(controller.command({ type: "new_thread_requested" })).toEqual({ type: "navigate", to: "/", replace: true });
+  });
+  it("routes ordinary questions to research and /search to ranked-link retrieval", () => {
+    const view = render(<MemoryRouter><Routes><Route path="/" element={<HomeRoute />} /><Route path="*" element={<LocationProbe />} /></Routes></MemoryRouter>);
+    const prompt = screen.getByLabelText("Search query");
+    fireEvent.change(prompt, { target: { value: "when did apollo 11 land?" } });
+    fireEvent.submit(prompt.closest("form")!);
+    expect(screen.getByTestId("location")).toHaveTextContent("/topics/new?kind=research&q=when%20did%20apollo%2011%20land%3F");
+    view.unmount();
+
+    render(<MemoryRouter><Routes><Route path="/" element={<HomeRoute />} /><Route path="*" element={<LocationProbe />} /></Routes></MemoryRouter>);
+    const search = screen.getByLabelText("Search query");
+    fireEvent.change(search, { target: { value: "/search apollo 11 landing" } });
+    fireEvent.submit(search.closest("form")!);
+    expect(screen.getByTestId("location")).toHaveTextContent("/topics/new?kind=search&q=apollo%2011%20landing");
   });
   it.each(["/threads", "/settings"])("uses unmodified : to focus the prompt from %s", (path) => {
     render(<MemoryRouter initialEntries={[path]}><GlobalShortcuts /><input aria-label="Search query" /></MemoryRouter>);

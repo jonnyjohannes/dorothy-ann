@@ -6,6 +6,7 @@ import { ThreadsBox } from "../boxes/ThreadsBox";
 import { PromptBox } from "../boxes/PromptBox";
 import { StickyHeader } from "../boxes/StickyHeader";
 import type { BoxIntent } from "../boxes/box-types";
+import { turnLocation, workspaceController } from "../controllers/workspace-controller";
 import styles from "../App.module.css";
 
 let store: IndexedDbThreadStore | undefined;
@@ -16,6 +17,7 @@ export function ThreadsRoute() {
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [prompt, setPrompt] = useState("");
+  const [commandMessage, setCommandMessage] = useState("");
   const refresh = useCallback(async () => {
     setLoading(true);
     const result = await getStore().list();
@@ -27,14 +29,14 @@ export function ThreadsRoute() {
   const onIntent = (intent: BoxIntent) => {
     if (intent.type === "thread_open_requested") navigate(`/topics/${encodeURIComponent(String(intent.threadId))}`);
     else if (intent.type === "thread_delete_requested") void getStore().remove({ threadId: intent.threadId }).then(() => refresh());
-    else if (intent.type === "new_thread_requested") navigate("/", { replace: true });
     else if (intent.type === "retry_requested") void refresh();
     else if (intent.type === "route_escape_requested") navigate("/", { replace: true });
-    else if (intent.type === "prompt_submitted") navigate(`/topics/new?q=${encodeURIComponent(intent.value)}`);
-    else if (intent.type === "command_requested") {
-      if (intent.command === "/new") navigate("/", { replace: true });
-      else if (intent.command === "/settings") navigate("/settings");
-      else if (intent.command === "/threads") setPrompt("");
+    else {
+      const command = workspaceController.command(intent);
+      if (!command) return;
+      if (command.type === "navigate") { if (intent.type === "command_requested" && intent.command === "/threads") setPrompt(""); else navigate(command.to, { replace: command.replace }); }
+      else if (command.type === "submit") navigate(turnLocation(command.value, command.kind));
+      else if (command.type === "invalid") setCommandMessage(command.message);
     }
   };
   return <main className={styles.shell}>
@@ -43,6 +45,7 @@ export function ThreadsRoute() {
       <h1 className={styles.pageTitle}><code>/threads</code></h1>
       <ThreadsBox state={{ threads, loading, error }} onIntent={onIntent} />
     </section>
+    {commandMessage && <p className={styles.commandMessage} role="status">{commandMessage}</p>}
     <PromptBox value={prompt} onChange={setPrompt} onIntent={onIntent} />
   </main>;
 }

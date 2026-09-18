@@ -44,6 +44,8 @@ describe("FileSystemPromptSource", () => {
   it("loads the committed root assets", async () => {
     const catalog = await new FileSystemPromptSource().load();
     expect(catalog.assessor).toBe(await readFile(new URL("../ASSESSOR.md", import.meta.url), "utf8"));
+    expect(catalog.assessor).toContain("For a single factual, navigational, or current-state problem, prefer one focused search over decomposition.");
+    expect(catalog.assessor).toContain("Resolve immediately once supplied evidence-backed findings satisfy the success criterion.");
     expect(catalog.synthesizer).toBe(await readFile(new URL("../SYNTHESIZER.md", import.meta.url), "utf8"));
   });
 
