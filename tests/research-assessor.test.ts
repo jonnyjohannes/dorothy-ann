@@ -66,6 +66,19 @@ describe("ResearchAssessor", () => {
     await expect(new ResearchAssessor(new IdentityPolicy(hasher)).assess(input)).rejects.toMatchObject({ code: "support_invalid" });
   });
 
+  it("does not treat bare known-source metadata as factual support", async () => {
+    const identities = new IdentityPolicy(hasher);
+    const sourceId = await identities.sourceId("https://example.com/catalog");
+    const input = await makeInput({
+      problem: {
+        ...(await makeInput()).problem,
+        context: { ...emptyContext(uuid(1)), knownSources: [{ sourceId, title: "Catalog", url: "https://example.com/catalog", canonicalUrl: "https://example.com/catalog", displayUrl: "example.com/catalog" }] },
+      },
+      proposal: { directive: { kind: "resolved", observations: [{ proposition: "Fact", statement: "Statement", stance: "supports", support: [{ type: "source", sourceId }] }] } },
+    });
+    await expect(new ResearchAssessor(identities).assess(input)).rejects.toMatchObject({ code: "unsupported_reference" });
+  });
+
   it("constructs bounded search and deduplicated all/any decomposition directives", async () => {
     const assessor = new ResearchAssessor(new IdentityPolicy(hasher));
     const search = await makeInput({ proposal: { directive: { kind: "search", query: "  current reporting ", purpose: "  Find reports ", successCriterion: "  A supported explanation ", priority: 2 } } });

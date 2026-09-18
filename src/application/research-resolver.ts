@@ -70,9 +70,6 @@ function refsFor(problem: ResearchProblem, knowledge: KnowledgeUnit): SupportRef
   for (const turn of problem.context.turns) {
     if (turnIdSchema.safeParse(turn.turnId).success) refs.set(`turn:${turn.turnId}`, { type: "turn", turnId: turn.turnId });
   }
-  for (const source of problem.context.knownSources) {
-    if (sourceIdSchema.safeParse(source.sourceId).success) refs.set(`source:${source.sourceId}`, { type: "source", sourceId: source.sourceId });
-  }
   for (const pack of [...problem.context.availableEvidence, ...knowledge.evidence]) {
     for (const source of pack.sources) {
       if (sourceIdSchema.safeParse(source.sourceId).success) refs.set(`source:${source.sourceId}`, { type: "source", sourceId: source.sourceId });
@@ -157,7 +154,7 @@ export class ResearchResolver {
       gap.status = "blocked";
       return { kind: "resolution", knowledge: startingKnowledge, stopReason: "duplicate_problem" };
     }
-    if (problem.depth > MAX_RESEARCH_DEPTH || state.budget.depthRemaining < 0) {
+    if (problem.depth > MAX_RESEARCH_DEPTH) {
       gap.status = "blocked";
       return { kind: "resolution", knowledge: startingKnowledge, stopReason: "depth_limit_reached" };
     }
@@ -169,8 +166,29 @@ export class ResearchResolver {
         return { kind: "resolution", knowledge: startingKnowledge, stopReason: "assessment_budget_exhausted" };
       }
       const before = startingKnowledge;
-      const assessment = await this.assess(turnId, problem, before, state);
-      const directive = assessment.directive;
+      // Brave already ranks the exact user question well enough for the first
+      // retrieval. Do not spend an assessment call inventing that query when
+      // the root has no admissible extracted evidence yet.
+      let directive: ResearchAssessment["directive"];
+      if (problem.depth === 0 && state.tasks.length === 0 && !useful(before) && problem.context.availableEvidence.length === 0) {
+        directive = {
+          kind: "search",
+          query: problem.question,
+          purpose: problem.purpose,
+          successCriterion: problem.successCriterion,
+          priority: 1,
+        };
+      } else {
+        try {
+          directive = (await this.assess(turnId, problem, before, state)).directive;
+        } catch (error) {
+          if (isUnavailable(error)) {
+            gap.status = "blocked";
+            return { kind: "resolution", knowledge: before, stopReason: "provider_unavailable" };
+          }
+          throw error;
+        }
+      }
       if (directive.kind === "resolved") {
         const merged = joinKnowledge(problem.id, [before, directive.knowledge]);
         state.knowledge = joinKnowledge(problem.id, [state.knowledge, merged]);
@@ -218,6 +236,14 @@ export class ResearchResolver {
         };
         state.tasks.push(task);
         if (key(before) === key(afterSearch)) {
+          // Even an empty exact-question retrieval is followed by one normal
+          // assessment, so existing context can still resolve or decompose
+          // the request. Subsequent duplicate searches stop normally.
+          if (problem.depth === 0 && state.tasks.length === 1 && state.ledger.assessmentsUsed === 0) {
+            gap.status = "open";
+            state.activeFingerprints.delete(gap.fingerprint);
+            return this.resolveProblem(turnId, problem, afterSearch, state, operatorFromParent);
+          }
           gap.status = "blocked";
           return { kind: "resolution", knowledge: afterSearch, stopReason: acquisition.results.some((result) => result.failure?.code === "search_unavailable") ? "provider_unavailable" : "no_new_knowledge" };
         }
@@ -234,7 +260,7 @@ export class ResearchResolver {
       let completedChild = false;
       const children = [...directive.problems].sort((left, right) => left.priority - right.priority || normalized(left.question).localeCompare(normalized(right.question)));
       for (const childProposal of children) {
-        if (problem.depth >= MAX_RESEARCH_DEPTH || state.budget.depthRemaining <= 0) break;
+        if (problem.depth >= MAX_RESEARCH_DEPTH) break;
         const childId = await this.dependencies.identities.problemId({
           turnId,
           parentId: problem.id,
@@ -255,10 +281,13 @@ export class ResearchResolver {
         if (childResult.kind === "checkpoint") return childResult;
         combined = joinKnowledge(problem.id, [combined, childResult.knowledge]);
         state.knowledge = joinKnowledge(problem.id, [state.knowledge, combined]);
-        completedChild ||= useful(childResult.knowledge);
-        if (directive.operator === "any" && completedChild) break;
+        const childResolved = childResult.stopReason === "sufficient";
+        completedChild ||= childResolved;
+        // `any` means one child satisfied its own obligation. The parent is
+        // still reassessed below before the root can be considered sufficient.
+        if (directive.operator === "any" && childResolved) break;
       }
-      if (problem.depth >= MAX_RESEARCH_DEPTH || state.budget.depthRemaining <= 0) {
+      if (problem.depth >= MAX_RESEARCH_DEPTH) {
         gap.status = "blocked";
         return { kind: "resolution", knowledge: combined, stopReason: "depth_limit_reached" };
       }

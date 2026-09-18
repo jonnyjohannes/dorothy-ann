@@ -136,7 +136,6 @@ function canonicalReferences(
 function supportRefsFromInput(input: ResearchAssessorInput): ReadonlySet<string> {
   const refs = input.allowedSupportRefs ?? [
     ...input.problem.context.turns.map((turn) => ({ type: "turn", turnId: turn.turnId }) as SupportRef),
-    ...input.problem.context.knownSources.map((source) => ({ type: "source", sourceId: source.sourceId }) as SupportRef),
     ...input.problem.context.availableEvidence.flatMap((pack) => pack.sources.map((source) => ({ type: "source", sourceId: source.sourceId }) as SupportRef)),
     ...input.knowledge.evidence.flatMap((pack) => pack.sources.map((source) => ({ type: "source", sourceId: source.sourceId }) as SupportRef)),
     ...input.knowledge.findings.flatMap((finding) => finding.observations.flatMap((observation) => observation.support)),

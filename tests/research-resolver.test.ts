@@ -50,7 +50,9 @@ describe("ResearchResolver", () => {
     expect(result.resolution.status).toBe("sufficient");
     expect(result.resolution.ledger.searchesUsed).toBe(1);
     expect(result.resolution.tasks).toHaveLength(1);
-    expect(calls).toBe(2);
+    // The root retrieval uses the exact question before the first assessor
+    // call; the assessor is reserved for deciding what to do with evidence.
+    expect(calls).toBe(1);
   });
 
   it("keeps failed extraction attempts out of task evidence and terminal source closure", async () => {
