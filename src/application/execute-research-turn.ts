@@ -34,6 +34,7 @@ export interface ResearchTurnExecutionInput {
   userMessage: UserMessage;
   createdAt: IsoTimestamp;
   context: ThreadContext;
+  answerPosition: "initial" | "follow_up";
   resolver: ResearchResolver;
   synthesizer: Pick<AnswerSynthesizer, "synthesize">;
   assessmentModelRef: string;
@@ -231,6 +232,7 @@ export async function executeResearchTurn(input: ResearchTurnExecutionInput): Pr
     // synthesizer and therefore cannot create child answers or turns.
     const answer = await input.synthesizer.synthesize({
       question: input.userMessage.content,
+      answerPosition: input.answerPosition,
       context: input.context,
       resolution,
       signal: input.signal,

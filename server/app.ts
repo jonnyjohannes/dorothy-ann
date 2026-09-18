@@ -92,7 +92,7 @@ function createExecutor(
       let timingTerminalStatus: "completed" | "failed" | "interrupted" | "executor_error" = "executor_error";
       try {
         let lastPhase: string | undefined;
-        const emitResearchPhase = async (phase: "searching" | "extracting" | "assessing" | "decomposing" | "resolving" | "synthesizing") => {
+        const emitResearchPhase = async (phase: "searching" | "extracting" | "assessing" | "decomposing" | "recursing" | "resolving" | "synthesizing") => {
           if (phase === lastPhase) return;
           lastPhase = phase;
           await onSignal({ type: "phase", phase });
@@ -135,7 +135,7 @@ function createExecutor(
         } else {
           await onSignal({ type: "research_state", state: { kind: "checkpoint", checkpoint: root.checkpoint } });
         }
-        const result = await executeResearchTurn({ turnId: request.turnId, userMessage: requestMessage(request), createdAt: new Date().toISOString() as never, context, resolver: { resolve: async () => resolution as ResearchResolutionResult }, synthesizer: phaseSynthesizer, assessmentModelRef: "assessment", synthesisModelRef: "synthesis", searchRef: "brave", signal });
+        const result = await executeResearchTurn({ turnId: request.turnId, userMessage: requestMessage(request), createdAt: new Date().toISOString() as never, context, answerPosition: request.answerPosition, resolver: { resolve: async () => resolution as ResearchResolutionResult }, synthesizer: phaseSynthesizer, assessmentModelRef: "assessment", synthesisModelRef: "synthesis", searchRef: "brave", signal });
         timingTerminalStatus = result.turn.status;
         if (result.turn.status === "completed") {
           let firstAnswer = true;

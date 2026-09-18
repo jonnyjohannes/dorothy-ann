@@ -46,11 +46,22 @@ describe("v3 answer and turn executors", () => {
       { type: "text", markdown: "# Opening\n\nInternal ## heading" },
       { type: "citation", sourceId: id("src_reachable") },
       { type: "citation", sourceId: id("src_unreachable") },
-    ]), "SYNTHESIZER EXACT").synthesize({ question: "What happened?", context, resolution });
+    ]), "SYNTHESIZER EXACT").synthesize({ question: "What happened?", answerPosition: "initial", context, resolution });
     expect(answer.parts).toEqual([
       { type: "text", markdown: "Opening\n\nInternal ## heading" },
       { type: "citation", sourceId: source.sourceId },
     ]);
+  });
+
+  it("passes answer position without changing the shared synthesis prompt", async () => {
+    let received: string | undefined;
+    const llm: LLMProvider = {
+      assessResearch: async () => { throw new Error("not used"); },
+      synthesizeResearch: async function* (input) { received = input.answerPosition; expect(input.systemPrompt).toBe("SYNTHESIZER EXACT"); yield { type: "text", markdown: "Follow-up answer." }; },
+    };
+    const answer = await new AnswerSynthesizer(llm, "SYNTHESIZER EXACT").synthesize({ question: "What happened next?", answerPosition: "follow_up", context, resolution });
+    expect(received).toBe("follow_up");
+    expect(answer.parts).toEqual([{ type: "text", markdown: "Follow-up answer." }]);
   });
 
   it("searches exactly once and does not invoke research capabilities", async () => {
@@ -74,7 +85,7 @@ describe("v3 answer and turn executors", () => {
     const resolver = { resolve: async (): Promise<ResearchResolutionResult> => resolution };
     const synthesizer = { synthesize: async (): Promise<AssistantContent> => { synthesisCalls += 1; return { parts: [{ type: "text", markdown: "Answer." }, { type: "citation", sourceId: source.sourceId }] }; } };
     const result = await executeResearchTurn({
-      turnId: id("turn-research"), userMessage, createdAt: userMessage.createdAt, context, resolver, synthesizer, ...executionRefs, finishedAt: fixedClock,
+      turnId: id("turn-research"), userMessage, createdAt: userMessage.createdAt, context, answerPosition: "initial", resolver, synthesizer, ...executionRefs, finishedAt: fixedClock,
     });
     expect(synthesisCalls).toBe(1);
     expect(result.sources).toEqual([source]);
@@ -105,6 +116,7 @@ describe("v3 answer and turn executors", () => {
       userMessage,
       createdAt: userMessage.createdAt,
       context,
+      answerPosition: "initial",
       resolver: { resolve: async () => gapSupported },
       synthesizer: { synthesize: async () => ({ parts: [{ type: "text", markdown: "Answer." }] }) },
       ...executionRefs,
@@ -127,6 +139,7 @@ describe("v3 answer and turn executors", () => {
       userMessage,
       createdAt: userMessage.createdAt,
       context: { ...context, knownSources: [] },
+      answerPosition: "initial",
       resolver: { resolve: async () => ({ checkpoint }) },
       synthesizer: { synthesize: async () => { throw new Error("must not synthesize"); } },
       ...executionRefs,
@@ -140,7 +153,7 @@ describe("v3 answer and turn executors", () => {
     const resolver = { resolve: async (): Promise<ResearchResolutionResult> => resolution };
     const synthesizer = { synthesize: async (): Promise<AssistantContent> => { throw Object.assign(new Error("secret payload"), { code: "refused" }); } };
     const result = await executeResearchTurn({
-      turnId: id("turn-failure"), userMessage, createdAt: userMessage.createdAt, context, resolver, synthesizer, ...executionRefs, finishedAt: fixedClock,
+      turnId: id("turn-failure"), userMessage, createdAt: userMessage.createdAt, context, answerPosition: "follow_up", resolver, synthesizer, ...executionRefs, finishedAt: fixedClock,
     });
     expect(result.turn.status).toBe("failed");
     if (result.turn.status === "failed") {

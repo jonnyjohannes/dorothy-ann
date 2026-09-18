@@ -35,6 +35,7 @@ describe("research browser flow", () => {
       expectedRevision: null,
       create: { id: threadId, title: "What happened?", createdAt: at(1) },
       context: { threadId, turns: [], knownSources: [], availableEvidence: [] },
+      answerPosition: "initial",
       gatewayOptions: { maxResults: 5, researchLimits: {} },
     });
     expect(first).toMatchObject({ ok: true, turn: { kind: "research", status: "completed" } });
@@ -50,6 +51,7 @@ describe("research browser flow", () => {
       createdAt: at(3),
       expectedRevision: first.record.revision,
       context: buildThreadContext(first.record.thread, contextLimits),
+      answerPosition: "follow_up",
       gatewayOptions: { maxResults: 5, researchLimits: {} },
     });
     expect(second).toMatchObject({ ok: true, turn: { kind: "research", status: "completed" }, record: { thread: { turns: [{ id: firstTurnId }, { id: uuid(5) }] } } });

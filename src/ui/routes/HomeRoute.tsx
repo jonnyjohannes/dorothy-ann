@@ -15,8 +15,7 @@ export function HomeRoute() {
   useEffect(() => {
     const query = params.get("q")?.trim();
     if (!query) return;
-    const kind = params.get("kind") === "search" ? "search" : "research";
-    navigate(turnLocation(query, kind), { replace: true });
+    navigate(turnLocation(query, "research"), { replace: true });
   }, [navigate, params]);
 
   const onIntent = (intent: BoxIntent) => {

@@ -45,8 +45,10 @@ describe("FileSystemPromptSource", () => {
     const catalog = await new FileSystemPromptSource().load();
     expect(catalog.assessor).toBe(await readFile(new URL("../ASSESSOR.md", import.meta.url), "utf8"));
     expect(catalog.assessor).toContain("For a single factual, navigational, or current-state problem, prefer one focused search over decomposition.");
-    expect(catalog.assessor).toContain("Resolve immediately once supplied evidence-backed findings satisfy the success criterion.");
+    expect(catalog.assessor).toContain("resolve immediately when the supplied extracted evidence supports a useful answer");
     expect(catalog.synthesizer).toBe(await readFile(new URL("../SYNTHESIZER.md", import.meta.url), "utf8"));
+    expect(catalog.synthesizer).toContain("When it is `initial`, begin exactly with `According to my research`");
+    expect(catalog.synthesizer).toContain("When it is `follow_up`, answer directly without repeating");
   });
 
   it.each([

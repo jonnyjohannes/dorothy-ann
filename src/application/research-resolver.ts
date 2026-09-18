@@ -23,7 +23,7 @@ import { sourceIdSchema, turnIdSchema } from "../domain/schemas.js";
 
 export const MAX_RESEARCH_DEPTH = 2;
 
-export type ResearchProgressPhase = "searching" | "extracting" | "assessing" | "decomposing" | "resolving";
+export type ResearchProgressPhase = "searching" | "extracting" | "assessing" | "decomposing" | "recursing" | "resolving";
 export type ResearchProgressObserver = (phase: ResearchProgressPhase) => void | Promise<void>;
 
 export interface ResearchAssessmentRequest {
@@ -357,6 +357,7 @@ export class ResearchResolver {
     });
     state.budget.assessmentsRemaining -= 1;
     state.ledger.assessmentsUsed += 1;
+    if (assessment.directive.kind !== "resolved") await emitPhase(state.onPhase, "recursing");
     await emitPhase(state.onPhase, "resolving");
     return assessment;
   }

@@ -91,7 +91,9 @@ export function App() {
     <Route path="/unlock" element={<UnlockRoute />} />
     <Route path="/settings" element={<SettingsRoute />} />
     <Route path="/threads" element={<ThreadsRoute />} />
-    <Route path="/topics/:threadId" element={<ThreadRoute />} />
+    <Route path="/threads/new" element={<ThreadRoute />} />
+    <Route path="/threads/:threadId" element={<ThreadRoute />} />
+    <Route path="/search" element={<ThreadRoute initialKind="search" />} />
     <Route path="/new" element={<HomeRoute />} />
     <Route path="*" element={<HomeRoute />} />
   </Routes></AuthGate></>;

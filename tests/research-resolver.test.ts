@@ -59,6 +59,27 @@ describe("ResearchResolver", () => {
     expect(calls).toBe(1);
   });
 
+  it("marks recursing when assessment requests more research after initial evidence", async () => {
+    const input = await makeInput();
+    const phases: string[] = [];
+    let assessments = 0;
+    const resolver = new ResearchResolver({
+      identities,
+      assessor: new ResearchAssessor(identities),
+      assess: async ({ problem }): Promise<ResearchAssessmentProposal> => {
+        assessments += 1;
+        if (assessments === 1) return { directive: { kind: "search", query: "follow-up reporting", purpose: "Fill a material gap", successCriterion: problem.successCriterion, priority: 1 } };
+        return { directive: { kind: "resolved", observations: [{ proposition: "The answer", statement: "The accumulated evidence supports the answer.", stance: "supports", support: [{ type: "turn", turnId }] }] } };
+      },
+      acquirer: new EvidenceAcquirer({ fixture: true }),
+    });
+    const result = await resolver.resolve({ ...input, onPhase: (phase) => { phases.push(phase); } });
+    expect(result.kind).toBe("resolution");
+    expect(phases).toContain("recursing");
+    expect(phases.indexOf("recursing")).toBeLessThan(phases.lastIndexOf("searching"));
+    expect(assessments).toBe(2);
+  });
+
   it("keeps failed extraction attempts out of task evidence and terminal source closure", async () => {
     const input = await makeInput();
     const failedUrl = "https://failed.example.test/report";
@@ -94,6 +115,7 @@ describe("ResearchResolver", () => {
       userMessage: { id: "00000000-0000-4000-8000-000000000002" as never, role: "user", content: "Question?", createdAt: "2026-01-01T00:00:00.000Z" as never },
       createdAt: "2026-01-01T00:00:00.000Z" as never,
       context,
+      answerPosition: "initial",
       resolver: { resolve: async () => result.resolution },
       synthesizer: { synthesize: async () => ({ parts: [{ type: "text", markdown: "Supported answer." }] }) },
       assessmentModelRef: "assessment",

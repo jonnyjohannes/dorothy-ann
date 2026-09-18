@@ -12,6 +12,7 @@ export const DEFAULT_SYNTHESIS_MAX_OUTPUT_TOKENS = 4_096;
 
 export interface AnswerSynthesizerInput {
   question: string;
+  answerPosition: "initial" | "follow_up";
   context: ThreadContext;
   resolution: SufficientResearchResolution | BestEffortResearchResolution;
   signal?: AbortSignal;
@@ -120,6 +121,7 @@ export class AnswerSynthesizer {
     const providerInput: ResearchSynthesisInput = {
       systemPrompt: this.systemPrompt,
       question: input.question,
+      answerPosition: input.answerPosition,
       context: input.context,
       resolution: input.resolution,
       allowedSourceIds,

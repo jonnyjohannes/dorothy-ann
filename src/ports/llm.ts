@@ -52,6 +52,7 @@ export interface ResearchAssessmentInput {
 export interface ResearchSynthesisInput {
   systemPrompt: string;
   question: string;
+  answerPosition: "initial" | "follow_up";
   context: ThreadContext;
   resolution: SufficientResearchResolution | BestEffortResearchResolution;
   allowedSourceIds: SourceId[];

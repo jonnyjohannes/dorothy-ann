@@ -27,6 +27,7 @@ export interface TurnStartInput {
   expectedRevision: ThreadRevision | null;
   create?: CommitTerminalTurnInput["create"];
   context?: ThreadContext;
+  answerPosition?: "initial" | "follow_up";
   gatewayOptions: TurnGatewayOptions;
 }
 
@@ -79,8 +80,8 @@ function controllerErrorMessage(error: TurnControllerError): string {
 }
 function gatewayRequest(input: TurnStartInput): TurnGatewayRequest {
   if (input.kind === "search") return { executionId: input.executionId, turnId: input.turnId, kind: "search", query: input.request };
-  if (!input.context) throw new Error("research context required");
-  return { executionId: input.executionId, turnId: input.turnId, kind: "research", question: input.request, context: input.context };
+  if (!input.context || !input.answerPosition) throw new Error("research context and answer position required");
+  return { executionId: input.executionId, turnId: input.turnId, kind: "research", question: input.request, context: input.context, answerPosition: input.answerPosition };
 }
 function sourceClosure(turn: Turn, sources: CanonicalSource[]): boolean {
   const referenced = collectTurnSourceIds(turn);

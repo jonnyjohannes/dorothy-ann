@@ -1,6 +1,6 @@
 # Dorothy Ann
 
-Dorothy Ann is a browser-based information resolver and researcher. Ordinary requests create recursively resolved `ResearchTurn`s with bounded evidence and one synthesized answer. Use `/search <query>` when you want ranked links without research synthesis; `/research <question>` is an explicit alias for the default behavior.
+Dorothy Ann is a browser-based information resolver and researcher. Ordinary requests and `/threads/new?q=...` create recursively resolved `ResearchTurn`s with bounded evidence and one synthesized answer. Use `/search <query>` or `/search?q=...` when you want ranked links without research synthesis.
 
 ## what it does
 

@@ -18,7 +18,7 @@ import type {
   ExecutionId,
 } from "../domain/types.js";
 
-export type TurnPhase = "searching" | "assessing" | "decomposing" | "extracting" | "resolving" | "synthesizing";
+export type TurnPhase = "searching" | "assessing" | "decomposing" | "extracting" | "recursing" | "resolving" | "synthesizing";
 
 export interface SourceDeltaOccurrence {
   sourceId: SourceId;
@@ -28,7 +28,7 @@ export interface SourceDeltaOccurrence {
 
 export type TurnGatewayRequest =
   | { executionId: ExecutionId; turnId: TurnId; kind: "search"; query: string }
-  | { executionId: ExecutionId; turnId: TurnId; kind: "research"; question: string; context: ThreadContext };
+  | { executionId: ExecutionId; turnId: TurnId; kind: "research"; question: string; context: ThreadContext; answerPosition: "initial" | "follow_up" };
 
 export type TurnExecutionRequest =
   | Extract<TurnGatewayRequest, { kind: "search" }> & { maxResults: number }
@@ -93,7 +93,7 @@ const sourceSchema = z.strictObject({
 const occurrenceSchema = z.strictObject({ sourceId, role: z.enum(["search_destination", "research_evidence"]), rank: z.number().int().positive().max(10).optional() });
 const requestSchema = z.discriminatedUnion("kind", [
   z.strictObject({ executionId: uuid, turnId: uuid, kind: z.literal("search"), query: boundedText(1, 2_000) }),
-  z.strictObject({ executionId: uuid, turnId: uuid, kind: z.literal("research"), question: boundedText(1, 2_000), context: threadContextV3Schema }),
+  z.strictObject({ executionId: uuid, turnId: uuid, kind: z.literal("research"), question: boundedText(1, 2_000), context: threadContextV3Schema, answerPosition: z.enum(["initial", "follow_up"]) }),
 ]);
 
 function jsonError(context: Context, status: 400 | 401 | 403 | 413 | 500 | 503, code: string, message: string) {
@@ -131,7 +131,7 @@ async function readBoundedJson(request: Request, maximum: number): Promise<{ ok:
   }
 }
 
-const researchPhases = new Set<TurnPhase>(["searching", "extracting", "assessing", "decomposing", "resolving", "synthesizing"]);
+const researchPhases = new Set<TurnPhase>(["searching", "extracting", "assessing", "decomposing", "recursing", "resolving", "synthesizing"]);
 
 function validateSignal(signal: TurnExecutionSignal, request: TurnExecutionRequest): boolean {
   if (signal.type === "phase") return request.kind === "research" ? researchPhases.has(signal.phase) : signal.phase === "searching";

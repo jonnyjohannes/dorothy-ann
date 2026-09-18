@@ -12,6 +12,7 @@ import { StickyHeader } from "../boxes/StickyHeader";
 import { TranscriptBox } from "../boxes/TranscriptBox";
 import { MarkdownContent } from "../primitives/MarkdownContent";
 import { sourceAccentSlotForIndex } from "../color-scheme";
+import { researchAnswerPosition } from "../policies/answer-position";
 import type { BoxIntent } from "../boxes/box-types";
 import { workspaceController } from "../controllers/workspace-controller";
 import styles from "../App.module.css";
@@ -23,13 +24,20 @@ const uuid = () => crypto.randomUUID();
 
 function researchStage(answerDraft: string, events: TurnControllerView["events"]): string {
   const phase = [...events].reverse().find((event) => event.type === "phase");
+  const recursing = events.some((event) => event.type === "phase" && event.phase === "recursing");
   if (phase?.type === "phase") {
+    if (phase.phase === "synthesizing") return "synthesizing";
+    if (recursing) {
+      if (phase.phase === "searching") return "recursing · searching";
+      if (phase.phase === "extracting") return "recursing · extracting evidence";
+      if (phase.phase === "assessing") return "recursing · assessing research";
+      return "recursing";
+    }
     if (phase.phase === "searching") return "searching sources";
     if (phase.phase === "extracting") return "extracting evidence";
     if (phase.phase === "assessing") return "assessing research";
     if (phase.phase === "decomposing") return "research direction";
     if (phase.phase === "resolving") return "resolving evidence";
-    if (phase.phase === "synthesizing") return "synthesizing";
   }
   return answerDraft ? "synthesizing" : "researching";
 }
@@ -64,13 +72,12 @@ function CheckGlyph() { return <svg {...glyphProps()}><path d="m5 12 4 4L19 6" /
 function CopyGlyph() { return <svg {...glyphProps()}><rect x="8" y="8" width="11" height="11" rx="1.5" /><path d="M16 8V6.5A1.5 1.5 0 0 0 14.5 5h-7A1.5 1.5 0 0 0 6 6.5v7A1.5 1.5 0 0 0 7.5 15H8" /></svg>; }
 function ExportGlyph() { return <svg {...glyphProps()}><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg>; }
 
-export function ThreadRoute() {
+export function ThreadRoute({ initialKind = "research" }: { initialKind?: "search" | "research" }) {
   const { threadId: routeThreadId } = useParams();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const threadId = useMemo(() => (routeThreadId === "new" || !routeThreadId ? uuid() : routeThreadId) as ThreadId, [routeThreadId]);
   const query = params.get("q")?.trim() ?? "";
-  const requestedKind = params.get("kind") === "search" ? "search" : "research";
   const [thread, setThread] = useState<Thread | null>(null);
   const threadRef = useRef<Thread | null>(null);
   const [view, setView] = useState<TurnControllerView>({ active: false, lastSequence: 0, events: [], answerDraft: "", sources: [] });
@@ -97,24 +104,25 @@ export function ThreadRoute() {
     const turnId = uuid() as TurnId;
     const userMessage: UserMessage = { id: uuid() as UserMessage["id"], role: "user", content: request, createdAt };
     const executionId = uuid() as never;
-    const current = threadRef.current;
-    const context = kind === "research" ? (current ? buildThreadContext(current, contextLimits) : emptyContext(threadId)) : undefined;
     const store = await getBrowserThreadStore();
-    const record = current ? await store.load(threadId) : null;
+    const record = await store.load(threadId);
+    const current = record.ok ? record.value?.thread ?? null : threadRef.current;
+    const context = kind === "research" ? (current ? buildThreadContext(current, contextLimits) : emptyContext(threadId)) : undefined;
+    const answerPosition = researchAnswerPosition(current?.turns ?? []);
     const activeController = new TurnController(gateway, store, timestamp, setView);
     controller.current = activeController;
     setMessage("");
-    const result = await activeController.run({ threadId, turnId, executionId, kind, request, userMessage, createdAt, expectedRevision: record && record.ok ? record.value?.revision ?? null : null, create: current ? undefined : { id: threadId, title: request.slice(0, 60), createdAt }, context, gatewayOptions: { maxResults: 5, researchLimits: {} } });
+    const result = await activeController.run({ threadId, turnId, executionId, kind, request, userMessage, createdAt, expectedRevision: record.ok ? record.value?.revision ?? null : null, create: current ? undefined : { id: threadId, title: request.slice(0, 60), createdAt }, context, answerPosition: kind === "research" ? answerPosition : undefined, gatewayOptions: { maxResults: 5, researchLimits: {} } });
     setActiveRequest("");
-    if (result.ok) { threadRef.current = result.record.thread; setThread(result.record.thread); if (routeThreadId === "new") navigate(`/topics/${encodeURIComponent(String(threadId))}`, { replace: true }); }
+    if (result.ok) { threadRef.current = result.record.thread; setThread(result.record.thread); if (routeThreadId === "new" || !routeThreadId) navigate(`/threads/${encodeURIComponent(String(threadId))}`, { replace: true }); }
     else setMessage(result.error === "commit_retryable" ? "The result was not saved. Retry save." : result.message ?? "That turn could not be completed.");
   }, [navigate, routeThreadId, threadId]);
 
   useEffect(() => {
     if (!query || started.current) return;
     started.current = true;
-    void run(query, requestedKind);
-  }, [query, requestedKind, run]);
+    void run(query, initialKind);
+  }, [initialKind, query, run]);
 
   const showSuccess = (action: "copy" | "export") => {
     if (feedbackTimer.current !== undefined) window.clearTimeout(feedbackTimer.current);
@@ -129,7 +137,7 @@ export function ThreadRoute() {
   const onIntent = (intent: BoxIntent) => {
     const command = workspaceController.command(intent);
     if (!command) return;
-    if (command.type === "submit") { setValue(""); setMessage(""); void run(command.value, command.kind); }
+    if (command.type === "submit") { setValue(""); setMessage(""); void run(command.value, initialKind === "search" && intent.type === "prompt_submitted" ? "search" : command.kind); }
     else if (command.type === "navigate") navigate(command.to, { replace: command.replace });
     else if (command.type === "invalid") setMessage(command.message);
     else if (command.type === "retry") void controller.current?.retryCommit();

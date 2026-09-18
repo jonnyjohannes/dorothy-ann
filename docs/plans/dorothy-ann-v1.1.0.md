@@ -4,24 +4,29 @@
 
 - Status: complete
 - Last updated: 2026-09-18
-- Current focus: checkpoint closure and bounded assessor-unavailability fallback repaired
+- Current focus: singular research flow shipped and verified
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: restart the local Node server or deploy current HEAD, then smoke one live research turn; invalid/rate-limited/unavailable assessment output with useful extracted evidence now proceeds to best-effort synthesis
-- Approved follow-up: retrieval-first recursive research semantics are preserved while real operation boundaries now drive turn-local phases. The assessment output default/ceiling remains 800 because no production distribution supports lowering it. Unstructured fallback is limited to classified bad requests, cancellation reaches assessment calls, and no new timeout or checkpoint failure-stage behavior was added without separate approval.
+- Next action: deploy and smoke one live initial answer, one live follow-up, and one assessor-triggered recursive continuation
+- Shipped follow-up: ordinary prompt and `?q=` entry use one research path at `/threads/new`; `/search?q=` remains the explicit plain-search utility; `/topics`, `?kind=`, and `?mode=` are removed without compatibility redirects. Retrieval-first assessment remains unchanged. If an assessor requests further search or decomposition, the UI reports sticky recursion state alongside the current operation (`recursing · searching`, `recursing · extracting evidence`, or `recursing · assessing research`). Synthesis receives explicit initial/follow-up metadata; only the initial completed research answer is instructed to begin with “According to my research,” while all other synthesis behavior remains shared.
 
-## Post-release routing amendment — research by default
+## Post-release singular research-flow amendment
 
-Approved after observing that ordinary grammatical questions made the trailing-`?` macro an accidental rather than intentional mode selector:
+Approved after auditing the shipped code path from prompt submission through retrieval, recursive resolution, synthesis, and durable commit:
 
-- Every ordinary non-command submission creates a `ResearchTurn`, whether or not it ends in `?`. Punctuation is content and never controls execution kind.
-- `/search <query>` is the explicit raw retrieval utility. It strips the command prefix, creates a `SearchTurn`, performs exactly one provider search, and returns ranked links without extraction or LLM use.
-- `/research <question>` is an explicit alias for the default research behavior. It strips the command prefix and creates a `ResearchTurn`.
-- Empty `/search` and `/research` commands do not execute and return bounded usage guidance. Unknown slash commands remain non-executing.
-- `WorkspaceController` owns this command/default-kind interpretation. `PromptBox` owns only draft editing and command suggestion presentation.
-- Research remains recursive and evidence-grounded, but the assessor must scale effort to the request: prefer one focused search for a single factual, navigational, or current-state problem; decompose only genuinely independent obligations; resolve immediately once the success criterion is supported; and avoid exhaustive coverage unless requested.
-- The assessor does not silently downgrade an accepted `ResearchTurn` into a `SearchTurn`; accepted and terminal kinds continue to match.
+- Ordinary `PromptBox` submissions and `?q=<question>` entry both create a `ResearchTurn` at `/threads/new?q=<question>`; punctuation has no routing semantics.
+- Canonical UI routes are `/threads`, `/threads/new?q=...`, `/threads/:threadId`, `/search?q=...`, `/settings`, and `/unlock`. Remove `/topics`, `?kind=`, and `?mode=` completely, with no compatibility aliases or redirects.
+- `/search <query>` navigates to the explicit `/search?q=<query>` utility and retains the existing one-provider-call `SearchTurn` behavior without extraction, assessment, or synthesis.
+- Every research turn retains the singular retrieval-first resolver: exact-question Brave search, bounded source extraction, assessment, then immediate root synthesis when `resolved` or continued recursive `search | decompose` work before one root synthesis.
+- “Quick” and “deep” are not distinct modes or pipelines; they differ only in how soon the assessor returns `resolved`.
+- A validated assessor continuation marks the execution as recursing. The UI retains that fact while reporting the current operation as `recursing · searching`, `recursing · extracting evidence`, or `recursing · assessing research`, then reports `synthesizing` normally.
+- Synthesis receives explicit `answerPosition: initial | follow_up` metadata derived from complete durable thread history. Search, failed, interrupted, and legacy entries do not consume the initial position. `SYNTHESIZER.md` alone owns the conditional initial preamble; application code must not inject, strip, or normalize it, and every other synthesis rule remains shared and independently editable.
+- `ASSESSOR.md` should resolve promptly from sufficient initial extracted evidence, request another focused search only for a material missing fact, and decompose only genuinely independent obligations. Existing support validation and untrusted-content rules remain unchanged.
 
-Verification: focused controller/box/route tests, assessor prompt checks, full test suite, typecheck, lint, production build, Playwright smoke, and `git diff --check`.
+Verification: focused route, resolver phase, SSE/gateway/controller, synthesis-envelope, prompt-asset, and browser flow tests; then lint, typecheck, full tests, production build, e2e, and `git diff --check`.
+
+## Post-release routing amendment — research by default (superseded)
+
+This historical amendment removed punctuation-based routing and made ordinary input research by default. Its `/research` alias and URL-kind transport are superseded by the singular research-flow amendment above. The retained contract is: ordinary input is research, `/search` is the sole explicit raw-retrieval utility, and accepted and terminal turn kinds must match.
 
 ## Post-release UX amendment — fuller workspace and bottom evidence
 
@@ -37,6 +42,10 @@ Verification: responsive UI regression tests, full test suite, typecheck, lint, 
 
 ## Handoff
 
+Plan Ledger item 26 is complete. Canonical browser routes are `/threads`, `/threads/new?q=...`, `/threads/:threadId`, and `/search?q=...`; ordinary prompt and query-string entry always research, while `/search` remains the only raw retrieval path. The retrieval-first resolver now emits `recursing` after any validated assessor continuation, and the loader retains that strategy while showing searching, extraction, or assessment work. Complete durable thread history derives `answerPosition`; the typed value crosses the browser, SSE, executor, synthesizer, and Anthropic envelope while exact `SYNTHESIZER.md` remains the shared system prompt. `ASSESSOR.md` now favors immediate supported resolution from initial extracted evidence. Verification passes: lint, typecheck, 213 tests, production build, six Playwright tests, and `git diff --check`. Deployment smoke should confirm the live model obeys the initial-only preamble and exercise an assessor-triggered recursive continuation.
+
+Historical context follows.
+
 The browser invalid-result and revealed assessment-failure path are repaired. The live source-closure failure was a checkpoint terminal carrying evidence references without their admitted source metadata: `ResearchResolver` correctly stored newly admitted metadata on `checkpoint.sources`, but `executeResearchTurn` read only the optional `sources` field on the outer `{ checkpoint }` result wrapper. Checkpoint terminal assembly now closes references directly from `resolution.checkpoint` through the shared `collectResearchStateSourceIds` policy. That shared policy also eliminates earlier drift where server terminal assembly omitted `ResearchGap.support` while browser/commit validation included it. Once closure was repaired, the persisted checkpoint exposed that invalid/rate-limited/bad-request/generic provider assessment output was still treated as fatal execution failure despite useful extracted evidence. Those expected assessor-unavailability codes now stop resolution normally as `provider_unavailable`; useful evidence proceeds to best-effort synthesis, while empty knowledge remains insufficient. Direct gap-support, checkpoint-evidence, and invalid-assessment-with-useful-evidence regressions cover these cases. Browser diagnostics distinguish malformed terminal data, wrong turn kind, and incomplete source metadata, and the server validates both terminal schema and cross-object source closure before emission. A real-boundary regression executes two consecutive research turns through Hono SSE, browser gateway/controller, contextual evidence projection, and IndexedDB commit; both complete. Verification passes: lint, typecheck, 206 tests, production build, six isolated-port Playwright tests, and `git diff --check`. The local Node entrypoint is not watch-mode and must restart after server-side changes.
 
 The approved latency optimization pass is complete. Research phase events now follow actual search, extraction, assessment, recursive interpretation, and synthesis boundaries through awaited turn-local observers; the UI treats explicit phases as authoritative and the SSE boundary runtime-validates the settled phase vocabulary. Opt-in `RESEARCH_TIMING_LOGS` emits one allowlisted server-only summary per research execution with monotonic wall/stage timings, first synthesis output/answer-signal timing, ledger counts, and bounded terminal enums; records exclude IDs, requests, prompts, source/provider data, payloads, and errors, and sink failure cannot alter execution. Anthropic assessment input now uses one compact semantic context projection, an aligned discriminated structured schema, and stricter support normalization while retaining the approved 800-token default/ceiling. Generic provider failures no longer trigger an unstructured replay; only classified HTTP 400 compatibility failures do, and assessment cancellation reaches the SDK client. No new timeout or checkpoint failure-stage contract was added. Verification passes: lint, typecheck, 198 tests, production build, six Playwright tests on fresh isolated fixture ports, and `git diff --check`. The repository-default Playwright command first reused unrelated servers on ports 5173/8787 and reached the unlock page; this environmental failure was not a product regression. Live-provider timing/latency smoke remains the deployment follow-up.
@@ -48,7 +57,7 @@ Dorothy Ann v1.0.0 behaves correctly and is the baseline for this architectural 
 Decisions made so far:
 
 - Dorothy Ann is an information resolver and researcher. A request creates either a `SearchTurn` or `ResearchTurn`; these are turn contracts, not persistent application modes, and `chat` is not a third kind.
-- Ordinary non-command input creates a `ResearchTurn`; punctuation has no routing semantics. `/search <query>` explicitly creates a raw ranked-link `SearchTurn`, while `/research <question>` is an explicit alias for the default research path.
+- Ordinary non-command input and `/threads/new?q=...` create a `ResearchTurn`; punctuation has no routing semantics. `/search <query>` and `/search?q=...` explicitly create a raw ranked-link `SearchTurn`; there is no separate research alias or URL mode parameter.
 - A `SearchTurn` uses `SearchProvider` and returns normalized ranked sources without LLM synthesis.
 - Every `ResearchTurn` follows one standard recursive protocol: the high-reasoning assessor returns `resolved`, `search`, or `decompose`; the resolver interprets the directive, joins child knowledge into parent state, reassesses, and synthesizes exactly one user-facing answer at the root. `resolved` is a recursive node directive; root research outcome uses `sufficient | best_effort | insufficient`.
 - Decomposition expresses `all` versus `any` child semantics. Recursive children return supported `KnowledgeUnit` values, never user-facing answers.
@@ -160,7 +169,7 @@ Find and display relevant sources. An explicit `/search <query>` submission crea
 
 ### Research turn
 
-Recursively resolve the current question using its conversation, available evidence, and explicit limits. Every ordinary non-command submission creates a `ResearchTurn`; `/research <question>` is an explicit alias. A research turn uses `LLMProvider` for semantic reduction and final synthesis and conditionally uses `SearchProvider` and `ContentExtractor` to acquire missing evidence.
+Recursively resolve the current question using its conversation, available evidence, and explicit limits. Every ordinary non-command submission and `/threads/new?q=...` entry creates a `ResearchTurn`. A research turn uses `LLMProvider` for semantic reduction and final synthesis and conditionally uses `SearchProvider` and `ContentExtractor` to acquire missing evidence.
 
 ### Thread context
 
@@ -238,7 +247,7 @@ UUID/random execution and turn IDs are generated by injected runtime identity so
 
 ### `Thread`
 
-**Meaning:** one durable topic containing an ordered conversation and its search/research activity.
+**Meaning:** one durable thread containing an ordered conversation and its search/research activity.
 
 ```ts
 interface Thread {
@@ -1725,7 +1734,7 @@ type WorkspaceViewState =
     };
 ```
 
-The workspace controller recognizes slash commands and routes them to navigation/application capabilities. Every non-command submission becomes research regardless of punctuation; `/search <query>` explicitly selects search and `/research <question>` explicitly selects research before delegation to `TurnController`. It composes `TranscriptBoxViewState` and `EvidenceBoxViewState` from the committed `Thread`, controller-owned active state, and active evidence delta.
+The workspace controller recognizes slash commands and routes them to navigation/application capabilities. Every non-command submission becomes research regardless of punctuation; `/search <query>` explicitly selects the separate `/search?q=...` utility before delegation to `TurnController`. It composes `TranscriptBoxViewState` and `EvidenceBoxViewState` from the committed `Thread`, controller-owned active state, and active evidence delta.
 
 **Invariants**
 
@@ -1857,7 +1866,7 @@ publish committed workspace state
 **Invariants**
 
 - At most one turn executes or awaits commit in one workspace; there is no request queue.
-- `WorkspaceController`, not `PromptBox`, defaults ordinary input to research and interprets explicit `/search <query>` or `/research <question>` commands; punctuation never selects turn kind.
+- `WorkspaceController`, not `PromptBox`, defaults ordinary input to research and interprets explicit `/search <query>` commands; punctuation never selects turn kind and URL mode parameters do not exist.
 - `executionId`, `turnId`, and event sequence identify the active stream. `accepted` is sequence one and each lifecycle event increments by one. Events for another execution, duplicate/lower-sequence events, and all events after terminal acceptance are ignored; a forward sequence gap or schema-invalid active event terminates that stream as connection loss. None can mutate newer state.
 - Public lifecycle events alone project `ActiveTurn`; raw SSE frames, provider payloads, assessor responses, and hidden reasoning never enter UI state.
 - The first legal terminal condition is authoritative: either a validated server terminal received before local cancellation/loss wins, or the controller closes the execution with one locally reasoned interrupted candidate. Earlier source/answer deltas are presentation-only and cannot be committed independently.
@@ -2378,19 +2387,18 @@ function rankPromptSuggestions(
 ): RankedPromptSuggestion[];
 ```
 
-`PromptBox` owns its ephemeral draft, text composition, focus, and command-suggester state. The controller defaults ordinary submitted text to a `ResearchTurn`, interprets `/search <query>` as a `SearchTurn`, and accepts `/research <question>` as an explicit research alias; the box does not know those semantics. The declared command registry includes:
+`PromptBox` owns its ephemeral draft, text composition, focus, and command-suggester state. The controller defaults ordinary submitted text to a `ResearchTurn` and interprets `/search <query>` as a `SearchTurn`; the box does not know those semantics. The declared command registry includes:
 
 | Command | Description | Fuzzy aliases |
 | --- | --- | --- |
 | `/new` | start a new thread | `new`, `fresh`, `reset` |
 | `/search <query>` | return ranked links without synthesis | `search`, `links`, `lookup` |
-| `/research <question>` | explicitly invoke default research | `research`, `answer`, `investigate` |
 | `/threads` | browse saved threads | `threads`, `history`, `saved` |
 | `/settings` | change appearance and manage backup | `settings`, `appearance`, `backup` |
 
 Aliases affect matching only and are never submitted as commands. Execution still flows through the same canonical command string, raw-submission intent, and `WorkspaceController` parser.
 
-The suggester opens when trimmed input begins with `/`. `rankPromptSuggestions` delegates fuzzy scoring to `rankFuzzyCandidates`; empty-query ordering follows the declared registry (`/new`, `/search`, `/research`, `/settings`, `/threads`), and equal scores tie by that declared registry order. `FuzzyListbox` owns accessible active-option mechanics but not command meaning.
+The suggester opens when trimmed input begins with `/`. `rankPromptSuggestions` delegates fuzzy scoring to `rankFuzzyCandidates`; empty-query ordering follows the declared registry (`/new`, `/search`, `/settings`, `/threads`), and equal scores tie by that declared registry order. `FuzzyListbox` owns accessible active-option mechanics but not command meaning.
 
 **Invariants**
 
@@ -3189,14 +3197,17 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [x] 17. Workspace/routes cutover — deliverable: route-discriminated workspace, focused routes, slim App, target end-to-end browser flow; verify: initial/follow-up/no-duplication/navigation/hotkey/e2e tests.
 - [x] 18. Legacy removal — deliverable: canonical filenames and deletion of old modes/endpoints/adapters/prompts/components/CSS; verify: forbidden repository searches plus lint/typecheck/test/build/diff checks.
 - [x] 19. Documentation/acceptance — deliverable: shipped README/AGENTS/operator docs and completed plan ledger; verify: full baseline, secret/prompt bundle inspection, fixture and deployment smoke.
-- [x] 20. Default-research routing amendment — deliverable: punctuation-neutral default research, explicit `/search` and `/research` utilities, proportional assessor guidance, synchronized UI/docs; verify: focused routing/prompt tests plus lint, typecheck, full tests, build, e2e, and `git diff --check`.
+- [x] 20. Default-research routing amendment (superseded by item 26) — deliverable: punctuation-neutral default research, explicit search utility, proportional assessor guidance, synchronized UI/docs; verify: focused routing/prompt tests plus lint, typecheck, full tests, build, e2e, and `git diff --check`.
 - [x] 21. Production research-event repair — deliverable: extracted evidence normalized to the domain's Unicode code-point contract, executor signals awaited in emission order, and a live-shaped research stream regression; verify: focused acquisition/boundary/app tests plus lint, typecheck, full tests, build, e2e, and `git diff --check`.
 - [x] 22. Production research source-closure repair — deliverable: task evidence references only successfully acquired evidence, while failed/skipped consumed candidates remain attempt/accounting data; verify: partial-extraction resolver closure regression plus lint, typecheck, full tests, build, e2e, and `git diff --check`.
 - [x] 23. Proportional recursive resolution follow-up — deliverable: exact-question root retrieval without an initial strategy call, admissible support excludes bare known-source metadata, depth/`all`/`any` semantics are truthful, bounded provider unavailability yields the documented outcome, and recursive regressions are covered; verify: focused resolver/assessor tests, lint, typecheck, full tests, build, e2e, and `git diff --check`.
 - [x] 24. Research latency optimization — deliverable: truthful turn-local phase events, opt-in allowlisted timing summaries, compact assessment projection, structured-schema/normalization alignment at the retained 800-token ceiling, and cancellation-aware/restricted fallback behavior; verify: focused phase/timing/provider/config/UI tests plus lint, typecheck, 198 tests, production build, six isolated-port e2e tests, and `git diff --check`.
 - [x] 25. Browser follow-up completion regression — deliverable: cover consecutive contextual research turns through real server/browser/IndexedDB boundaries, centralize server/browser/commit source-reference collection including ledger-gap support, validate research terminals server-side, and replace generic browser failures with bounded diagnostics; verify: focused executor/controller/app/browser regressions plus lint, typecheck, 202 tests, build, six isolated-port e2e tests, and `git diff --check`.
+- [x] 26. Singular research-flow amendment — deliverable: canonical `/threads` detail/new routes, explicit `/search?q=` utility, no URL kind/mode routing, retrieval-first prompt-tuned assessment, sticky `recursing · operation` progress, and explicit initial/follow-up synthesis metadata with an initial-only prompt-owned preamble; verify: focused routing/resolver/stream/controller/provider tests plus lint, typecheck, 213 tests, production build, six Playwright tests, and `git diff --check`.
 
 ## Verification
+
+Latest amendment verification: `npm run lint`, `npm run typecheck`, `npm test` (213 tests), `npm run build`, `npm run test:e2e` (six tests), and `git diff --check` all pass. Live-provider obedience to the initial-only preamble and visual observation of a recursive continuation remain deployment smoke checks.
 
 The final implementation must prove at least:
 
@@ -3204,7 +3215,7 @@ The final implementation must prove at least:
 - Insufficient research always carries an insufficient resolution; synthesis failure always carries a sufficient/best-effort resolution; earlier failure/interruption explicitly distinguishes a validated checkpoint from unavailable state and never carries an answer.
 - Research failure records/events expose only the approved capability-level synthesis and execution codes with their fixed retryability; adapter details remain sanitized server-only observability.
 - Every validated terminal outcome is submitted for immutable commit; retryable storage failure retains/retries the exact candidate, permanent post-validation corruption blocks visibly, and a turn retry appends a same-request turn linked to an earlier same-thread terminal through `retryOfTurnId` rather than reopening it.
-- Every ordinary non-command submission creates a `ResearchTurn` regardless of punctuation; `/search <query>` creates a `SearchTurn`, `/research <question>` explicitly creates a `ResearchTurn`, and none depends on persistent UI mode.
+- Every ordinary non-command submission and `/threads/new?q=...` entry creates a `ResearchTurn` regardless of punctuation; `/search <query>` and `/search?q=...` create a `SearchTurn`; no execution kind depends on punctuation, persistent UI mode, or a URL mode parameter.
 - `SearchTurn` invokes one search and never invokes extraction or an LLM.
 - Every initial and follow-up research question enters the same recursive ResearchResolver and ResearchAssessor interfaces.
 - `ASSESSOR.md` and `SYNTHESIZER.md` are the only target LLM system prompts; a runtime-only `SystemPromptSource` loads each exact bounded UTF-8 asset once, injects immutable catalog values, excludes them from browser/public/durable surfaces, and fails startup safely when either asset is invalid or deployment-omitted.
@@ -3222,7 +3233,7 @@ The final implementation must prove at least:
 - Budget exhaustion with useful evidence produces best-effort synthesis with uncertainty; no useful evidence produces insufficient-evidence failure.
 - Partial sibling failures preserve viable evidence and provenance.
 - Synthesis receives typed bounded thread context and the final root knowledge unit, emits only citations reachable through that unit, and fails on empty output.
-- Root `SYNTHESIZER.md` instructs every initial/follow-up answer to begin conversationally without an opening Markdown heading and encourages descriptive Markdown after the opening paragraph; prompt edits update the canonical asset, provider-boundary expectations, behavioral fixtures, and the streaming leading-line fallback together.
+- Root `SYNTHESIZER.md` applies shared grounding, citation, voice, and Markdown rules to every answer; explicit `answerPosition` requires only the initial completed research answer to begin with `According to my research` and forbids repeating it on follow-ups. Prompt edits update the canonical asset, provider-boundary expectations, behavioral fixtures, and the streaming leading-line fallback together.
 - The streaming fallback buffers through the first non-empty line and demotes only a violating leading ATX marker; it performs no second synthesis and leaves all internal Markdown untouched.
 - Structured assessment retry and dynamic problem/context/evidence/schema envelopes remain typed user/protocol input; no adapter or retry appends hidden system text to either editable Markdown asset.
 - Search and research failures cross boxes as bounded typed failures without provider payloads.

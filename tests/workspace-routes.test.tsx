@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { GlobalShortcuts } from "../src/ui/App";
 import { WorkspaceController } from "../src/ui/controllers/workspace-controller";
 import { ResearchStatus } from "../src/ui/routes/ThreadRoute";
+import { researchAnswerPosition } from "../src/ui/policies/answer-position";
 import { HomeRoute } from "../src/ui/routes/HomeRoute";
 
 afterEach(() => cleanup());
@@ -14,9 +15,11 @@ describe("workspace controller", () => {
   it("discriminates the canonical routes", () => {
     expect(controller.route("/")).toEqual({ kind: "home" });
     expect(controller.route("/threads")).toEqual({ kind: "threads" });
+    expect(controller.route("/threads/new")).toEqual({ kind: "new_thread" });
+    expect(controller.route("/search")).toEqual({ kind: "search" });
     expect(controller.route("/settings")).toEqual({ kind: "settings" });
     expect(controller.route("/unlock")).toEqual({ kind: "unlock" });
-    expect(controller.route("/topics/thread-1")).toEqual({ kind: "thread", threadId: "thread-1" });
+    expect(controller.route("/threads/thread-1")).toEqual({ kind: "thread", threadId: "thread-1" });
   });
   it("renders an accessible animated research status with a reduced-motion-safe bar structure", () => {
     render(<ResearchStatus answerDraft="" />);
@@ -28,10 +31,22 @@ describe("workspace controller", () => {
     ["extracting", "extracting evidence"],
     ["assessing", "assessing research"],
     ["decomposing", "research direction"],
+    ["recursing", "recursing"],
     ["resolving", "resolving evidence"],
     ["synthesizing", "synthesizing"],
   ] as const)("surfaces the %s research phase in the loader", (phase, label) => {
     render(<ResearchStatus answerDraft="" events={[{ type: "phase", phase, executionId: "123e4567-e89b-12d3-a456-426614174001" as never, turnId: "123e4567-e89b-12d3-a456-426614174000" as never, sequence: 2 }]} />);
+    expect(screen.getByRole("status")).toHaveTextContent(label);
+  });
+  it.each([
+    ["searching", "recursing · searching"],
+    ["extracting", "recursing · extracting evidence"],
+    ["assessing", "recursing · assessing research"],
+  ] as const)("retains recursion while reporting the %s operation", (phase, label) => {
+    render(<ResearchStatus answerDraft="" events={[
+      { type: "phase", phase: "recursing", executionId: "123e4567-e89b-12d3-a456-426614174001" as never, turnId: "123e4567-e89b-12d3-a456-426614174000" as never, sequence: 2 },
+      { type: "phase", phase, executionId: "123e4567-e89b-12d3-a456-426614174001" as never, turnId: "123e4567-e89b-12d3-a456-426614174000" as never, sequence: 3 },
+    ]} />);
     expect(screen.getByRole("status")).toHaveTextContent(label);
   });
   it("keeps the latest explicit phase authoritative over source events", () => {
@@ -40,6 +55,12 @@ describe("workspace controller", () => {
       { type: "source_delta", sources: [], occurrences: [], executionId: "123e4567-e89b-12d3-a456-426614174001" as never, turnId: "123e4567-e89b-12d3-a456-426614174000" as never, sequence: 3 },
     ]} />);
     expect(screen.getByRole("status")).toHaveTextContent("assessing research");
+  });
+  it("derives the initial preamble position only from completed research answers", () => {
+    expect(researchAnswerPosition([])).toBe("initial");
+    expect(researchAnswerPosition([{ kind: "search", status: "completed" }] as never)).toBe("initial");
+    expect(researchAnswerPosition([{ kind: "research", status: "failed" }, { kind: "research", status: "interrupted" }] as never)).toBe("initial");
+    expect(researchAnswerPosition([{ kind: "research", status: "completed" }] as never)).toBe("follow_up");
   });
   it("defaults ordinary input to research and reserves search for an explicit utility", () => {
     expect(controller.command({ type: "command_requested", command: "/threads" })).toEqual({ type: "navigate", to: "/threads" });
@@ -54,14 +75,14 @@ describe("workspace controller", () => {
     const prompt = screen.getByLabelText("Search query");
     fireEvent.change(prompt, { target: { value: "when did apollo 11 land?" } });
     fireEvent.submit(prompt.closest("form")!);
-    expect(screen.getByTestId("location")).toHaveTextContent("/topics/new?kind=research&q=when%20did%20apollo%2011%20land%3F");
+    expect(screen.getByTestId("location")).toHaveTextContent("/threads/new?q=when%20did%20apollo%2011%20land%3F");
     view.unmount();
 
     render(<MemoryRouter><Routes><Route path="/" element={<HomeRoute />} /><Route path="*" element={<LocationProbe />} /></Routes></MemoryRouter>);
     const search = screen.getByLabelText("Search query");
     fireEvent.change(search, { target: { value: "/search apollo 11 landing" } });
     fireEvent.submit(search.closest("form")!);
-    expect(screen.getByTestId("location")).toHaveTextContent("/topics/new?kind=search&q=apollo%2011%20landing");
+    expect(screen.getByTestId("location")).toHaveTextContent("/search?q=apollo%2011%20landing");
   });
   it.each(["/threads", "/settings"])("uses unmodified i to focus the prompt from %s", (path) => {
     render(<MemoryRouter initialEntries={[path]}><GlobalShortcuts /><input aria-label="Search query" /></MemoryRouter>);

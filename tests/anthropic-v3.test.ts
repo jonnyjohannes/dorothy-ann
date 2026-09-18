@@ -17,6 +17,7 @@ const baseAssessment = {
 const baseSynthesis = {
   systemPrompt: "SYNTHESIZER EXACT",
   question: "What?",
+  answerPosition: "initial",
   context: { threadId: "thread_test", turns: [], knownSources: [], availableEvidence: [] },
   resolution: { status: "best_effort", stopReason: "no_new_knowledge", knowledge: { problemId: "problem_test", findings: [], evidence: [], unresolvedGapIds: [] }, ledger: { gaps: [], assessmentsUsed: 1, searchesUsed: 0, sourcesConsumed: 0 }, tasks: [] },
   allowedSourceIds: [source],
@@ -165,6 +166,8 @@ describe("AnthropicProvider v3", () => {
       { type: "text", markdown: "." },
     ]);
     expect(fake.systems).toEqual(["SYNTHESIZER EXACT"]);
+    const envelope = JSON.parse((fake.requests[0].messages as Array<{ content: string }>)[0].content) as { answerPosition?: string };
+    expect(envelope.answerPosition).toBe("initial");
   });
 
   it("sanitizes provider failures", async () => {

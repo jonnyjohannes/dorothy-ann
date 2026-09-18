@@ -19,7 +19,7 @@ This is one strict-TypeScript npm package targeting Node 22.
 
 Domain/application code must not import React, Hono, Vercel, provider SDKs, Node-only APIs, or IndexedDB adapters. Keep provider, runtime, persistence, authentication, and extraction implementations behind their documented ports. Do not add global client state or speculative abstraction layers.
 
-Ordinary non-command input is a `ResearchTurn` regardless of punctuation. `/search <query>` explicitly creates a `SearchTurn`; `/research <question>` is an explicit alias for research. Active execution is controller-only. Durable history contains terminal v3 turns and bounded read-only migrated legacy archive entries; legacy archive content never becomes evidence, context, retry input, or a child turn.
+Ordinary non-command input and `/threads/new?q=...` create a `ResearchTurn` regardless of punctuation. `/search <query>` and `/search?q=...` explicitly create a `SearchTurn`. Active execution is controller-only. Durable history contains terminal v3 turns and bounded read-only migrated legacy archive entries; legacy archive content never becomes evidence, context, retry input, or a child turn.
 
 ## implementation workflow
 

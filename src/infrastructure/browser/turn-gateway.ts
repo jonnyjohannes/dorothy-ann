@@ -22,7 +22,7 @@ const base = z.object({ executionId: uuid, turnId: uuid, sequence: z.number().in
 const eventSchema = z.discriminatedUnion("type", [
   base.extend({ type: z.literal("error"), code: z.enum(["invalid_event", "invalid_terminal", "execution_failed"]), message: z.string().min(1).max(500) }),
   base.extend({ type: z.literal("accepted"), kind: z.enum(["search", "research"]) }),
-  base.extend({ type: z.literal("phase"), phase: z.enum(["searching", "assessing", "decomposing", "extracting", "resolving", "synthesizing"]) }),
+  base.extend({ type: z.literal("phase"), phase: z.enum(["searching", "assessing", "decomposing", "extracting", "recursing", "resolving", "synthesizing"]) }),
   base.extend({
     type: z.literal("source_delta"),
     sources: z.array(source).max(10),

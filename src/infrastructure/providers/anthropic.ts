@@ -327,6 +327,7 @@ function synthesisEnvelope(input: ResearchSynthesisInput): string {
   return JSON.stringify({
     task: "research_synthesis",
     question: input.question,
+    answerPosition: input.answerPosition,
     context: input.context,
     resolution: input.resolution,
     allowedSourceIds: input.allowedSourceIds,

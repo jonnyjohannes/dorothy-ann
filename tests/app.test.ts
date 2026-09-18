@@ -25,7 +25,7 @@ describe("portable v3 Hono API", () => {
     expect(body).toContain("event: turn.terminal");
   });
   it("streams fixture research phases at real operation boundaries", async () => {
-    const response = await app.request("http://localhost/api/turn/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ executionId, turnId, kind: "research", question: "what happened?", context: { threadId: "00000000-0000-4000-8000-000000000003", turns: [], knownSources: [], availableEvidence: [] } }) });
+    const response = await app.request("http://localhost/api/turn/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ executionId, turnId, kind: "research", question: "what happened?", answerPosition: "initial", context: { threadId: "00000000-0000-4000-8000-000000000003", turns: [], knownSources: [], availableEvidence: [] } }) });
     expect(response.status).toBe(200);
     const body = await response.text();
     const events = body.split("\n").filter((line) => line.startsWith("data: ")).map((line) => JSON.parse(line.slice(6)) as { type: string; phase?: string });
@@ -47,7 +47,7 @@ describe("portable v3 Hono API", () => {
       systemPrompts: { assessor: "SENTINEL_ASSESSOR_PROMPT", synthesizer: "SENTINEL_SYNTHESIZER_PROMPT" },
       researchTimingSink: (record) => { records.push(record); },
     });
-    const response = await timedApp.request("http://localhost/api/turn/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ executionId, turnId, kind: "research", question: "SENTINEL_USER_QUESTION", context: { threadId: "00000000-0000-4000-8000-000000000003", turns: [], knownSources: [], availableEvidence: [] } }) });
+    const response = await timedApp.request("http://localhost/api/turn/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ executionId, turnId, kind: "research", question: "SENTINEL_USER_QUESTION", answerPosition: "initial", context: { threadId: "00000000-0000-4000-8000-000000000003", turns: [], knownSources: [], availableEvidence: [] } }) });
     const body = await response.text();
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({ event: "research_timing", schema_version: 1, terminal_status: "completed", counts: { searches_used: 1, sources_consumed: 1, assessments_used: 1 } });
@@ -58,7 +58,7 @@ describe("portable v3 Hono API", () => {
   });
   it("keeps timing console output disabled by default", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
-    const response = await app.request("http://localhost/api/turn/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ executionId, turnId, kind: "research", question: "timing disabled", context: { threadId: "00000000-0000-4000-8000-000000000003", turns: [], knownSources: [], availableEvidence: [] } }) });
+    const response = await app.request("http://localhost/api/turn/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ executionId, turnId, kind: "research", question: "timing disabled", answerPosition: "initial", context: { threadId: "00000000-0000-4000-8000-000000000003", turns: [], knownSources: [], availableEvidence: [] } }) });
     await response.text();
     expect(info).not.toHaveBeenCalled();
     info.mockRestore();

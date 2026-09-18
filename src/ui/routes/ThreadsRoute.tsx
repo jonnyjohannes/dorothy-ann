@@ -25,7 +25,7 @@ export function ThreadsRoute() {
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
   const onIntent = (intent: BoxIntent) => {
-    if (intent.type === "thread_open_requested") navigate(`/topics/${encodeURIComponent(String(intent.threadId))}`);
+    if (intent.type === "thread_open_requested") navigate(`/threads/${encodeURIComponent(String(intent.threadId))}`);
     else if (intent.type === "thread_delete_requested") void getBrowserThreadStore().then((store) => store.remove({ threadId: intent.threadId })).then(() => refresh());
     else if (intent.type === "retry_requested") void refresh();
     else if (intent.type === "route_escape_requested") navigate("/", { replace: true });

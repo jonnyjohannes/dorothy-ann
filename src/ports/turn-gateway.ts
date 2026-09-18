@@ -19,6 +19,7 @@ export interface TurnGatewayResearchRequest {
   kind: "research";
   question: string;
   context: ThreadContext;
+  answerPosition: "initial" | "follow_up";
 }
 export type TurnGatewayRequest = TurnGatewaySearchRequest | TurnGatewayResearchRequest;
 
@@ -38,7 +39,7 @@ export interface TurnGatewayOptions {
   researchLimits: TurnGatewayResearchLimits;
 }
 
-export type TurnGatewayPhase = "searching" | "assessing" | "decomposing" | "extracting" | "resolving" | "synthesizing";
+export type TurnGatewayPhase = "searching" | "assessing" | "decomposing" | "extracting" | "recursing" | "resolving" | "synthesizing";
 export interface TurnGatewaySourceOccurrence {
   sourceId: CanonicalSource["sourceId"];
   role: "search_destination" | "research_evidence";
