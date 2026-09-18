@@ -11,6 +11,34 @@ Dorothy Ann is a browser-based information resolver and researcher. Ordinary req
 - 🔐 **private research desk** keeps authentication, storage, provider, and extraction implementations behind ports
 - 🧪 **fixture mode** supports development without live provider credentials
 
+## research flow
+
+Ordinary research follows a simple retrieval-first path and only recurses when the retrieved evidence leaves genuinely independent gaps:
+
+```text
+question
+   |
+   v
+exact Brave search
+   |
+   v
+extract top useful results
+   |
+   v
+can we answer simply and responsibly?
+   | yes                     | no
+   v                         v
+synthesize          recursively split material gaps
+                                 |
+                                 v
+                       targeted child searches
+                                 |
+                                 v
+                            join + synthesize
+```
+
+The root uses the exact user question for its first search when no admissible extracted evidence already exists. The assessor then evaluates the extracted evidence. Simple questions resolve and synthesize immediately; genuinely compound questions may decompose into bounded child problems, whose supported knowledge is joined and reassessed at the root. Children never produce separate user-facing answers. Search, source, assessment, and depth ceilings are shared across the complete tree and are hard limits rather than targets.
+
 ## architecture
 
 The package is strict TypeScript targeting Node 22. Domain and application code remain provider/platform independent. The main boundaries are:
