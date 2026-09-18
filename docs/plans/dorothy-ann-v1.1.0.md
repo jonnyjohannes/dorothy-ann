@@ -4,9 +4,9 @@
 
 - Status: complete
 - Last updated: 2026-09-18
-- Current focus: complexity-sensitive `invalid_terminal` from uncoalesced synthesis stream chunks repaired
+- Current focus: prompt-owned evidence thresholds now trigger proportional recursion for complex questions
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: visually smoke-test the post-release palette/caret/route polish in light, dark, and reduced-motion modes
+- Next action: restart/redeploy after the prompt change, then smoke one simple factual question and one multi-obligation comparison to observe direct resolution versus recursion
 - Shipped follow-up: ordinary prompt and `?q=` entry use one research path at `/threads/new`; `/search?q=` remains the explicit plain-search utility; `/topics`, `?kind=`, and `?mode=` are removed without compatibility redirects. Retrieval-first assessment remains unchanged. If an assessor requests further search or decomposition, the UI reports sticky recursion state alongside the current operation (`recursing · searching`, `recursing · extracting evidence`, or `recursing · assessing research`). Synthesis receives explicit initial/follow-up metadata; only the initial completed research answer is instructed to begin with “According to my research,” while all other synthesis behavior remains shared.
 
 ## Post-release singular research-flow amendment
@@ -20,7 +20,7 @@ Approved after auditing the shipped code path from prompt submission through ret
 - “Quick” and “deep” are not distinct modes or pipelines; they differ only in how soon the assessor returns `resolved`.
 - A validated assessor continuation marks the execution as recursing. The UI retains that fact while reporting the current operation as `recursing · searching`, `recursing · extracting evidence`, or `recursing · assessing research`, then reports `synthesizing` normally.
 - Synthesis receives explicit `answerPosition: initial | follow_up` metadata derived from complete durable thread history. Search, failed, interrupted, and legacy entries do not consume the initial position. `SYNTHESIZER.md` alone owns the conditional initial preamble; application code must not inject, strip, or normalize it, and every other synthesis rule remains shared and independently editable.
-- `ASSESSOR.md` should resolve promptly from sufficient initial extracted evidence, request another focused search only for a material missing fact, and decompose only genuinely independent obligations. Existing support validation and untrusted-content rules remain unchanged.
+- `ASSESSOR.md` resolves a straightforward factual/navigational problem from one sufficiently authoritative source, but a comparative, causal, contested, or multi-obligation problem requires direct support for every material obligation, two materially independent sources corroborating the central conclusion, and at least four materially independent sources overall. Different URLs, syndicated copies, repeated underlying reports, or same-publisher pages do not establish independence without distinct primary evidence. Unmet thresholds trigger one focused search or genuine decomposition. This remains prompt-owned policy; existing application support validation and untrusted-content rules remain unchanged.
 
 Verification: focused route, resolver phase, SSE/gateway/controller, synthesis-envelope, prompt-asset, and browser flow tests; then lint, typecheck, full tests, production build, e2e, and `git diff --check`.
 
@@ -41,6 +41,8 @@ Approved after v1.1.0 deployment smoke:
 Verification: responsive UI regression tests, full test suite, typecheck, lint, production build, Playwright smoke, and `git diff --check`.
 
 ## Handoff
+
+Plan Ledger item 30 is complete. `ASSESSOR.md` now keeps single-fact resolution cheap while requiring complex comparative/causal/contested/multi-obligation research to cover every explicit obligation, corroborate its central conclusion with two materially independent sources, and contain four materially independent sources overall before `resolved`. It explicitly rejects URL count, syndication, repeated reports, and same-publisher pages as automatic independence. The policy remains prose-only and can be tuned without application changes. Verification passes: lint, typecheck, 219 tests, production build, and `git diff --check`. Restart/redeploy is required because prompts load once at startup.
 
 Plan Ledger item 29 is complete. The post-release visual polish now uses warm gray `--paper`/`--ink` tokens with matching light/dark selection inversion, highlights the fixed prompt border while its input subtree is focused, rotates the full selected scheme accent palette on the native PromptBox and thread-search carets every two seconds with reduced-motion and live-preference fallbacks, and removes the global PromptBox from settings and threads while retaining the dedicated thread finder. Verification passes: lint, typecheck, 219 tests, production build, and `git diff --check`. Browser visual smoke across light/dark/auto and reduced-motion modes remains the deployment follow-up.
 
@@ -3213,6 +3215,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [x] 27. Search-metadata terminal regression — deliverable: provider and acquisition normalization admits only exact bounded canonical source metadata so live search results cannot fail strict terminal validation; verify: oversized Unicode metadata, overlong URL, and extra-field provider fixtures plus lint, typecheck, 216 tests, production build, six isolated-port e2e tests, and `git diff --check`.
 - [x] 28. Synthesis-part terminal regression — deliverable: coalesce provider streaming text chunks into durable Markdown segments and enforce answer-part/text bounds before terminal assembly so response length cannot surface as `invalid_terminal`; verify: 300-chunk schema-valid answer and post-coalescing overflow fixtures plus lint, typecheck, 218 tests, production build, six isolated-port e2e tests, and `git diff --check`.
 - [x] 29. Post-release visual polish — deliverable: warm gray paper/ink light-dark tokens with global selection inversion, focused prompt accent border, full-scheme native caret rotation on PromptBox/thread search with reduced-motion fallback, and no global PromptBox on settings/threads; verify: UI regression tests, lint, typecheck, full tests, production build, and `git diff --check`.
+- [x] 30. Prompt-owned recursion threshold — deliverable: simple factual/navigation problems may resolve from one authoritative source, while comparative/causal/contested/multi-obligation problems require complete obligation coverage, two-source central corroboration, and four materially independent sources overall; verify: exact prompt-asset assertions, lint, typecheck, 219 tests, production build, and `git diff --check`.
 
 ## Verification
 
