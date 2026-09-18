@@ -111,6 +111,11 @@ function sourceClosure(
   for (const pack of resolution.knowledge.evidence) for (const source of pack.sources) required.add(source.sourceId);
   for (const finding of resolution.knowledge.findings) for (const observation of finding.observations) for (const support of observation.support) if (support.type === "source") required.add(support.sourceId);
   for (const task of resolution.tasks) for (const source of task.evidence) required.add(source.sourceId);
+  for (const gap of resolution.ledger.gaps) {
+    for (const source of gap.problem.context.knownSources) required.add(source.sourceId);
+    for (const pack of gap.problem.context.availableEvidence) for (const source of pack.sources) required.add(source.sourceId);
+    for (const turn of gap.problem.context.turns) if ("answer" in turn) for (const part of turn.answer.parts) if (part.type === "citation") required.add(part.sourceId);
+  }
   for (const sourceId of required) if (!byId.has(sourceId)) throw new Error("source_reference_missing");
   return [...required].map((sourceId) => byId.get(sourceId)!).sort((left, right) => left.sourceId.localeCompare(right.sourceId));
 }
