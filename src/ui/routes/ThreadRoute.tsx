@@ -62,8 +62,11 @@ export function ThreadRoute() {
   const [value, setValue] = useState("");
   const [message, setMessage] = useState("");
   const [exportMessage, setExportMessage] = useState("");
+  const feedbackTimer = useRef<number | undefined>(undefined);
   const controller = useRef<TurnController | undefined>(undefined);
   const started = useRef(false);
+
+  useEffect(() => () => { if (feedbackTimer.current !== undefined) window.clearTimeout(feedbackTimer.current); }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,11 +98,16 @@ export function ThreadRoute() {
     void run(query, requestedKind);
   }, [query, requestedKind, run]);
 
+  const showExportMessage = (message: string) => {
+    if (feedbackTimer.current !== undefined) window.clearTimeout(feedbackTimer.current);
+    setExportMessage(message);
+    feedbackTimer.current = window.setTimeout(() => { setExportMessage(""); feedbackTimer.current = undefined; }, 2000);
+  };
   const copyThread = async () => {
     if (!thread) return;
-    try { await navigator.clipboard.writeText(threadMarkdown(thread)); setExportMessage("Copied."); } catch { setExportMessage("Copy unavailable."); }
+    try { await navigator.clipboard.writeText(threadMarkdown(thread)); showExportMessage("Copied."); } catch { showExportMessage("Copy unavailable."); }
   };
-  const exportThread = () => { if (thread) { downloadMarkdown(threadMarkdown(thread), "dorothy-ann-thread.md"); setExportMessage("Exported."); } };
+  const exportThread = () => { if (thread) { downloadMarkdown(threadMarkdown(thread), "dorothy-ann-thread.md"); showExportMessage("Exported."); } };
   const onIntent = (intent: BoxIntent) => {
     if (intent.type === "prompt_submitted") { setValue(""); void run(intent.value, requestedResearch(intent.value) ? "research" : "search"); }
     else if (intent.type === "command_requested") { if (intent.command === "/new") navigate("/", { replace: true }); else if (intent.command === "/threads") navigate("/threads"); else if (intent.command === "/settings") navigate("/settings"); }
