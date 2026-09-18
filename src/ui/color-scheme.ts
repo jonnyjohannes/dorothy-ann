@@ -52,6 +52,13 @@ export function sourceAccentSlot(sourceId: string, paletteSize: number, threadSe
   return order[stableHash(`${threadSeed}:${sourceId}`) % order.length] ?? 0;
 }
 
+/** Evidence order uses the intentional yellow/red/teal relational sequence. */
+export function sourceAccentSlotForIndex(index: number, paletteSize: number): number {
+  if (paletteSize <= 0) return 0;
+  const order = [6, 5, 1, 4, 0, 7, 2, 3].filter((slot) => slot < paletteSize);
+  return order[index % order.length] ?? 0;
+}
+
 export function headingAccentSlot(_headingIndex: number, paletteSize: number, threadSeed = ""): number {
   if (paletteSize <= 0) return 0;
   const order = spreadOrder(paletteSize);

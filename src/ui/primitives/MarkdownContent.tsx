@@ -2,13 +2,14 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import type { CSSProperties, ComponentPropsWithoutRef } from "react";
-import { headingAccentSlot, inlineAccentSlot, sourceAccentSlot } from "../color-scheme";
+import { headingAccentSlot, inlineAccentSlot } from "../color-scheme";
 
 export interface MarkdownCitation {
   label: string;
   href: string;
   sourceId?: string;
   number?: number;
+  accentSlot?: number;
 }
 
 export interface MarkdownContentProps {
@@ -16,6 +17,7 @@ export interface MarkdownContentProps {
   className?: string;
   threadSeed?: string;
   resolveCitation?: (sourceId: string) => MarkdownCitation | undefined;
+  citationAccentSlot?: (sourceId: string) => number | undefined;
 }
 
 const PALETTE_SIZE = 8;
@@ -31,7 +33,7 @@ function citationMarkdown(markdown: string, resolveCitation?: MarkdownContentPro
   });
 }
 
-export function MarkdownContent({ markdown, className, threadSeed = "", resolveCitation }: MarkdownContentProps) {
+export function MarkdownContent({ markdown, className, threadSeed = "", resolveCitation, citationAccentSlot }: MarkdownContentProps) {
   let headingIndex = 0;
   let inlineIndex = 0;
   const answer = citationMarkdown(markdown, resolveCitation);
@@ -55,7 +57,7 @@ export function MarkdownContent({ markdown, className, threadSeed = "", resolveC
         blockquote: ({ children, ...props }) => <blockquote {...props} className="ui-markdown__blockquote">{children}</blockquote>,
         a: ({ href, children, ...props }) => {
           const sourceId = href?.startsWith("#source-") ? href.slice("#source-".length) : undefined;
-          return <a {...props} href={href} className={sourceId ? "ui-markdown__citation" : undefined} style={sourceId ? customAccent(sourceAccentSlot(sourceId, PALETTE_SIZE, threadSeed)) : undefined}>{children}</a>;
+          return <a {...props} href={href} className={sourceId ? "ui-markdown__citation" : undefined} style={sourceId ? customAccent(citationAccentSlot?.(sourceId) ?? 0) : undefined}>{children}</a>;
         },
       }}
     >{answer}</ReactMarkdown>

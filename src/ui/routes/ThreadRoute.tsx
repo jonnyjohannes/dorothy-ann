@@ -11,6 +11,7 @@ import { PromptBox } from "../boxes/PromptBox";
 import { StickyHeader } from "../boxes/StickyHeader";
 import { TranscriptBox } from "../boxes/TranscriptBox";
 import { MarkdownContent } from "../primitives/MarkdownContent";
+import { sourceAccentSlotForIndex } from "../color-scheme";
 import type { BoxIntent } from "../boxes/box-types";
 import { workspaceController } from "../controllers/workspace-controller";
 import styles from "../App.module.css";
@@ -144,8 +145,8 @@ export function ThreadRoute() {
     {thread && <TranscriptBox thread={thread} sources={sources} onIntent={onIntent} />}
     {view.active && activeRequest && <article className={styles.scrollback}><blockquote className={styles.userTurn}>{activeRequest}</blockquote></article>}
     {view.active && <ResearchStatus answerDraft={view.answerDraft} events={view.events} />}
-    {view.active && view.answerDraft && <MarkdownContent markdown={view.answerDraft} threadSeed={String(threadId)} resolveCitation={resolveCitation} />}
-    {sources.length > 0 && <EvidenceBox sources={sources} threadSeed={String(threadId)} onIntent={onIntent} />}
+    {view.active && view.answerDraft && <MarkdownContent markdown={view.answerDraft} threadSeed={String(threadId)} resolveCitation={resolveCitation} citationAccentSlot={(sourceId) => { const index = sources.findIndex((source) => String(source.sourceId) === sourceId); return index >= 0 ? sourceAccentSlotForIndex(index, 8) : undefined; }} />}
+    {sources.length > 0 && <EvidenceBox sources={sources} onIntent={onIntent} />}
     <PromptBox value={value} disabled={view.active} onChange={setValue} onIntent={onIntent} />
   </main>;
 }
