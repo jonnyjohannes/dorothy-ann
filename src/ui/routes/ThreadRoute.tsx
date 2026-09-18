@@ -58,6 +58,7 @@ export function ThreadRoute() {
   const [thread, setThread] = useState<Thread | null>(null);
   const threadRef = useRef<Thread | null>(null);
   const [view, setView] = useState<TurnControllerView>({ active: false, lastSequence: 0, events: [], answerDraft: "", sources: [] });
+  const [activeRequest, setActiveRequest] = useState("");
   const [value, setValue] = useState("");
   const [message, setMessage] = useState("");
   const [exportMessage, setExportMessage] = useState("");
@@ -71,6 +72,7 @@ export function ThreadRoute() {
   }, [threadId]);
 
   const run = useCallback(async (request: string, kind: "search" | "research") => {
+    setActiveRequest(request);
     const createdAt = timestamp();
     const turnId = uuid() as TurnId;
     const userMessage: UserMessage = { id: uuid() as UserMessage["id"], role: "user", content: request, createdAt };
@@ -82,6 +84,7 @@ export function ThreadRoute() {
     controller.current = activeController;
     setMessage("");
     const result = await activeController.run({ threadId, turnId, executionId, kind, request, userMessage, createdAt, expectedRevision: record && record.ok ? record.value?.revision ?? null : null, create: current ? undefined : { id: threadId, title: request.slice(0, 60), createdAt }, context, gatewayOptions: { maxResults: 5, researchLimits: {} } });
+    setActiveRequest("");
     if (result.ok) { threadRef.current = result.record.thread; setThread(result.record.thread); if (routeThreadId === "new") navigate(`/topics/${encodeURIComponent(String(threadId))}`, { replace: true }); }
     else setMessage(result.error === "commit_retryable" ? "The result was not saved. Retry save." : result.message ?? "That turn could not be completed.");
   }, [navigate, routeThreadId, threadId]);
@@ -107,8 +110,9 @@ export function ThreadRoute() {
   return <main className={styles.shell}>
     <StickyHeader onIntent={onIntent} actions={thread ? <div className={styles.headerActions} aria-label="Thread actions"><button className={styles.iconButton} type="button" onClick={() => void copyThread()} aria-label="Copy thread" title="Copy thread"><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="8" y="8" width="11" height="11" rx="1.5" /><path d="M16 8V6.5A1.5 1.5 0 0 0 14.5 5h-7A1.5 1.5 0 0 0 6 6.5v7A1.5 1.5 0 0 0 7.5 15H8" /></svg></button><button className={styles.iconButton} type="button" onClick={exportThread} aria-label="Export thread" title="Export thread"><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg></button></div> : undefined} feedback={exportMessage} />
     {message && <p role="alert">{message}</p>}
-    {view.active && <ResearchStatus answerDraft={view.answerDraft} />}
     {thread && <TranscriptBox thread={thread} sources={sources} onIntent={onIntent} />}
+    {view.active && activeRequest && <blockquote className={styles.userTurn}>{activeRequest}</blockquote>}
+    {view.active && <ResearchStatus answerDraft={view.answerDraft} />}
     {view.active && view.answerDraft && <MarkdownContent markdown={view.answerDraft} threadSeed={String(threadId)} />}
     {sources.length > 0 && <EvidenceBox sources={sources} onIntent={onIntent} />}
     <PromptBox value={value} disabled={view.active} onChange={setValue} onIntent={onIntent} />
