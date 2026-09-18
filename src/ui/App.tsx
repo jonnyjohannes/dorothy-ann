@@ -43,7 +43,7 @@ export function GlobalShortcuts() {
       const isEditable = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable);
       if (event.isComposing) return;
       if (event.altKey && event.code === "KeyS") { event.preventDefault(); navigate("/threads"); return; }
-      if (event.altKey && event.code === "KeyC" && !isEditable) { event.preventDefault(); navigate("/settings"); return; }
+      if (event.altKey && event.code === "KeyC") { event.preventDefault(); navigate("/settings"); return; }
       if (event.altKey && event.code === "KeyA" && !event.ctrlKey && !event.metaKey) { event.preventDefault(); window.dispatchEvent(new Event("dorothy-ann-search-shortcut")); return; }
       if (event.key === "i" && !event.ctrlKey && !event.altKey && !event.metaKey && !isEditable) {
         const prompt = document.querySelector<HTMLInputElement>('input[aria-label="Search query"]:not(:disabled)');

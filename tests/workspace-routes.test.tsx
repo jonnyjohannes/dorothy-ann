@@ -69,12 +69,12 @@ describe("workspace controller", () => {
     fireEvent.keyDown(window, { key: "i" });
     expect(document.activeElement).toBe(prompt);
   });
-  it("opens threads with Alt+S even while the prompt is focused", () => {
+  it.each([["s", "KeyS", "/threads"], ["c", "KeyC", "/settings"] as const])("opens %s route with Alt+%s even while the prompt is focused", (key, code, path) => {
     render(<MemoryRouter initialEntries={["/"]}><Routes><Route path="*" element={<><GlobalShortcuts /><input aria-label="Search query" /><LocationProbe /></>} /></Routes></MemoryRouter>);
     const prompt = screen.getByLabelText("Search query");
     prompt.focus();
-    fireEvent.keyDown(prompt, { key: "s", code: "KeyS", altKey: true });
-    expect(screen.getByTestId("location")).toHaveTextContent("/threads");
+    fireEvent.keyDown(prompt, { key, code, altKey: true });
+    expect(screen.getByTestId("location")).toHaveTextContent(path);
   });
   it.each(["/threads", "/settings"])("leaves %s on Escape", (path) => {
     render(<MemoryRouter initialEntries={[path]}><Routes><Route path="*" element={<><GlobalShortcuts /><LocationProbe /></>} /></Routes></MemoryRouter>);
