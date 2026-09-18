@@ -50,7 +50,7 @@ describe("browser semantic primitives", () => {
   });
   it("renders citation markers as numbered links to evidence cards", () => {
     render(<MarkdownContent markdown="Definition [cite:src_test]" resolveCitation={() => ({ label: "Source", href: "https://example.com", sourceId: "src_test", number: 1 })} />);
-    expect(screen.getByRole("link", { name: "1" })).toHaveAttribute("href", "#source-src_test");
+    expect(screen.getByRole("link", { name: "[1]" })).toHaveAttribute("href", "#source-src_test");
   });
 });
 

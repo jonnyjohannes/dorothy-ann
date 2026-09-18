@@ -25,7 +25,9 @@ function citationMarkdown(markdown: string, resolveCitation?: MarkdownContentPro
   if (!resolveCitation) return markdown;
   return markdown.replace(/\[{1,2}cite:([^\]]+)\]{1,2}/g, (marker, sourceId: string) => {
     const citation = resolveCitation(sourceId);
-    return citation ? `[${citation.number ?? citation.label}](#source-${sourceId})` : marker;
+    if (!citation) return marker;
+    const label = String.raw`\[${citation.number ?? citation.label}\]`;
+    return `[${label}](#source-${sourceId})`;
   });
 }
 
