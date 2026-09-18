@@ -90,7 +90,13 @@ function createExecutor(config: AppConfig, prompts: SystemPromptCatalog, identit
       const problem: ResearchProblem = { id: problemId, question: request.question, purpose: "answer the user question", successCriterion: "provide a supported answer", context, depth: 0 };
       const root = await resolver.resolve({ turnId: request.turnId, problem, knowledge: emptyKnowledge(problemId), ledger: { gaps: [], assessmentsUsed: 0, searchesUsed: 0, sourcesConsumed: 0 }, budget: { searchesRemaining: 3, sourcesRemaining: 9, assessmentsRemaining: 8, depthRemaining: 2 } });
       const resolution = root.kind === "resolution" ? root.resolution : { checkpoint: root.checkpoint };
-      if (root.kind === "resolution") onSignal({ type: "research_state", state: { kind: "resolution", resolution: root.resolution } });
+      if (root.kind === "resolution") {
+        // Canonical source metadata is carried by the terminal/source delta contract;
+        // keep the live resolution state focused on the validated research shape.
+        const { sources: _sources, ...streamResolution } = root.resolution;
+        void _sources;
+        onSignal({ type: "research_state", state: { kind: "resolution", resolution: streamResolution } });
+      }
       else onSignal({ type: "research_state", state: { kind: "checkpoint", checkpoint: root.checkpoint } });
       const result = await executeResearchTurn({ turnId: request.turnId, userMessage: requestMessage(request), createdAt: new Date().toISOString() as never, context, resolver: { resolve: async () => resolution as ResearchResolutionResult }, synthesizer, assessmentModelRef: "assessment", synthesisModelRef: "synthesis", searchRef: "brave", signal });
       if (result.turn.status === "completed") for (const part of result.turn.result.answer.parts) if (part.type === "text") onSignal({ type: "answer_delta", delta: part.markdown });
