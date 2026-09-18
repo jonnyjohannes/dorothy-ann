@@ -550,9 +550,6 @@
   backdrop-filter: blur(10px);
 }
 .promptBox > input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); padding: 0.65rem 0.7rem; }
-.terminalCaret { position: absolute; top: 50%; width: 0.48rem; height: 1.35em; transform: translateY(-50%); pointer-events: none; animation: terminalCaretBlink 1.5s steps(1, end) infinite; }
-@keyframes terminalCaretBlink { 50% { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .terminalCaret { animation: none; } }
 .promptHint { align-self: center; color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
 .commandMessage { width: min(100%, 110rem); margin: 1rem auto; color: var(--muted); }
 .researchPlanLive {

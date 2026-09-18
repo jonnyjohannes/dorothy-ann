@@ -49,10 +49,10 @@ describe("workspace controller", () => {
     fireEvent.submit(search.closest("form")!);
     expect(screen.getByTestId("location")).toHaveTextContent("/topics/new?kind=search&q=apollo%2011%20landing");
   });
-  it.each(["/threads", "/settings"])("uses unmodified : to focus the prompt from %s", (path) => {
+  it.each(["/threads", "/settings"])("uses unmodified i to focus the prompt from %s", (path) => {
     render(<MemoryRouter initialEntries={[path]}><GlobalShortcuts /><input aria-label="Search query" /></MemoryRouter>);
     const prompt = screen.getByLabelText("Search query");
-    fireEvent.keyDown(window, { key: ":", shiftKey: true });
+    fireEvent.keyDown(window, { key: "i" });
     expect(document.activeElement).toBe(prompt);
   });
   it.each(["/threads", "/settings"])("leaves %s on Escape", (path) => {

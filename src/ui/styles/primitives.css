@@ -80,6 +80,3 @@
 .ui-markdown pre { overflow-x: auto; padding: var(--space-md); background: color-mix(in srgb, var(--ink) 8%, var(--paper)); }
 .ui-markdown table { border-collapse: collapse; }
 .ui-markdown th, .ui-markdown td { border: 1px solid var(--line); padding: var(--space-xs) var(--space-sm); }
-
-/* Native caret remains in charge; PromptBox supplies a discrete palette token. */
-.prompt-caret-cycle { caret-color: var(--accent); }
