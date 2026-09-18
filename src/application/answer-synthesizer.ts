@@ -75,6 +75,20 @@ function hasVisibleContent(part: AssistantContentPart): boolean {
   return part.type === "citation" || part.markdown.trim().length > 0;
 }
 
+/** Provider stream chunks are transport details, not durable answer segments. */
+export function coalesceAssistantContent(parts: readonly AssistantContentPart[]): AssistantContentPart[] {
+  const result: AssistantContentPart[] = [];
+  for (const part of parts) {
+    if (part.type === "text") {
+      if (!part.markdown) continue;
+      const previous = result.at(-1);
+      if (previous?.type === "text") previous.markdown += part.markdown;
+      else result.push({ ...part });
+    } else result.push({ ...part });
+  }
+  return result;
+}
+
 export function enforceReachableCitations(
   parts: readonly AssistantContentPart[],
   resolution: SufficientResearchResolution | BestEffortResearchResolution,
@@ -88,11 +102,12 @@ export function enforceReachableCitations(
 function validateAnswer(
   parts: readonly AssistantContentPart[],
 ): AssistantContent {
-  if (parts.length === 0 || !parts.some(hasVisibleContent)) {
+  if (parts.length === 0 || parts.length > 256 || !parts.some(hasVisibleContent)) {
     throw new AnswerSynthesisError("invalid_output", "synthesis_empty");
   }
-  const total = parts.reduce((count, part) => count + (part.type === "text" ? textCodePoints(part.markdown) : 0), 0);
-  if (total === 0 && !parts.some((part) => part.type === "citation")) {
+  const textLengths = parts.flatMap((part) => part.type === "text" ? [textCodePoints(part.markdown)] : []);
+  const total = textLengths.reduce((count, length) => count + length, 0);
+  if (textLengths.some((length) => length > 64_000) || total === 0 && !parts.some((part) => part.type === "citation")) {
     throw new AnswerSynthesisError("invalid_output", "synthesis_empty");
   }
   return { parts: [...parts] };
@@ -136,7 +151,7 @@ export class AnswerSynthesizer {
         parts.push(part);
       }
       const reachable = enforceReachableCitations(parts, input.resolution, allowedSourceIds);
-      return validateAnswer(normalizeLeadingHeading(reachable));
+      return validateAnswer(normalizeLeadingHeading(coalesceAssistantContent(reachable)));
     } catch (error) {
       throw mapSynthesisError(error);
     }

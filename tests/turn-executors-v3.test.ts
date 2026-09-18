@@ -4,6 +4,7 @@ import { AnswerSynthesizer } from "../src/application/answer-synthesizer.js";
 import { executeSearchTurn } from "../src/application/execute-search-turn.js";
 import { executeResearchTurn } from "../src/application/execute-research-turn.js";
 import type { LLMProvider } from "../src/ports/llm.js";
+import { assistantContentV3Schema } from "../src/domain/schemas.js";
 
 const id = (value: string) => value as never;
 const source: CanonicalSource = {
@@ -51,6 +52,19 @@ describe("v3 answer and turn executors", () => {
       { type: "text", markdown: "Opening\n\nInternal ## heading" },
       { type: "citation", sourceId: source.sourceId },
     ]);
+  });
+
+  it("coalesces long provider streams into bounded durable answer segments", async () => {
+    const chunks = Array.from({ length: 300 }, (_, index) => ({ type: "text" as const, markdown: index === 0 ? "According" : " to research" }));
+    const answer = await new AnswerSynthesizer(provider(chunks), "SYNTHESIZER EXACT").synthesize({ question: "What happened?", answerPosition: "initial", context, resolution });
+    expect(answer.parts).toHaveLength(1);
+    expect(answer.parts[0]).toEqual({ type: "text", markdown: `According${" to research".repeat(299)}` });
+    expect(assistantContentV3Schema.safeParse(answer).success).toBe(true);
+  });
+
+  it("rejects an answer that still exceeds durable part bounds after coalescing", async () => {
+    const parts = Array.from({ length: 129 }, () => [{ type: "text" as const, markdown: "claim" }, { type: "citation" as const, sourceId: source.sourceId }]).flat();
+    await expect(new AnswerSynthesizer(provider(parts), "SYNTHESIZER EXACT").synthesize({ question: "What happened?", answerPosition: "initial", context, resolution })).rejects.toMatchObject({ code: "invalid_output" });
   });
 
   it("passes answer position without changing the shared synthesis prompt", async () => {
