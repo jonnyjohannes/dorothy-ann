@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { EvidenceAcquirer, type EvidenceRequest } from "../src/application/evidence-acquirer.js";
 import type { ResearchBudget } from "../src/domain/types.js";
 import type { SearchResult } from "../src/domain/types.js";
+import { evidencePackV3Schema } from "../src/domain/schemas.js";
 
 const request = (problemId: string, priority: 1 | 2 | 3, createdOrder: number): EvidenceRequest => ({
   problemId: problemId as EvidenceRequest["problemId"],
@@ -86,6 +87,35 @@ describe("EvidenceAcquirer", () => {
     expect(result.results[0].evidenceSourceIds).toContain("shared");
     expect(result.results[1].evidenceSourceIds).toContain("shared");
     expect(result.budget.sourcesRemaining).toBe(0);
+  });
+
+  it("normalizes extracted evidence to bounded Unicode code points", async () => {
+    const validProblemId = `problem_${"A".repeat(43)}`;
+    const unicodeSource = { ...source("unicode", 1), sourceId: `src_${"B".repeat(43)}` as SearchResult["sourceId"] };
+    const result = await new EvidenceAcquirer({
+      search: { search: async () => [unicodeSource] },
+      extractor: { extract: async (candidate) => ({
+        sourceId: candidate.sourceId,
+        status: "viable" as const,
+        page: {
+          sourceId: candidate.sourceId,
+          canonicalUrl: candidate.canonicalUrl,
+          title: candidate.title,
+          text: "A😀B",
+          extractedAt: "2026-01-01T00:00:00.000Z" as never,
+          characterCount: 4,
+        },
+      }) },
+    }).acquire({
+      requests: [request(validProblemId, 1, 0)],
+      knownSources: [],
+      availableEvidenceSourceIds: [],
+      budget: budget(),
+      limits: { extractionMaxCharacters: 2, now: () => "2026-01-01T00:00:00.000Z" as never },
+    });
+
+    expect(result.evidence[0].sources[0].page).toMatchObject({ text: "A😀", characterCount: 2 });
+    expect(evidencePackV3Schema.safeParse(result.evidence[0]).success).toBe(true);
   });
 
   it("retains metadata for already-available search matches", async () => {

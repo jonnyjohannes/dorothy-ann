@@ -23,6 +23,15 @@ describe("portable v3 Hono API", () => {
     expect(body).toContain("event: turn.source_delta");
     expect(body).toContain("event: turn.terminal");
   });
+  it("streams a fixture research turn without protocol-invalid events", async () => {
+    const response = await app.request("http://localhost/api/turn/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ executionId, turnId, kind: "research", question: "what happened?", context: { threadId: "00000000-0000-4000-8000-000000000003", turns: [], knownSources: [], availableEvidence: [] } }) });
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).toContain("event: turn.research_state");
+    expect(body).toContain("event: turn.answer_delta");
+    expect(body).toContain("event: turn.terminal");
+    expect(body).not.toContain("event: turn.error");
+  });
   it("reports missing live provider readiness without exposing configuration", async () => {
     const response = await liveApp.request("http://localhost/api/status");
     expect(await response.json()).toEqual({ fixtureMode: false, provider: false, search: false, llm: false, storage: false });

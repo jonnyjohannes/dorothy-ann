@@ -248,11 +248,12 @@ export class SafeContentExtractor implements ContentExtractor {
         );
         const raw = new TextDecoder().decode(buffer);
         const text = contentType === "text/html" ? readableText(raw) : raw;
-        const bounded = text
+        const boundedCodePoints = [...text
           .replace(/\s+/g, " ")
-          .trim()
+          .trim()]
           .slice(0, limits.maxCharacters);
-        if (bounded.length < this.config.minCharacters) {
+        const bounded = boundedCodePoints.join("");
+        if (boundedCodePoints.length < this.config.minCharacters) {
           return {
             sourceId: source.sourceId,
             status: "skipped",
@@ -268,7 +269,7 @@ export class SafeContentExtractor implements ContentExtractor {
             title: source.title,
             text: bounded,
             extractedAt: new Date().toISOString() as never,
-            characterCount: bounded.length,
+            characterCount: boundedCodePoints.length,
           },
         };
       } catch (error) {

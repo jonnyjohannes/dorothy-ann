@@ -79,12 +79,12 @@ function createExecutor(config: AppConfig, prompts: SystemPromptCatalog, identit
   return {
     async execute(request, onSignal, signal) {
       if (request.kind === "search") {
-        onSignal({ type: "phase", phase: "searching" });
+        await onSignal({ type: "phase", phase: "searching" });
         const result = await executeSearchTurn({ turnId: request.turnId, userMessage: requestMessage(request), createdAt: new Date().toISOString() as never, provider: search, maxResults: request.maxResults, signal, searchRef: "brave" });
-        if (result.sources.length) onSignal({ type: "source_delta", sources: result.sources, occurrences: result.sources.map((source) => ({ sourceId: source.sourceId, role: "search_destination" as const, rank: result.turn.status === "completed" && result.turn.result.completion === "results" ? result.turn.result.destinations.find((destination) => destination.sourceId === source.sourceId)?.rank : undefined })) });
+        if (result.sources.length) await onSignal({ type: "source_delta", sources: result.sources, occurrences: result.sources.map((source) => ({ sourceId: source.sourceId, role: "search_destination" as const, rank: result.turn.status === "completed" && result.turn.result.completion === "results" ? result.turn.result.destinations.find((destination) => destination.sourceId === source.sourceId)?.rank : undefined })) });
         return terminalFor(result);
       }
-      onSignal({ type: "phase", phase: "assessing" });
+      await onSignal({ type: "phase", phase: "assessing" });
       const context = request.context;
       const problemId = await identities.problemId({ turnId: request.turnId, question: request.question, purpose: "answer the user question", successCriterion: "provide a supported answer" });
       const problem: ResearchProblem = { id: problemId, question: request.question, purpose: "answer the user question", successCriterion: "provide a supported answer", context, depth: 0 };
@@ -95,11 +95,11 @@ function createExecutor(config: AppConfig, prompts: SystemPromptCatalog, identit
         // keep the live resolution state focused on the validated research shape.
         const { sources: _sources, ...streamResolution } = root.resolution;
         void _sources;
-        onSignal({ type: "research_state", state: { kind: "resolution", resolution: streamResolution } });
+        await onSignal({ type: "research_state", state: { kind: "resolution", resolution: streamResolution } });
       }
-      else onSignal({ type: "research_state", state: { kind: "checkpoint", checkpoint: root.checkpoint } });
+      else await onSignal({ type: "research_state", state: { kind: "checkpoint", checkpoint: root.checkpoint } });
       const result = await executeResearchTurn({ turnId: request.turnId, userMessage: requestMessage(request), createdAt: new Date().toISOString() as never, context, resolver: { resolve: async () => resolution as ResearchResolutionResult }, synthesizer, assessmentModelRef: "assessment", synthesisModelRef: "synthesis", searchRef: "brave", signal });
-      if (result.turn.status === "completed") for (const part of result.turn.result.answer.parts) if (part.type === "text") onSignal({ type: "answer_delta", delta: part.markdown });
+      if (result.turn.status === "completed") for (const part of result.turn.result.answer.parts) if (part.type === "text") await onSignal({ type: "answer_delta", delta: part.markdown });
       return terminalFor(result);
     },
   };

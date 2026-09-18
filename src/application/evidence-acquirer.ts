@@ -176,6 +176,11 @@ function extractionLimits(limits: ResearchLimits): ExtractionLimits {
   };
 }
 
+function normalizedPageText(text: string, maxCharacters: number): { text: string; characterCount: number } {
+  const codePoints = [...text].slice(0, maxCharacters);
+  return { text: codePoints.join(""), characterCount: codePoints.length };
+}
+
 /**
  * Performs only bounded search, source allocation, and extraction. Assessment,
  * recursion, joining, and synthesis deliberately remain outside this box.
@@ -358,6 +363,7 @@ export class EvidenceAcquirer {
     });
 
     const now = input.limits.now ?? (() => "1970-01-01T00:00:00.000Z" as IsoTimestamp);
+    const maxEvidenceCharacters = extractionLimits(input.limits).maxCharacters;
     const evidence: EvidencePack[] = [];
     for (const result of results) {
       const sources = result.evidenceSourceIds.flatMap((sourceId) => {
@@ -365,10 +371,11 @@ export class EvidenceAcquirer {
         if (!source) return [];
         const viable = viableByKey.get(canonicalKey(source)!);
         if (!viable) return [];
+        const normalized = normalizedPageText(viable.page.text, maxEvidenceCharacters);
+        if (!normalized.text) return [];
         return [{ sourceId, page: {
-          text: viable.page.text,
+          ...normalized,
           extractedAt: viable.page.extractedAt,
-          characterCount: viable.page.characterCount,
         } }];
       });
       if (sources.length) evidence.push({
