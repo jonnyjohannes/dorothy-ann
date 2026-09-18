@@ -77,7 +77,7 @@ function gatewayRequest(input: TurnStartInput): TurnGatewayRequest {
 function sourceClosure(turn: Turn, sources: CanonicalSource[]): boolean {
   const referenced = collectTurnSourceIds(turn);
   const supplied = new Set<string>(sources.map((source) => String(source.sourceId)));
-  return supplied.size === sources.length && referenced.size === supplied.size && [...referenced].every((sourceId) => supplied.has(sourceId));
+  return supplied.size === sources.length && [...referenced].every((sourceId) => supplied.has(sourceId));
 }
 
 export class TurnController {
