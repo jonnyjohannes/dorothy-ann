@@ -550,6 +550,23 @@
   backdrop-filter: blur(10px);
 }
 .promptBox > input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); padding: 0.65rem 0.7rem; }
+.promptBox > ul {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.5rem);
+  width: max-content;
+  min-width: 12rem;
+  max-width: min(24rem, 90vw);
+  margin: 0;
+  padding: 0.35rem 0;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 18%);
+  list-style: none;
+}
+.promptBox > ul li { padding: 0.35rem 0.65rem; color: var(--muted); cursor: pointer; }
+.promptBox > ul li strong { color: var(--ink); }
+.promptBox > ul li[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 22%, var(--paper)); color: var(--ink); }
 .promptHint { align-self: center; color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
 .commandMessage { width: min(100%, 110rem); margin: 1rem auto; color: var(--muted); }
 .researchPlanLive {

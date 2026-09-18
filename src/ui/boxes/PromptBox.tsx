@@ -16,6 +16,7 @@ export function PromptBox({ value, disabled = false, onChange, onIntent }: { val
     return () => window.removeEventListener("dorothy-ann-search-shortcut", onSearchShortcut);
   }, [onChange]);
   const suggestions = COMMANDS.filter((command) => command.startsWith(value));
+  const renderSuggestion = (command: (typeof COMMANDS)[number]) => <>{value && <strong>{command.slice(0, value.length)}</strong>}{command.slice(value.length)}</>;
   const submit = (event?: FormEvent) => { event?.preventDefault(); const next = suggestions[active] ?? value.trim(); if (!next) return; if (next.startsWith("/")) onIntent({ type: "command_requested", command: next }); else onIntent({ type: "prompt_submitted", value: next }); setSuggestionsOpen(false); };
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown" && suggestionsOpen) { event.preventDefault(); setActive((current) => Math.min(current + 1, suggestions.length - 1)); }
@@ -26,5 +27,5 @@ export function PromptBox({ value, disabled = false, onChange, onIntent }: { val
     }
     else if (event.key === "c" && (event.ctrlKey || event.metaKey) && input.current && input.current === document.activeElement && input.current.selectionStart === input.current.selectionEnd) { event.preventDefault(); onChange(""); }
   };
-  return <form className={styles.promptBox} onSubmit={submit}><input ref={input} autoFocus className={styles.promptInput} aria-label="Search query" value={value} disabled={disabled} placeholder="???" onChange={(event) => { onChange(event.target.value); setActive(0); }} onKeyDown={onKeyDown} onFocus={() => setEscapeArmed(false)} />{suggestionsOpen && suggestions.length > 0 && <ul role="listbox" aria-label="Commands">{suggestions.map((command, index) => <li key={command} role="option" aria-selected={index === active} onMouseDown={(event) => { event.preventDefault(); onChange(command); submit(); }}>{command}</li>)}</ul>}</form>;
+  return <form className={styles.promptBox} onSubmit={submit}><input ref={input} autoFocus className={styles.promptInput} aria-label="Search query" value={value} disabled={disabled} placeholder="???" onChange={(event) => { onChange(event.target.value); setActive(0); }} onKeyDown={onKeyDown} onFocus={() => setEscapeArmed(false)} />{suggestionsOpen && suggestions.length > 0 && <ul role="listbox" aria-label="Commands">{suggestions.map((command, index) => <li key={command} role="option" aria-selected={index === active} onMouseDown={(event) => { event.preventDefault(); setActive(index); onChange(command); onIntent({ type: "command_requested", command }); setSuggestionsOpen(false); }}>{renderSuggestion(command)}</li>)}</ul>}</form>;
 }
