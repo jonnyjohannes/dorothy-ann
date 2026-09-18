@@ -125,7 +125,7 @@ export function ThreadRoute() {
     <StickyHeader onIntent={onIntent} actions={thread ? <div className={styles.headerActions} aria-label="Thread actions"><button className={`${styles.iconButton} ${successfulAction === "copy" ? styles.iconButtonSuccess : ""}`} type="button" onClick={() => void copyThread()} aria-label={successfulAction === "copy" ? "Copied thread" : "Copy thread"}>{successfulAction === "copy" ? <CheckGlyph /> : <CopyGlyph />}</button><button className={`${styles.iconButton} ${successfulAction === "export" ? styles.iconButtonSuccess : ""}`} type="button" onClick={exportThread} aria-label={successfulAction === "export" ? "Exported thread" : "Export thread"}>{successfulAction === "export" ? <CheckGlyph /> : <ExportGlyph />}</button></div> : undefined} />
     {message && <p role="alert">{message}</p>}
     {thread && <TranscriptBox thread={thread} sources={sources} onIntent={onIntent} />}
-    {view.active && activeRequest && <blockquote className={styles.userTurn}>{activeRequest}</blockquote>}
+    {view.active && activeRequest && <article className={styles.scrollback}><blockquote className={styles.userTurn}>{activeRequest}</blockquote></article>}
     {view.active && <ResearchStatus answerDraft={view.answerDraft} />}
     {view.active && view.answerDraft && <MarkdownContent markdown={view.answerDraft} threadSeed={String(threadId)} />}
     {sources.length > 0 && <EvidenceBox sources={sources} onIntent={onIntent} />}

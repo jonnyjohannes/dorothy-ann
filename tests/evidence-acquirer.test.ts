@@ -88,6 +88,22 @@ describe("EvidenceAcquirer", () => {
     expect(result.budget.sourcesRemaining).toBe(0);
   });
 
+  it("retains metadata for already-available search matches", async () => {
+    const result = await new EvidenceAcquirer({
+      search: { search: async () => [source("available", 1)] },
+      extractor: { extract: extractor },
+    }).acquire({
+      requests: [request("a", 1, 0)],
+      knownSources: [],
+      availableEvidenceSourceIds: ["available" as never],
+      budget: budget({ sourcesRemaining: 0 }),
+      limits: { now: () => "2026-01-01T00:00:00.000Z" as never },
+    });
+
+    expect(result.results[0].evidenceSourceIds).toEqual(["available"]);
+    expect(result.admittedSources.map(({ sourceId }) => sourceId)).toEqual(["available"]);
+  });
+
   it("does not backfill a failed extraction and caps extraction concurrency at three", async () => {
     let active = 0;
     let peak = 0;

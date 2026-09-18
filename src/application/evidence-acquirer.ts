@@ -229,6 +229,8 @@ export class EvidenceAcquirer {
     await Promise.all(Array.from({ length: searchWorkers }, () => searchWorker()));
 
     const available = new Set(input.availableEvidenceSourceIds);
+    const searchedById = new Map<string, SearchResult>();
+    for (const result of searched) for (const candidate of result.candidates) searchedById.set(String(candidate.sourceId), candidate);
     const selectedByKey = new Map<string, SearchResult>();
     const selectedForRequest = new Map<string, SearchResult[]>();
     const associatedForRequest = new Map<string, Set<string>>();
@@ -359,7 +361,7 @@ export class EvidenceAcquirer {
     const evidence: EvidencePack[] = [];
     for (const result of results) {
       const sources = result.evidenceSourceIds.flatMap((sourceId) => {
-        const source = [...selectedByKey.values()].find((candidate) => candidate.sourceId === sourceId);
+        const source = [...selectedByKey.values()].find((candidate) => candidate.sourceId === sourceId) ?? searchedById.get(String(sourceId));
         if (!source) return [];
         const viable = viableByKey.get(canonicalKey(source)!);
         if (!viable) return [];
@@ -380,8 +382,8 @@ export class EvidenceAcquirer {
 
     const admittedByKey = new Map<string, CanonicalSource>();
     for (const result of results) for (const sourceId of result.evidenceSourceIds) {
-      const source = [...selectedByKey.values()].find((candidate) => candidate.sourceId === sourceId);
-      if (source && viableByKey.has(canonicalKey(source)!)) admittedByKey.set(canonicalKey(source)!, source);
+      const source = [...selectedByKey.values()].find((candidate) => candidate.sourceId === sourceId) ?? searchedById.get(String(sourceId));
+      if (source && (available.has(sourceId) || viableByKey.has(canonicalKey(source)!))) admittedByKey.set(canonicalKey(source)!, source);
     }
     return {
       requests,
