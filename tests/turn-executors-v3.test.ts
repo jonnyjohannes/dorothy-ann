@@ -14,7 +14,8 @@ const source: CanonicalSource = {
   displayUrl: "example.com/a",
 };
 const userMessage: UserMessage = { id: id("message"), role: "user", content: "What happened?", createdAt: id("2026-01-01T00:00:00.000Z") };
-const context: ThreadContext = { threadId: id("thread"), turns: [], knownSources: [source], availableEvidence: [] };
+const extraSource: CanonicalSource = { ...source, sourceId: id("src_extra") };
+const context: ThreadContext = { threadId: id("thread"), turns: [], knownSources: [source, extraSource], availableEvidence: [] };
 const resolution: SufficientResearchResolution = {
   status: "sufficient",
   stopReason: "sufficient",
@@ -76,6 +77,7 @@ describe("v3 answer and turn executors", () => {
       turnId: id("turn-research"), userMessage, createdAt: userMessage.createdAt, context, resolver, synthesizer, ...executionRefs, finishedAt: fixedClock,
     });
     expect(synthesisCalls).toBe(1);
+    expect(result.sources).toEqual([source]);
     expect(result.turn.status).toBe("completed");
     if (result.turn.status === "completed") {
       expect(result.turn.result.completion).toBe("sufficient");

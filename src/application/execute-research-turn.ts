@@ -109,9 +109,10 @@ function sourceClosure(
   }
   const required = new Set<string>();
   for (const pack of resolution.knowledge.evidence) for (const source of pack.sources) required.add(source.sourceId);
+  for (const finding of resolution.knowledge.findings) for (const observation of finding.observations) for (const support of observation.support) if (support.type === "source") required.add(support.sourceId);
   for (const task of resolution.tasks) for (const source of task.evidence) required.add(source.sourceId);
   for (const sourceId of required) if (!byId.has(sourceId)) throw new Error("source_reference_missing");
-  return [...byId.values()];
+  return [...required].map((sourceId) => byId.get(sourceId)!).sort((left, right) => left.sourceId.localeCompare(right.sourceId));
 }
 
 function failureStage(error: unknown): "assessment" | "acquisition" | "resolution" | "transport" {
