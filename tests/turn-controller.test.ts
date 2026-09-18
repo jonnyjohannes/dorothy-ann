@@ -26,7 +26,7 @@ describe("TurnController", () => {
     let commits = 0;
     const store = storeWith(async () => { commits += 1; return { ok: true, value: { disposition: "committed", record: record("r1") } }; });
     const controller = new TurnController(gatewayFor([accepted, { ...terminal, sequence: 3 }]), store);
-    expect(await controller.run(input())).toMatchObject({ ok: false, error: "invalid_event" });
+    expect(await controller.run(input())).toMatchObject({ ok: false, error: "invalid_event", message: "The research stream became invalid." });
     expect(commits).toBe(0);
     const duplicate = new TurnController(gatewayFor([accepted, { ...accepted, sequence: 2 }]), store);
     expect(await duplicate.run(input())).toMatchObject({ ok: false, error: "invalid_event" });
@@ -72,6 +72,6 @@ describe("TurnController", () => {
     available = true;
     expect(await controller.retryCommit()).toMatchObject({ ok: true, turn: { id: turnId } });
     const blocked = new TurnController(gatewayFor([accepted, terminal]), storeWith(async () => ({ ok: false, failure: { code: "integrity_failure", retryable: false } })));
-    expect(await blocked.run(input())).toMatchObject({ ok: false, error: "commit_blocked", candidate: { id: turnId } });
+    expect(await blocked.run(input())).toMatchObject({ ok: false, error: "commit_blocked", message: "The result could not be saved because the thread failed validation.", candidate: { id: turnId } });
   });
 });

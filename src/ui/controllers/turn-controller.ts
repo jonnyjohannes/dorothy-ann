@@ -69,6 +69,14 @@ interface ActiveRun {
 
 function nowIso(): TurnStartInput["createdAt"] { return new Date().toISOString() as TurnStartInput["createdAt"]; }
 function boundedMessage(message: string): string { return [...message].slice(0, 500).join("") || "Turn was interrupted."; }
+function controllerErrorMessage(error: TurnControllerError): string {
+  if (error === "already_active") return "A turn is already running.";
+  if (error === "invalid_event") return "The research stream became invalid.";
+  if (error === "invalid_terminal") return "Research returned an invalid result.";
+  if (error === "commit_retryable") return "The result was not saved. Retry save.";
+  if (error === "commit_blocked") return "The result could not be saved because the thread failed validation.";
+  return "Research execution failed.";
+}
 function gatewayRequest(input: TurnStartInput): TurnGatewayRequest {
   if (input.kind === "search") return { executionId: input.executionId, turnId: input.turnId, kind: "search", query: input.request };
   if (!input.context) throw new Error("research context required");
@@ -96,7 +104,7 @@ export class TurnController {
   get pendingCandidate(): Turn | undefined { return this.pending?.turn; }
 
   async run(input: TurnStartInput): Promise<TurnControllerResult> {
-    if (this.active) return { ok: false, error: "already_active" };
+    if (this.active) return { ok: false, error: "already_active", message: controllerErrorMessage("already_active") };
     const abort = new AbortController();
     const active: ActiveRun = { input, abort, events: [], answerDraft: "", sources: new Map() };
     this.active = active;
@@ -117,7 +125,7 @@ export class TurnController {
         this.emit();
         if (event.type === "terminal") {
           const candidate = this.buildTerminal(active, event);
-          if (!candidate) { protocolError = "invalid_terminal"; abort.abort(); break; }
+          if (!candidate) { protocolError = "invalid_terminal"; protocolMessage = controllerErrorMessage("invalid_terminal"); abort.abort(); break; }
           terminal = candidate;
           break;
         }
@@ -196,7 +204,7 @@ export class TurnController {
     if (this.active === active) this.active = undefined;
     this.view.active = false;
     this.emit();
-    return { ok: false, error, message };
+    return { ok: false, error, message: message ?? controllerErrorMessage(error) };
   }
 
   private async finishWithCommit(candidate: Candidate): Promise<TurnControllerResult> {
@@ -214,19 +222,19 @@ export class TurnController {
       const result = await this.store.commitTerminalTurn({ threadId: candidate.input.threadId, expectedRevision, create, sourceRecords: candidate.sourceRecords, turn: candidate.turn });
       if (result.ok) { this.pending = undefined; return { ok: true, turn: candidate.turn, record: result.value.record, disposition: result.value.disposition }; }
       if (result.failure.code !== "revision_conflict" || attempt > 0) {
-        if (result.failure.retryable) { this.pending = candidate; return { ok: false, error: "commit_retryable", failure: result.failure, candidate: candidate.turn }; }
-        return { ok: false, error: "commit_blocked", failure: result.failure, candidate: candidate.turn };
+        if (result.failure.retryable) { this.pending = candidate; return { ok: false, error: "commit_retryable", message: controllerErrorMessage("commit_retryable"), failure: result.failure, candidate: candidate.turn }; }
+        return { ok: false, error: "commit_blocked", message: controllerErrorMessage("commit_blocked"), failure: result.failure, candidate: candidate.turn };
       }
       const loaded = await this.store.load(candidate.input.threadId);
       if (!loaded.ok) {
-        if (loaded.failure.retryable) { this.pending = candidate; return { ok: false, error: "commit_retryable", failure: loaded.failure, candidate: candidate.turn }; }
-        return { ok: false, error: "commit_blocked", failure: loaded.failure, candidate: candidate.turn };
+        if (loaded.failure.retryable) { this.pending = candidate; return { ok: false, error: "commit_retryable", message: controllerErrorMessage("commit_retryable"), failure: loaded.failure, candidate: candidate.turn }; }
+        return { ok: false, error: "commit_blocked", message: controllerErrorMessage("commit_blocked"), failure: loaded.failure, candidate: candidate.turn };
       }
       expectedRevision = loaded.value?.revision ?? null;
       create = loaded.value ? undefined : candidate.input.create;
     }
     this.pending = candidate;
-    return { ok: false, error: "commit_retryable" , candidate: candidate.turn };
+    return { ok: false, error: "commit_retryable", message: controllerErrorMessage("commit_retryable"), candidate: candidate.turn };
   }
 
   private emit(): void { this.onViewChange?.(this.snapshot); }

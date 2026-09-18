@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { stream } from "hono/streaming";
 import { z } from "zod";
-import { researchResolutionV3Schema, searchTurnV3Schema, threadContextV3Schema } from "../domain/schemas.js";
+import { researchResolutionV3Schema, researchTurnV3Schema, searchTurnV3Schema, threadContextV3Schema } from "../domain/schemas.js";
 import type { ResearchLimits } from "../application/evidence-acquirer.js";
 import type {
   CanonicalSource,
@@ -151,11 +151,9 @@ function validateSignal(signal: TurnExecutionSignal, request: TurnExecutionReque
 function validateTerminal(terminal: TurnExecutionTerminal, kind: TurnKind, request: TurnExecutionRequest): boolean {
   if (terminal.kind !== kind || terminal.sourceRecords.length > 24) return false;
   if (!terminal.sourceRecords.every((source) => sourceSchema.safeParse(source).success)) return false;
-  if (kind === "search") {
-    const candidate = { ...terminal.outcome, id: request.turnId, kind: "search", createdAt: new Date(0).toISOString(), finishedAt: new Date(0).toISOString(), userMessage: { id: request.turnId, role: "user", content: "request", createdAt: new Date(0).toISOString() } };
-    return searchTurnV3Schema.safeParse(candidate).success;
-  }
-  return typeof terminal.outcome === "object" && terminal.outcome !== null;
+  const timestamp = new Date(0).toISOString();
+  const candidate = { ...terminal.outcome, id: request.turnId, kind, createdAt: timestamp, finishedAt: timestamp, userMessage: { id: request.turnId, role: "user", content: "request", createdAt: timestamp } };
+  return kind === "search" ? searchTurnV3Schema.safeParse(candidate).success : researchTurnV3Schema.safeParse(candidate).success;
 }
 
 function eventName(type: TurnExecutionEvent["type"]): string {

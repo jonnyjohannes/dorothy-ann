@@ -60,6 +60,14 @@ describe("portable turn stream boundary", () => {
     expect(events.map((event) => event.sequence)).toEqual(events.map((_, index) => index + 1));
   });
 
+  it("rejects an invalid research terminal at the server boundary", async () => {
+    const app = appFor({ execute: async () => ({ kind: "research", outcome: {}, sourceRecords: [] }) as never });
+    const response = await app.request("http://localhost/", { method: "POST", body: JSON.stringify({ executionId, turnId, kind: "research", question: "hello", context: { threadId: "123e4567-e89b-12d3-a456-426614174002", turns: [], knownSources: [], availableEvidence: [] } }) });
+    const body = await response.text();
+    expect(body).toContain('"code":"invalid_terminal"');
+    expect(body).toContain("Turn execution returned an invalid result.");
+  });
+
   it("rejects an invalid cast research phase before it reaches SSE", async () => {
     const app = appFor({
       async execute(_request, onSignal) {
