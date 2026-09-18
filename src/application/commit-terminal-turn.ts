@@ -37,24 +37,24 @@ function addLedgerContexts(resolution: ResearchResolution | ResearchCheckpoint, 
     for (const contextTurn of gap.problem.context.turns) if ("answer" in contextTurn) for (const part of contextTurn.answer.parts) if (part.type === "citation") references.sources.add(part.sourceId);
   }
 }
-function addResolution(resolution: ResearchResolution, references: References) {
-  addKnowledge(resolution.knowledge, references);
-  for (const task of resolution.tasks) for (const evidence of task.evidence) references.sources.add(evidence.sourceId);
-  addLedgerContexts(resolution, references);
+export function collectResearchStateSourceIds(state: ResearchResolution | ResearchCheckpoint): Set<string> {
+  const references: References = { sources: new Set() };
+  addKnowledge(state.knowledge, references);
+  for (const task of state.tasks) for (const evidence of task.evidence) references.sources.add(evidence.sourceId);
+  addLedgerContexts(state, references);
+  return references.sources;
 }
-function addCheckpoint(checkpoint: ResearchCheckpoint, references: References) {
-  addKnowledge(checkpoint.knowledge, references);
-  for (const task of checkpoint.tasks) for (const evidence of task.evidence) references.sources.add(evidence.sourceId);
-  addLedgerContexts(checkpoint, references);
+function addResearchState(state: ResearchResolution | ResearchCheckpoint, references: References) {
+  for (const sourceId of collectResearchStateSourceIds(state)) references.sources.add(sourceId);
 }
 function addResearch(turn: ResearchTurn, references: References) {
   if (turn.status === "completed") {
-    addResolution(turn.result.resolution, references);
+    addResearchState(turn.result.resolution, references);
     for (const part of turn.result.answer.parts) if (part.type === "citation") references.sources.add(part.sourceId);
     return;
   }
-  if (turn.researchState.kind === "resolution") addResolution(turn.researchState.resolution, references);
-  else if (turn.researchState.kind === "checkpoint") addCheckpoint(turn.researchState.checkpoint, references);
+  if (turn.researchState.kind === "resolution") addResearchState(turn.researchState.resolution, references);
+  else if (turn.researchState.kind === "checkpoint") addResearchState(turn.researchState.checkpoint, references);
 }
 export function collectTurnSourceIds(turn: Turn): Set<string> {
   const references: References = { sources: new Set() };

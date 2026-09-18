@@ -85,6 +85,35 @@ describe("v3 answer and turn executors", () => {
     }
   });
 
+  it("includes source metadata referenced only by ledger-gap support", async () => {
+    const gapSupported: SufficientResearchResolution = {
+      ...resolution,
+      ledger: {
+        ...resolution.ledger,
+        gaps: [{
+          id: id("gap_supported"),
+          problem: { id: resolution.knowledge.problemId, question: "What happened?", purpose: "answer", successCriterion: "supported", context: { ...context, knownSources: [] }, depth: 0 },
+          status: "resolved",
+          support: [{ type: "source", sourceId: extraSource.sourceId }],
+          fingerprint: "supported-gap",
+          createdOrder: 0,
+        }],
+      },
+    };
+    const result = await executeResearchTurn({
+      turnId: id("turn-gap-support"),
+      userMessage,
+      createdAt: userMessage.createdAt,
+      context,
+      resolver: { resolve: async () => gapSupported },
+      synthesizer: { synthesize: async () => ({ parts: [{ type: "text", markdown: "Answer." }] }) },
+      ...executionRefs,
+      finishedAt: fixedClock,
+    });
+    expect(result.turn.status).toBe("completed");
+    expect(result.sources).toEqual([extraSource, source]);
+  });
+
   it("persists bounded synthesis failure without provider details", async () => {
     const resolver = { resolve: async (): Promise<ResearchResolutionResult> => resolution };
     const synthesizer = { synthesize: async (): Promise<AssistantContent> => { throw Object.assign(new Error("secret payload"), { code: "refused" }); } };
