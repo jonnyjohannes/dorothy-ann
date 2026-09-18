@@ -8,6 +8,7 @@ export interface MarkdownCitation {
   label: string;
   href: string;
   sourceId?: string;
+  number?: number;
 }
 
 export interface MarkdownContentProps {
@@ -24,7 +25,7 @@ function citationMarkdown(markdown: string, resolveCitation?: MarkdownContentPro
   if (!resolveCitation) return markdown;
   return markdown.replace(/\[{1,2}cite:([^\]]+)\]{1,2}/g, (marker, sourceId: string) => {
     const citation = resolveCitation(sourceId);
-    return citation ? `[${citation.label}](#source-${sourceId})` : marker;
+    return citation ? `[${citation.number ?? citation.label}](#source-${sourceId})` : marker;
   });
 }
 

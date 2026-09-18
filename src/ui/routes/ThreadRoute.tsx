@@ -137,7 +137,7 @@ export function ThreadRoute() {
   };
   const sources = sourceRecords(thread, view.sources);
   const sourceById = new Map(sources.map((source) => [String(source.sourceId), source]));
-  const resolveCitation = (sourceId: string) => { const source = sourceById.get(sourceId); return source ? { label: source.title, href: source.url, sourceId } : undefined; };
+  const resolveCitation = (sourceId: string) => { const source = sourceById.get(sourceId); const number = sources.findIndex((candidate) => String(candidate.sourceId) === sourceId) + 1; return source ? { label: source.title, href: source.url, sourceId, number } : undefined; };
   return <main className={styles.shell}>
     <StickyHeader onIntent={onIntent} actions={thread ? <div className={styles.headerActions} aria-label="Thread actions"><button className={`${styles.iconButton} ${successfulAction === "copy" ? styles.iconButtonSuccess : ""}`} type="button" onClick={() => void copyThread()} aria-label={successfulAction === "copy" ? "Copied thread" : "Copy thread"}>{successfulAction === "copy" ? <CheckGlyph /> : <CopyGlyph />}</button><button className={`${styles.iconButton} ${successfulAction === "export" ? styles.iconButtonSuccess : ""}`} type="button" onClick={exportThread} aria-label={successfulAction === "export" ? "Exported thread" : "Export thread"}>{successfulAction === "export" ? <CheckGlyph /> : <ExportGlyph />}</button></div> : undefined} />
     {message && <p role="alert">{message}</p>}
