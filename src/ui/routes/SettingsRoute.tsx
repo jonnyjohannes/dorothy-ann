@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { SettingsBox } from "../boxes/SettingsBox";
-import { PromptBox } from "../boxes/PromptBox";
 import { StickyHeader } from "../boxes/StickyHeader";
 import type { BoxIntent } from "../boxes/box-types";
 import { turnLocation, workspaceController } from "../controllers/workspace-controller";
@@ -9,7 +8,6 @@ import styles from "../App.module.css";
 
 export function SettingsRoute() {
   const navigate = useNavigate();
-  const [prompt, setPrompt] = useState("");
   const [message, setMessage] = useState("");
   const [values, setValues] = useState<Record<string, string>>(() => ({
     theme: localStorage.getItem("dorothy-ann-theme") ?? "auto",
@@ -29,7 +27,7 @@ export function SettingsRoute() {
     }
     const command = workspaceController.command(intent);
     if (!command) return;
-    if (command.type === "navigate") { if (intent.type === "command_requested" && intent.command === "/settings") setPrompt(""); else navigate(command.to, { replace: command.replace }); }
+    if (command.type === "navigate") navigate(command.to, { replace: command.replace });
     else if (command.type === "submit") navigate(turnLocation(command.value, command.kind));
     else if (command.type === "invalid") setMessage(command.message);
   };
@@ -40,6 +38,5 @@ export function SettingsRoute() {
       <SettingsBox values={values} persistence="saved" onIntent={onIntent} />
     </section>
     {message && <p className={styles.commandMessage} role="status">{message}</p>}
-    <PromptBox value={prompt} onChange={setPrompt} onIntent={onIntent} />
   </main>;
 }

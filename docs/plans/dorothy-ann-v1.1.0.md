@@ -6,7 +6,7 @@
 - Last updated: 2026-09-18
 - Current focus: complexity-sensitive `invalid_terminal` from uncoalesced synthesis stream chunks repaired
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: restart the local Node server and retry the complex language-and-thought question against the new synthesis boundary
+- Next action: visually smoke-test the post-release palette/caret/route polish in light, dark, and reduced-motion modes
 - Shipped follow-up: ordinary prompt and `?q=` entry use one research path at `/threads/new`; `/search?q=` remains the explicit plain-search utility; `/topics`, `?kind=`, and `?mode=` are removed without compatibility redirects. Retrieval-first assessment remains unchanged. If an assessor requests further search or decomposition, the UI reports sticky recursion state alongside the current operation (`recursing · searching`, `recursing · extracting evidence`, or `recursing · assessing research`). Synthesis receives explicit initial/follow-up metadata; only the initial completed research answer is instructed to begin with “According to my research,” while all other synthesis behavior remains shared.
 
 ## Post-release singular research-flow amendment
@@ -41,6 +41,8 @@ Approved after v1.1.0 deployment smoke:
 Verification: responsive UI regression tests, full test suite, typecheck, lint, production build, Playwright smoke, and `git diff --check`.
 
 ## Handoff
+
+Plan Ledger item 29 is complete. The post-release visual polish now uses warm gray `--paper`/`--ink` tokens with matching light/dark selection inversion, highlights the fixed prompt border while its input subtree is focused, rotates the full selected scheme accent palette on the native PromptBox and thread-search carets every two seconds with reduced-motion and live-preference fallbacks, and removes the global PromptBox from settings and threads while retaining the dedicated thread finder. Verification passes: lint, typecheck, 219 tests, production build, and `git diff --check`. Browser visual smoke across light/dark/auto and reduced-motion modes remains the deployment follow-up.
 
 Plan Ledger item 28 is complete. The remaining complexity-sensitive `invalid_terminal` occurred after a valid `research_state`: Anthropic streaming chunks were retained one-for-one as durable `AssistantContentPart` values, so a longer synthesis could exceed the terminal schema’s 256-part ceiling even though its Markdown was valid. `AnswerSynthesizer` now coalesces adjacent text chunks without crossing citation boundaries, drops empty transport chunks, and enforces both the 256-part and 64,000-code-point-per-text-part durable bounds before terminal assembly. A 300-chunk synthesis now produces one schema-valid text segment; an answer that remains over the durable part ceiling fails as a typed synthesis `invalid_output` rather than leaking into terminal validation. Verification passes: lint, typecheck, 218 tests, production build, six Playwright tests on isolated fixture ports, and `git diff --check`.
 
@@ -3210,10 +3212,11 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [x] 26. Singular research-flow amendment — deliverable: canonical `/threads` detail/new routes, explicit `/search?q=` utility, no URL kind/mode routing, retrieval-first prompt-tuned assessment, sticky `recursing · operation` progress, and explicit initial/follow-up synthesis metadata with an initial-only prompt-owned preamble; verify: focused routing/resolver/stream/controller/provider tests plus lint, typecheck, 213 tests, production build, six Playwright tests, and `git diff --check`.
 - [x] 27. Search-metadata terminal regression — deliverable: provider and acquisition normalization admits only exact bounded canonical source metadata so live search results cannot fail strict terminal validation; verify: oversized Unicode metadata, overlong URL, and extra-field provider fixtures plus lint, typecheck, 216 tests, production build, six isolated-port e2e tests, and `git diff --check`.
 - [x] 28. Synthesis-part terminal regression — deliverable: coalesce provider streaming text chunks into durable Markdown segments and enforce answer-part/text bounds before terminal assembly so response length cannot surface as `invalid_terminal`; verify: 300-chunk schema-valid answer and post-coalescing overflow fixtures plus lint, typecheck, 218 tests, production build, six isolated-port e2e tests, and `git diff --check`.
+- [x] 29. Post-release visual polish — deliverable: warm gray paper/ink light-dark tokens with global selection inversion, focused prompt accent border, full-scheme native caret rotation on PromptBox/thread search with reduced-motion fallback, and no global PromptBox on settings/threads; verify: UI regression tests, lint, typecheck, full tests, production build, and `git diff --check`.
 
 ## Verification
 
-Latest regression verification: `npm run lint`, `npm run typecheck`, `npm test` (218 tests), `npm run build`, six Playwright tests on isolated fixture ports, and `git diff --check` all pass. The default Playwright command reused unrelated authenticated servers on ports 5173/8787; this environmental run reached `/unlock` before the isolated-port suite passed. Live-provider obedience to the initial-only preamble and visual observation of a recursive continuation remain deployment smoke checks.
+Latest regression verification: `npm run lint`, `npm run typecheck`, `npm test` (219 tests), `npm run build`, and `git diff --check` all pass. Browser visual smoke across light/dark/auto and reduced-motion modes remains the deployment follow-up. The default Playwright command reused unrelated authenticated servers on ports 5173/8787; this environmental run reached `/unlock` before the isolated-port suite passed. Live-provider obedience to the initial-only preamble and visual observation of a recursive continuation remain deployment smoke checks.
 
 The final implementation must prove at least:
 

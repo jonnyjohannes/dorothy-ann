@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { getBrowserThreadStore } from "../../infrastructure/browser/thread-store";
 import type { ThreadId, ThreadSummary } from "../../domain/types";
 import { ThreadsBox } from "../boxes/ThreadsBox";
-import { PromptBox } from "../boxes/PromptBox";
 import { StickyHeader } from "../boxes/StickyHeader";
 import type { BoxIntent } from "../boxes/box-types";
 import { turnLocation, workspaceController } from "../controllers/workspace-controller";
@@ -14,7 +13,6 @@ export function ThreadsRoute() {
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(true);
-  const [prompt, setPrompt] = useState("");
   const [commandMessage, setCommandMessage] = useState("");
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -32,7 +30,7 @@ export function ThreadsRoute() {
     else {
       const command = workspaceController.command(intent);
       if (!command) return;
-      if (command.type === "navigate") { if (intent.type === "command_requested" && intent.command === "/threads") setPrompt(""); else navigate(command.to, { replace: command.replace }); }
+      if (command.type === "navigate") navigate(command.to, { replace: command.replace });
       else if (command.type === "submit") navigate(turnLocation(command.value, command.kind));
       else if (command.type === "invalid") setCommandMessage(command.message);
     }
@@ -44,7 +42,6 @@ export function ThreadsRoute() {
       <ThreadsBox state={{ threads, loading, error }} onIntent={onIntent} />
     </section>
     {commandMessage && <p className={styles.commandMessage} role="status">{commandMessage}</p>}
-    <PromptBox value={prompt} onChange={setPrompt} onIntent={onIntent} />
   </main>;
 }
 

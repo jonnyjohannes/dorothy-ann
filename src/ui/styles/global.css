@@ -1,6 +1,6 @@
 :root {
-  --paper: #ffffff;
-  --ink: #111111;
+  --paper: #e0e0e0;
+  --ink: #1e1e1e;
   --muted: #666666;
   --accent: #f6c945;
   --accent-1: #f6c945;
@@ -24,16 +24,16 @@
   background: var(--ink);
 }
 :root[data-theme="dark"] {
-  --paper: #000000;
-  --ink: #ffffff;
+  --paper: #1e1e1e;
+  --ink: #e0e0e0;
   --muted: #b5b5b5;
   --line: #333333;
   --shadow: 0 1rem 3rem rgb(0 0 0 / 35%);
 }
 @media (prefers-color-scheme: dark) {
   :root[data-theme="auto"] {
-    --paper: #000000;
-    --ink: #ffffff;
+    --paper: #1e1e1e;
+    --ink: #e0e0e0;
     --muted: #b5b5b5;
     --line: #333333;
     --shadow: 0 1rem 3rem rgb(0 0 0 / 35%);
