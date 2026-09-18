@@ -19,6 +19,10 @@
   background: var(--paper);
   font-synthesis: none;
 }
+::selection {
+  color: var(--paper);
+  background: var(--ink);
+}
 :root[data-theme="dark"] {
   --paper: #000000;
   --ink: #ffffff;

@@ -22,9 +22,9 @@ const customAccent = (slot: number): CSSProperties => ({ "--relational-accent": 
 
 function citationMarkdown(markdown: string, resolveCitation?: MarkdownContentProps["resolveCitation"]): string {
   if (!resolveCitation) return markdown;
-  return markdown.replace(/\[\[cite:([^\]]+)\]\]/g, (marker, sourceId: string) => {
+  return markdown.replace(/\[{1,2}cite:([^\]]+)\]{1,2}/g, (marker, sourceId: string) => {
     const citation = resolveCitation(sourceId);
-    return citation ? `[${citation.label}](${citation.href})` : marker;
+    return citation ? `[${citation.label}](#source-${sourceId})` : marker;
   });
 }
 

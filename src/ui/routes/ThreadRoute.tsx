@@ -136,14 +136,16 @@ export function ThreadRoute() {
     else if (command.type === "retry") void controller.current?.retryCommit();
   };
   const sources = sourceRecords(thread, view.sources);
+  const sourceById = new Map(sources.map((source) => [String(source.sourceId), source]));
+  const resolveCitation = (sourceId: string) => { const source = sourceById.get(sourceId); return source ? { label: source.title, href: source.url, sourceId } : undefined; };
   return <main className={styles.shell}>
     <StickyHeader onIntent={onIntent} actions={thread ? <div className={styles.headerActions} aria-label="Thread actions"><button className={`${styles.iconButton} ${successfulAction === "copy" ? styles.iconButtonSuccess : ""}`} type="button" onClick={() => void copyThread()} aria-label={successfulAction === "copy" ? "Copied thread" : "Copy thread"}>{successfulAction === "copy" ? <CheckGlyph /> : <CopyGlyph />}</button><button className={`${styles.iconButton} ${successfulAction === "export" ? styles.iconButtonSuccess : ""}`} type="button" onClick={exportThread} aria-label={successfulAction === "export" ? "Exported thread" : "Export thread"}>{successfulAction === "export" ? <CheckGlyph /> : <ExportGlyph />}</button></div> : undefined} />
     {message && <p role="alert">{message}</p>}
     {thread && <TranscriptBox thread={thread} sources={sources} onIntent={onIntent} />}
     {view.active && activeRequest && <article className={styles.scrollback}><blockquote className={styles.userTurn}>{activeRequest}</blockquote></article>}
     {view.active && <ResearchStatus answerDraft={view.answerDraft} events={view.events} />}
-    {view.active && view.answerDraft && <MarkdownContent markdown={view.answerDraft} threadSeed={String(threadId)} />}
-    {sources.length > 0 && <EvidenceBox sources={sources} onIntent={onIntent} />}
+    {view.active && view.answerDraft && <MarkdownContent markdown={view.answerDraft} threadSeed={String(threadId)} resolveCitation={resolveCitation} />}
+    {sources.length > 0 && <EvidenceBox sources={sources} threadSeed={String(threadId)} onIntent={onIntent} />}
     <PromptBox value={value} disabled={view.active} onChange={setValue} onIntent={onIntent} />
   </main>;
 }
