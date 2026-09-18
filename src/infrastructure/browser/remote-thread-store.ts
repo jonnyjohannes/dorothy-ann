@@ -25,7 +25,7 @@ function parseRecord(value: unknown): StoredThreadRecord | null | undefined {
 
 export class BrowserRemoteThreadStore implements ThreadStore {
   private readonly candidates = new Map<ValidatedImportCandidate, unknown>();
-  constructor(private readonly fetcher: typeof fetch = fetch, private readonly basePath = "/api/storage/threads") {}
+  constructor(private readonly fetcher: typeof fetch = fetch.bind(globalThis), private readonly basePath = "/api/storage/threads") {}
 
   private async request<T>(path: string, init?: RequestInit): Promise<ThreadStoreResult<T>> {
     try {
