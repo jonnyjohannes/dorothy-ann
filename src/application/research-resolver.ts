@@ -204,13 +204,17 @@ export class ResearchResolver {
         }
         const afterSearch = joinKnowledge(problem.id, [before, { problemId: problem.id, findings: [], evidence: acquisition.evidence, unresolvedGapIds: [] }]);
         state.knowledge = joinKnowledge(problem.id, [state.knowledge, afterSearch]);
+        const acquiredEvidenceIds = new Set(acquisition.evidence.flatMap((pack) => pack.sources.map((source) => source.sourceId)));
+        const taskEvidence = acquisition.results.flatMap((result) => result.candidates.flatMap((source) =>
+          acquiredEvidenceIds.has(source.sourceId) ? [{ sourceId: source.sourceId, rank: source.rank }] : [],
+        ));
         const task: ResearchTaskRecord = {
           problemId: problem.id,
           query: directive.query,
           purpose: directive.purpose,
           priority: directive.priority,
-          status: acquisition.evidence.length > 0 ? (acquisition.results.some((result) => result.failure) ? "partial" : "completed") : "failed",
-          evidence: acquisition.results.flatMap((result) => result.ownedConsumedSources.map((source) => ({ sourceId: source.sourceId, rank: source.rank }))),
+          status: taskEvidence.length > 0 ? (acquisition.results.some((result) => result.failure) ? "partial" : "completed") : "failed",
+          evidence: taskEvidence,
         };
         state.tasks.push(task);
         if (key(before) === key(afterSearch)) {

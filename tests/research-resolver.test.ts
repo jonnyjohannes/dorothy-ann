@@ -6,6 +6,7 @@ import { IdentityPolicy } from "../src/application/identity-policy.js";
 import { EvidenceAcquirer } from "../src/application/evidence-acquirer.js";
 import { ResearchAssessor } from "../src/application/research-assessor.js";
 import { ResearchResolver } from "../src/application/research-resolver.js";
+import { executeResearchTurn } from "../src/application/execute-research-turn.js";
 import type { GapLedger, KnowledgeUnit, ResearchProblem, ThreadContext, TurnId } from "../src/domain/types.js";
 import type { ResearchAssessmentProposal } from "../src/application/research-assessor.js";
 import { WebCryptoIdentityHasher } from "../src/infrastructure/identity/web-crypto-hasher.js";
@@ -50,6 +51,50 @@ describe("ResearchResolver", () => {
     expect(result.resolution.ledger.searchesUsed).toBe(1);
     expect(result.resolution.tasks).toHaveLength(1);
     expect(calls).toBe(2);
+  });
+
+  it("keeps failed extraction attempts out of task evidence and terminal source closure", async () => {
+    const input = await makeInput();
+    const failedUrl = "https://failed.example.test/report";
+    const viableUrl = "https://viable.example.test/report";
+    const failedSourceId = await identities.sourceId(failedUrl);
+    const viableSourceId = await identities.sourceId(viableUrl);
+    const resolver = new ResearchResolver({
+      identities,
+      assessor: new ResearchAssessor(identities),
+      assess: async ({ problem, knowledge }): Promise<ResearchAssessmentProposal> => knowledge.evidence.length === 0
+        ? { directive: { kind: "search", query: "independent reporting", purpose: "Find evidence", successCriterion: problem.successCriterion, priority: 1 } }
+        : { directive: { kind: "resolved", observations: [{ proposition: "The answer", statement: "The viable evidence supports the answer.", stance: "supports", support: [{ type: "source", sourceId: viableSourceId }] }] } },
+      acquirer: new EvidenceAcquirer({
+        search: { search: async () => [
+          { sourceId: failedSourceId, rank: 1, title: "Failed", url: failedUrl, canonicalUrl: failedUrl, displayUrl: "failed.example.test" },
+          { sourceId: viableSourceId, rank: 2, title: "Viable", url: viableUrl, canonicalUrl: viableUrl, displayUrl: "viable.example.test" },
+        ] },
+        extractor: { extract: async (source) => source.sourceId === failedSourceId
+          ? { sourceId: source.sourceId, status: "failed", code: "fetch_failed", retryable: true }
+          : { sourceId: source.sourceId, status: "viable", page: { sourceId: source.sourceId, canonicalUrl: source.canonicalUrl, title: source.title, text: "Viable evidence.", extractedAt: "2026-01-01T00:00:00.000Z" as never, characterCount: 16 } },
+        },
+      }),
+    });
+
+    const result = await resolver.resolve(input);
+    expect(result.kind).toBe("resolution");
+    if (result.kind !== "resolution") return;
+    expect(result.resolution.tasks[0].evidence).toEqual([{ sourceId: viableSourceId, rank: 2 }]);
+    expect(result.resolution.sources?.map(({ sourceId }) => sourceId)).toEqual([viableSourceId]);
+
+    const execution = await executeResearchTurn({
+      turnId,
+      userMessage: { id: "00000000-0000-4000-8000-000000000002" as never, role: "user", content: "Question?", createdAt: "2026-01-01T00:00:00.000Z" as never },
+      createdAt: "2026-01-01T00:00:00.000Z" as never,
+      context,
+      resolver: { resolve: async () => result.resolution },
+      synthesizer: { synthesize: async () => ({ parts: [{ type: "text", markdown: "Supported answer." }] }) },
+      assessmentModelRef: "assessment",
+      synthesisModelRef: "synthesis",
+      searchRef: "search",
+    });
+    expect(execution.turn.status).toBe("completed");
   });
 
   it("returns insufficient evidence when the explicit search budget is exhausted", async () => {
