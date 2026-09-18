@@ -89,12 +89,19 @@ function safeCode(error: unknown): string {
   return error instanceof Error ? error.message : "";
 }
 
+function sourceRecords(context: ThreadContext, admitted: CanonicalSource[] = []): CanonicalSource[] {
+  const byId = new Map<string, CanonicalSource>();
+  for (const source of context.knownSources) byId.set(source.sourceId, source);
+  for (const source of admitted) byId.set(source.sourceId, source);
+  return [...byId.values()];
+}
+
 function sourceClosure(
   resolution: ResearchResolution & { sources?: CanonicalSource[] },
   context: ThreadContext,
 ): CanonicalSource[] {
   const byId = new Map<string, CanonicalSource>();
-  for (const source of context.knownSources) byId.set(source.sourceId, source);
+  for (const source of sourceRecords(context, resolution.sources)) byId.set(source.sourceId, source);
   for (const source of resolution.sources ?? []) {
     const previous = byId.get(source.sourceId);
     if (previous && previous.canonicalUrl !== source.canonicalUrl) throw new Error("source_reference_conflict");
@@ -152,7 +159,7 @@ export async function executeResearchTurn(input: ResearchTurnExecutionInput): Pr
           failure: { kind: "execution_failure", stage: "resolution", code: "resolution_invalid", message: "Research execution stopped before a validated answer was available.", retryable: false },
           researchState: { kind: "checkpoint", checkpoint: resolution.checkpoint },
         },
-        sources: resolution.sources ?? [],
+        sources: sourceRecords(input.context, resolution.sources),
       };
     }
     if (input.signal?.aborted) {

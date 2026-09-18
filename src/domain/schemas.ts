@@ -185,6 +185,7 @@ const resolutionBase = {
   knowledge: knowledgeUnitV3Schema,
   ledger: gapLedgerV3Schema,
   tasks: z.array(taskSchema).max(3),
+  sources: z.array(canonicalSourceV3Schema).max(24).optional(),
 };
 const boundedStop = z.enum(["search_budget_exhausted", "source_budget_exhausted", "assessment_budget_exhausted", "depth_limit_reached", "no_new_knowledge", "duplicate_problem", "provider_unavailable"]);
 const sufficientResolutionSchema: z.ZodType<SufficientResearchResolution> = z.strictObject({ ...resolutionBase, status: z.literal("sufficient"), stopReason: z.literal("sufficient") });
@@ -196,6 +197,7 @@ const checkpointSchema: z.ZodType<ResearchCheckpoint> = z.strictObject({
   knowledge: knowledgeUnitV3Schema,
   ledger: gapLedgerV3Schema,
   tasks: z.array(taskSchema).max(3),
+  sources: z.array(canonicalSourceV3Schema).max(24).optional(),
 });
 
 const recordedSearchExecution = z.strictObject({ kind: z.literal("recorded"), searchRef: noControlRef });

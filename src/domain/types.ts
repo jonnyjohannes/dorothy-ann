@@ -160,6 +160,7 @@ export interface ResearchResolutionBase {
   knowledge: KnowledgeUnit;
   ledger: GapLedger;
   tasks: ResearchTaskRecord[];
+  sources?: CanonicalSource[];
 }
 export interface SufficientResearchResolution extends ResearchResolutionBase {
   status: "sufficient";
@@ -179,6 +180,7 @@ export interface ResearchCheckpoint {
   knowledge: KnowledgeUnit;
   ledger: GapLedger;
   tasks: ResearchTaskRecord[];
+  sources?: CanonicalSource[];
 }
 
 export type TurnKind = "search" | "research";

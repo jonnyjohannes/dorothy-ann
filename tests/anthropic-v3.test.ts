@@ -49,6 +49,13 @@ describe("AnthropicProvider v3", () => {
     expect(fake.systems).toEqual(["ASSESSOR EXACT", "ASSESSOR EXACT"]);
   });
 
+  it("accepts the assessor's named directive wrapper", async () => {
+    const fake = client([{ content: [{ type: "text", text: JSON.stringify({ directive: "search", search: { query: "independent reporting", purpose: "find evidence", successCriterion: "supported answer", priority: 1 } }) }] }]);
+    const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: fake });
+    const result = await provider.assessResearch(baseAssessment);
+    expect(result.directive).toMatchObject({ kind: "search", query: "independent reporting", priority: 1 });
+  });
+
   it("streams citations only when they are reachable through allowed source IDs", async () => {
     const fake = client([{ [Symbol.asyncIterator]: async function* () {
       yield { type: "content_block_delta", delta: { type: "text_delta", text: "Answer [[cite:src_test]] and [[cite:other]]." } };

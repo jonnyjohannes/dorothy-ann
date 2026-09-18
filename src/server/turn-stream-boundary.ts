@@ -77,6 +77,7 @@ export interface TurnStreamBoundaryOptions {
 }
 
 const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu);
+
 const boundedText = (minimum: number, maximum: number) => z.string().refine((value) => [...value].length >= minimum && [...value].length <= maximum);
 const sourceId = z.string().regex(/^src_[A-Za-z0-9_-]{43}$/);
 const sourceSchema = z.strictObject({
@@ -190,14 +191,19 @@ export function createTurnStreamBoundary(options: TurnStreamBoundaryOptions): Ho
       try {
         const terminal = await options.executor.execute(requestForExecutor, async (signal) => {
           if (terminalSent) return;
-          if (!validateSignal(signal, requestForExecutor)) { protocolInvalid = true; abort.abort(); return; }
+          if (!validateSignal(signal, requestForExecutor)) {
+            protocolInvalid = true;
+            abort.abort();
+            return;
+          }
           await write(signal.type, signal.type === "phase" ? { phase: signal.phase } : signal.type === "source_delta" ? { sources: signal.sources, occurrences: signal.occurrences } : signal.type === "research_state" ? { state: signal.state } : { delta: signal.delta });
         }, abort.signal);
         if (!terminalSent && !context.req.raw.signal.aborted && !abort.signal.aborted && !protocolInvalid && validateTerminal(terminal, request.kind, requestForExecutor)) {
           terminalSent = true;
           await write("terminal", { terminal });
         } else if (!terminalSent) {
-          await write("error", { code: protocolInvalid ? "invalid_event" : "invalid_terminal", message: protocolInvalid ? "Turn execution emitted an invalid event." : "Turn execution returned an invalid result." });
+          const code = protocolInvalid ? "invalid_event" : "invalid_terminal";
+          await write("error", { code, message: protocolInvalid ? "Turn execution emitted an invalid event." : "Turn execution returned an invalid result." });
         }
       } catch {
         if (!terminalSent && !context.req.raw.signal.aborted) await write("error", { code: "execution_failed", message: "Turn execution failed." });

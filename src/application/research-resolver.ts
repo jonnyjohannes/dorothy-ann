@@ -117,6 +117,7 @@ export class ResearchResolver {
           knowledge: state.knowledge,
           ledger: state.ledger,
           tasks: state.tasks,
+          sources: state.admittedSources.length ? state.admittedSources : undefined,
         },
       };
     }
@@ -197,7 +198,9 @@ export class ResearchResolver {
         }
         const acquisition = await this.acquire(problem, directive, state);
         for (const source of acquisition.admittedSources) {
-          if (!state.admittedSources.some((existing) => existing.sourceId === source.sourceId)) state.admittedSources.push(source);
+          const canonical = { ...source } as CanonicalSource & { rank?: number };
+          delete canonical.rank;
+          if (!state.admittedSources.some((existing) => existing.sourceId === source.sourceId)) state.admittedSources.push(canonical);
         }
         const afterSearch = joinKnowledge(problem.id, [before, { problemId: problem.id, findings: [], evidence: acquisition.evidence, unresolvedGapIds: [] }]);
         state.knowledge = joinKnowledge(problem.id, [state.knowledge, afterSearch]);

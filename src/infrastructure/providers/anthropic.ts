@@ -26,8 +26,70 @@ interface MessagesClient {
     system: string;
     messages: Message[];
     stream?: boolean;
+    output_config?: { format: { type: "json_schema"; schema: unknown } };
   }): Promise<MessageResponse | MessageStream>;
 }
+
+const assessmentOutputSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    directive: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        kind: { type: "string", enum: ["search", "resolved", "decompose"] },
+        query: { type: "string" },
+        purpose: { type: "string" },
+        successCriterion: { type: "string" },
+        priority: { type: "integer", enum: [1, 2, 3] },
+        observations: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              proposition: { type: "string" },
+              statement: { type: "string" },
+              stance: { type: "string", enum: ["supports", "contradicts", "qualifies"] },
+              support: {
+                type: "array",
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    type: { type: "string", enum: ["source", "turn"] },
+                    sourceId: { type: "string" },
+                    turnId: { type: "string" },
+                  },
+                  required: ["type"],
+                },
+              },
+            },
+            required: ["proposition", "statement", "stance", "support"],
+          },
+        },
+        operator: { type: "string", enum: ["all", "any"] },
+        problems: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              question: { type: "string" },
+              purpose: { type: "string" },
+              successCriterion: { type: "string" },
+              priority: { type: "integer", enum: [1, 2, 3] },
+            },
+            required: ["question", "purpose", "successCriterion", "priority"],
+          },
+        },
+      },
+      required: ["kind"],
+    },
+  },
+  required: ["directive"],
+} as const;
 
 export type AnthropicFailureCode =
   | "provider_rate_limited"
@@ -76,20 +138,28 @@ export class AnthropicProvider implements LLMProvider {
 
   async assessResearch(input: ResearchAssessmentInput): Promise<ResearchAssessmentProposal> {
     let correction: string | undefined;
+    let structuredOutput = true;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        const response = await this.create({
+        const request: Parameters<MessagesClient["create"]>[0] = {
           model: this.assessmentModelRef,
           max_tokens: Math.min(800, input.maxOutputTokens),
           system: input.systemPrompt,
           messages: [{ role: "user", content: assessmentEnvelope(input, correction) }],
-        });
-        const proposal = parseProposal(responseText(response));
+          ...(structuredOutput ? { output_config: { format: { type: "json_schema" as const, schema: assessmentOutputSchema } } } : {}),
+        };
+        const response = await this.create(request);
+        const text = responseText(response);
+        const proposal = parseProposal(text);
         if (proposal) return proposal;
       } catch (error) {
+        if (error instanceof AnthropicProviderError && error.code === "provider_failed" && structuredOutput) {
+          structuredOutput = false;
+          continue;
+        }
         if (error instanceof AnthropicProviderError && error.code !== "assessment_invalid_response") throw error;
       }
-      correction = "The previous response was not valid for the requested schema. Return exactly one compact JSON object with a directive and no explanation.";
+      correction = "The previous response failed validation. Return exactly one compact JSON object and no explanation. For resolved, every observation must include proposition, statement, stance (supports|contradicts|qualifies), and support as an array of allowed reference objects. For search, include query, purpose, successCriterion, and priority. For decompose, include operator and 1-3 problems.";
     }
     throw new AnthropicProviderError("assessment_invalid_response", true);
   }
@@ -167,6 +237,7 @@ function assessmentEnvelope(input: ResearchAssessmentInput, correction?: string)
       search: { query: "string", purpose: "string", successCriterion: "string", priority: "1..3" },
       decompose: { operator: "all|any", problems: "1..3 items" },
     },
+    outputInstruction: "Return exactly one valid JSON object now. Do not explain, reason aloud, use Markdown, use a code fence, or return any text before or after the object.",
     correction,
   };
   return JSON.stringify(payload);
@@ -183,24 +254,58 @@ function synthesisEnvelope(input: ResearchSynthesisInput): string {
   });
 }
 
-function parseProposal(text: string): ResearchAssessmentProposal | undefined {
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) return undefined;
-  try {
-    const raw = JSON.parse(text.slice(start, end + 1)) as unknown;
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
-    const root = raw as Record<string, unknown>;
-    const candidate = objectValue(root.directive) ?? objectValue(root.assessment) ?? objectValue(root.proposal) ?? root;
-    const directive = objectValue(candidate.directive) ?? candidate;
-    const kind = normalizeKind(directive.kind ?? directive.type ?? directive.action);
-    if (kind === "resolved") return parseResolved(directive);
-    if (kind === "search") return parseSearch(directive);
-    if (kind === "decompose") return parseDecompose(directive);
-    return undefined;
-  } catch {
-    return undefined;
+function jsonObjectCandidates(text: string): unknown[] {
+  const candidates: unknown[] = [];
+  for (let start = 0; start < text.length; start += 1) {
+    if (text[start] !== "{") continue;
+    let depth = 0;
+    let quoted = false;
+    let escaped = false;
+    for (let index = start; index < text.length; index += 1) {
+      const character = text[index];
+      if (quoted) {
+        if (escaped) escaped = false;
+        else if (character === "\\") escaped = true;
+        else if (character === '"') quoted = false;
+        continue;
+      }
+      if (character === '"') { quoted = true; continue; }
+      if (character === "{") depth += 1;
+      else if (character === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          try { candidates.push(JSON.parse(text.slice(start, index + 1)) as unknown); } catch { /* try the next balanced object */ }
+          break;
+        }
+      }
+    }
   }
+  return candidates;
+}
+
+function parseProposal(text: string): ResearchAssessmentProposal | undefined {
+  for (const raw of jsonObjectCandidates(text)) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const root = raw as Record<string, unknown>;
+    const directiveObject = objectValue(root.directive);
+    const declaredKind = normalizeKind(root.directive) ?? normalizeKind(directiveObject?.kind ?? directiveObject?.type ?? directiveObject?.action);
+    const candidate = objectValue(declaredKind ? root[declaredKind] : undefined) ?? directiveObject ?? objectValue(root.assessment) ?? objectValue(root.proposal) ?? root;
+    const directive = objectValue(candidate.directive) ?? candidate;
+    const kind = declaredKind ?? normalizeKind(directive.kind ?? directive.type ?? directive.action);
+    if (kind === "resolved") {
+      const result = parseResolved(directive);
+      if (result) return result;
+    }
+    if (kind === "search") {
+      const result = parseSearch(directive);
+      if (result) return result;
+    }
+    if (kind === "decompose") {
+      const result = parseDecompose(directive);
+      if (result) return result;
+    }
+  }
+  return undefined;
 }
 
 function parseResolved(value: Record<string, unknown>): ResearchAssessmentProposal | undefined {
