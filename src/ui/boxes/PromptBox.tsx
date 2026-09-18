@@ -21,7 +21,7 @@ export function PromptBox({ value, disabled = false, onChange, onIntent }: { val
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown" && suggestionsOpen) { event.preventDefault(); setActive((current) => Math.min(current + 1, suggestions.length - 1)); }
     else if (event.key === "ArrowUp" && suggestionsOpen) { event.preventDefault(); setActive((current) => Math.max(0, current - 1)); }
-    else if (event.key === "Tab" && suggestionsOpen && suggestions.length) { event.preventDefault(); onChange(suggestions[active]); }
+    else if (event.key === "Tab" && suggestionsOpen && suggestions.length) { event.preventDefault(); onChange(`${suggestions[active]} `); setSuggestionsOpen(false); }
     else if (event.key === "Escape" && !event.nativeEvent.isComposing && !event.altKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault(); setSuggestionsOpen(false); if (escapeArmed) onIntent({ type: "new_thread_requested" }); else { setEscapeArmed(true); input.current?.blur(); window.setTimeout(() => setEscapeArmed(false), 500); }
     }
