@@ -12,11 +12,16 @@ export function ThreadsBox({ state, onIntent }: { state: ThreadsViewState; onInt
   useEffect(() => setActive((value) => Math.min(value, Math.max(0, visible.length - 1))), [visible.length]);
   useEffect(() => { searchInput.current?.focus(); }, []);
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    const selected = visible[active];
     if (event.key === "ArrowDown") { event.preventDefault(); setActive((value) => Math.min(value + 1, visible.length - 1)); }
     if (event.key === "ArrowUp") { event.preventDefault(); setActive((value) => Math.max(0, value - 1)); }
-    if (event.key === "Enter" && visible[active]) { event.preventDefault(); onIntent({ type: "thread_open_requested", threadId: visible[active].id }); }
-    if (event.key === "1" && visible[active]) { event.preventDefault(); setConfirming(visible[active].id); }
-    if (event.key === "2" && confirming && visible[active]?.id === confirming) { event.preventDefault(); onIntent({ type: "thread_delete_requested", threadId: confirming }); setConfirming(null); }
+    if (confirming) {
+      if (event.key === "Enter" || event.key.toLowerCase() === "y") { event.preventDefault(); onIntent({ type: "thread_delete_requested", threadId: confirming }); setConfirming(null); }
+      else if (event.key.toLowerCase() === "n") { event.preventDefault(); setConfirming(null); }
+      return;
+    }
+    if (event.key === "Enter" && selected) { event.preventDefault(); onIntent({ type: "thread_open_requested", threadId: selected.id }); }
+    if ((event.key === "Delete" || event.key === "Backspace") && !query && selected) { event.preventDefault(); setConfirming(selected.id); }
   };
   const onContainerKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key !== "Escape") return;
