@@ -4,6 +4,9 @@ import type { SearchResult } from "../../domain/types.js";
 import type { SearchOptions, SearchProvider } from "../../ports/providers.js";
 
 type BraveFetch = (input: string, init?: RequestInit) => Promise<Response>;
+const boundedText = (value: string, maximum: number): string => [...value].slice(0, maximum).join("");
+const boundedUrl = (value: string): boolean => [...value].length <= 2_048;
+
 interface SourceIdentity {
   sourceId(canonicalUrl: string): Promise<SourceId>;
 }
@@ -42,17 +45,18 @@ export async function normalizeBravePayload(
     if (typeof item.title !== "string" || typeof item.url !== "string") continue;
     let canonicalUrl: string;
     try { canonicalUrl = normalizeCanonicalUrl(item.url); } catch { continue; }
-    if (seen.has(canonicalUrl)) continue;
+    const title = boundedText(item.title, 500);
+    if (!title || !boundedUrl(canonicalUrl) || seen.has(canonicalUrl)) continue;
     seen.add(canonicalUrl);
     const sourceId = await identities.sourceId(canonicalUrl);
     results.push({
       sourceId: sourceId as SearchResult["sourceId"],
       rank: results.length + 1,
-      title: item.title,
+      title,
       url: canonicalUrl,
       canonicalUrl,
-      displayUrl: new URL(canonicalUrl).hostname,
-      snippet: typeof item.description === "string" ? item.description : undefined,
+      displayUrl: boundedText(new URL(canonicalUrl).hostname, 512),
+      snippet: typeof item.description === "string" ? boundedText(item.description, 1_000) : undefined,
     });
   }
   return results;

@@ -157,13 +157,15 @@ function canonicalizeSearchResults(
     const rank = typeof candidate.rank === "number" && Number.isSafeInteger(candidate.rank) && candidate.rank > 0
       ? candidate.rank
       : normalized.length + 1;
-    normalized.push({
-      ...candidate,
-      sourceId: sourceId as SearchResult["sourceId"],
-      url: key,
-      canonicalUrl: key,
-      rank,
-    } as SearchResult);
+    if ([...key].length > 2_048 || typeof candidate.displayUrl !== "string") continue;
+    const title = [...candidate.title].slice(0, 500).join("");
+    const displayUrl = [...candidate.displayUrl].slice(0, 512).join("");
+    if (!title || !displayUrl) continue;
+    const snippet = typeof candidate.snippet === "string" ? [...candidate.snippet].slice(0, 1_000).join("") : undefined;
+    const publishedAt = typeof candidate.publishedAt === "string" && Number.isFinite(Date.parse(candidate.publishedAt))
+      ? new Date(candidate.publishedAt).toISOString() as SearchResult["publishedAt"]
+      : undefined;
+    normalized.push({ sourceId: sourceId as SearchResult["sourceId"], title, url: key, canonicalUrl: key, displayUrl, snippet, publishedAt, rank });
   }
   return normalized.sort((left, right) => left.rank - right.rank || left.canonicalUrl.localeCompare(right.canonicalUrl));
 }

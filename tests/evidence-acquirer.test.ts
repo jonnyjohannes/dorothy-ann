@@ -206,6 +206,21 @@ describe("EvidenceAcquirer", () => {
     expect(first.evidence).toEqual(second.evidence);
   });
 
+  it("strips provider-only fields and bounds canonical metadata before admission", async () => {
+    const candidate = { ...source("bounded", 1), title: "t".repeat(600), snippet: "s".repeat(1_100), providerPayload: "must not escape" } as SearchResult;
+    const result = await new EvidenceAcquirer({ search: { search: async () => [candidate] }, extractor: { extract: extractor } }).acquire({
+      requests: [request("bounded", 1, 0)],
+      knownSources: [],
+      availableEvidenceSourceIds: [],
+      budget: budget({ searchesRemaining: 1, sourcesRemaining: 1 }),
+      limits: {},
+    });
+    expect(result.admittedSources).toHaveLength(1);
+    expect([...result.admittedSources[0].title]).toHaveLength(500);
+    expect([...(result.admittedSources[0].snippet ?? "")]).toHaveLength(1_000);
+    expect(result.admittedSources[0]).not.toHaveProperty("providerPayload");
+  });
+
   it("returns typed partial failures while preserving viable sibling evidence", async () => {
     const result = await new EvidenceAcquirer({
       search: { search: async (query) => query === "broken" ? Promise.reject(new Error("provider_unavailable")) : [source("ok", 1)] },
