@@ -516,13 +516,7 @@
   gap: 1rem;
   margin-left: auto;
 }
-.headerFeedback {
-  margin-top: -0.5rem;
-  padding: 0 0 0.75rem;
-  color: var(--muted);
-  font-size: 0.8rem;
-  text-align: right;
-}
+.iconButtonSuccess { color: #2f9e44; }
 .inlineSources { display: none; }
 .textButton {
   border: 0;

@@ -12,6 +12,7 @@ import { StickyHeader } from "../boxes/StickyHeader";
 import { TranscriptBox } from "../boxes/TranscriptBox";
 import { MarkdownContent } from "../primitives/MarkdownContent";
 import type { BoxIntent } from "../boxes/box-types";
+import { workspaceController } from "../controllers/workspace-controller";
 import styles from "../App.module.css";
 
 let store: IndexedDbThreadStore | undefined;
@@ -20,7 +21,6 @@ const gateway = createFetchTurnGateway();
 const contextLimits = { maxThreadContextTurns: 8, maxThreadContextChars: 24_000, maxEvidenceCharsPerSource: 48_000, maxEvidenceCharsTotal: 96_000, maxTurnRequestBytes: 128_000 } as const;
 const timestamp = () => new Date().toISOString() as UserMessage["createdAt"];
 const uuid = () => crypto.randomUUID();
-const requestedResearch = (query: string) => query.trimEnd().endsWith("?");
 
 export function ResearchStatus({ answerDraft }: { answerDraft: string }) {
   return <div className={styles.researchLoader} role="status" aria-live="polite"><span className={styles.loaderBars} aria-hidden="true"><i /><i /><i /></span><span>{answerDraft ? "synthesizing" : "researching"}</span></div>;
@@ -47,6 +47,10 @@ function downloadMarkdown(markdown: string, filename: string): void {
   anchor.click();
   URL.revokeObjectURL(url);
 }
+function glyphProps() { return { "aria-hidden": true, viewBox: "0 0 24 24", width: "18", height: "18", fill: "none", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round" as const, strokeLinejoin: "round" as const }; }
+function CheckGlyph() { return <svg {...glyphProps()}><path d="m5 12 4 4L19 6" /></svg>; }
+function CopyGlyph() { return <svg {...glyphProps()}><rect x="8" y="8" width="11" height="11" rx="1.5" /><path d="M16 8V6.5A1.5 1.5 0 0 0 14.5 5h-7A1.5 1.5 0 0 0 6 6.5v7A1.5 1.5 0 0 0 7.5 15H8" /></svg>; }
+function ExportGlyph() { return <svg {...glyphProps()}><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg>; }
 
 export function ThreadRoute() {
   const { threadId: routeThreadId } = useParams();
@@ -54,14 +58,14 @@ export function ThreadRoute() {
   const navigate = useNavigate();
   const threadId = useMemo(() => (routeThreadId === "new" || !routeThreadId ? uuid() : routeThreadId) as ThreadId, [routeThreadId]);
   const query = params.get("q")?.trim() ?? "";
-  const requestedKind = requestedResearch(query) ? "research" : "search";
+  const requestedKind = params.get("kind") === "search" ? "search" : "research";
   const [thread, setThread] = useState<Thread | null>(null);
   const threadRef = useRef<Thread | null>(null);
   const [view, setView] = useState<TurnControllerView>({ active: false, lastSequence: 0, events: [], answerDraft: "", sources: [] });
   const [activeRequest, setActiveRequest] = useState("");
   const [value, setValue] = useState("");
   const [message, setMessage] = useState("");
-  const [exportMessage, setExportMessage] = useState("");
+  const [successfulAction, setSuccessfulAction] = useState<"copy" | "export" | null>(null);
   const feedbackTimer = useRef<number | undefined>(undefined);
   const controller = useRef<TurnController | undefined>(undefined);
   const started = useRef(false);
@@ -98,25 +102,27 @@ export function ThreadRoute() {
     void run(query, requestedKind);
   }, [query, requestedKind, run]);
 
-  const showExportMessage = (message: string) => {
+  const showSuccess = (action: "copy" | "export") => {
     if (feedbackTimer.current !== undefined) window.clearTimeout(feedbackTimer.current);
-    setExportMessage(message);
-    feedbackTimer.current = window.setTimeout(() => { setExportMessage(""); feedbackTimer.current = undefined; }, 2000);
+    setSuccessfulAction(action);
+    feedbackTimer.current = window.setTimeout(() => { setSuccessfulAction(null); feedbackTimer.current = undefined; }, 2000);
   };
   const copyThread = async () => {
     if (!thread) return;
-    try { await navigator.clipboard.writeText(threadMarkdown(thread)); showExportMessage("Copied."); } catch { showExportMessage("Copy unavailable."); }
+    try { await navigator.clipboard.writeText(threadMarkdown(thread)); showSuccess("copy"); } catch { setSuccessfulAction(null); }
   };
-  const exportThread = () => { if (thread) { downloadMarkdown(threadMarkdown(thread), "dorothy-ann-thread.md"); showExportMessage("Exported."); } };
+  const exportThread = () => { if (thread) { downloadMarkdown(threadMarkdown(thread), "dorothy-ann-thread.md"); showSuccess("export"); } };
   const onIntent = (intent: BoxIntent) => {
-    if (intent.type === "prompt_submitted") { setValue(""); void run(intent.value, requestedResearch(intent.value) ? "research" : "search"); }
-    else if (intent.type === "command_requested") { if (intent.command === "/new") navigate("/", { replace: true }); else if (intent.command === "/threads") navigate("/threads"); else if (intent.command === "/settings") navigate("/settings"); }
-    else if (intent.type === "new_thread_requested") navigate("/", { replace: true });
-    else if (intent.type === "retry_requested") void controller.current?.retryCommit();
+    const command = workspaceController.command(intent);
+    if (!command) return;
+    if (command.type === "submit") { setValue(""); setMessage(""); void run(command.value, command.kind); }
+    else if (command.type === "navigate") navigate(command.to, { replace: command.replace });
+    else if (command.type === "invalid") setMessage(command.message);
+    else if (command.type === "retry") void controller.current?.retryCommit();
   };
   const sources = sourceRecords(thread, view.sources);
   return <main className={styles.shell}>
-    <StickyHeader onIntent={onIntent} actions={thread ? <div className={styles.headerActions} aria-label="Thread actions"><button className={styles.iconButton} type="button" onClick={() => void copyThread()} aria-label="Copy thread" title="Copy thread"><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="8" y="8" width="11" height="11" rx="1.5" /><path d="M16 8V6.5A1.5 1.5 0 0 0 14.5 5h-7A1.5 1.5 0 0 0 6 6.5v7A1.5 1.5 0 0 0 7.5 15H8" /></svg></button><button className={styles.iconButton} type="button" onClick={exportThread} aria-label="Export thread" title="Export thread"><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg></button></div> : undefined} feedback={exportMessage} />
+    <StickyHeader onIntent={onIntent} actions={thread ? <div className={styles.headerActions} aria-label="Thread actions"><button className={`${styles.iconButton} ${successfulAction === "copy" ? styles.iconButtonSuccess : ""}`} type="button" onClick={() => void copyThread()} aria-label={successfulAction === "copy" ? "Copied thread" : "Copy thread"}>{successfulAction === "copy" ? <CheckGlyph /> : <CopyGlyph />}</button><button className={`${styles.iconButton} ${successfulAction === "export" ? styles.iconButtonSuccess : ""}`} type="button" onClick={exportThread} aria-label={successfulAction === "export" ? "Exported thread" : "Export thread"}>{successfulAction === "export" ? <CheckGlyph /> : <ExportGlyph />}</button></div> : undefined} />
     {message && <p role="alert">{message}</p>}
     {thread && <TranscriptBox thread={thread} sources={sources} onIntent={onIntent} />}
     {view.active && activeRequest && <blockquote className={styles.userTurn}>{activeRequest}</blockquote>}
