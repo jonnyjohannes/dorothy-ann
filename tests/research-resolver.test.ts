@@ -140,6 +140,25 @@ describe("ResearchResolver", () => {
     expect(result.resolution.knowledge.evidence).toHaveLength(1);
   });
 
+  it("keeps prior evidence usable when follow-up assessment is unavailable", async () => {
+    const input = await makeInput();
+    const sourceId = await identities.sourceId("https://context.example.test/source");
+    input.problem.context = {
+      ...input.problem.context,
+      knownSources: [{ sourceId, title: "Prior source", url: "https://context.example.test/source", canonicalUrl: "https://context.example.test/source", displayUrl: "context.example.test/source" }],
+      availableEvidence: [{ problemId: input.problem.id, requestOrder: 0, query: "prior question", createdAt: "2026-01-01T00:00:00.000Z" as never, sources: [{ sourceId, page: { sourceId, canonicalUrl: "https://context.example.test/source", title: "Prior source", text: "Prior supported evidence.", extractedAt: "2026-01-01T00:00:00.000Z" as never, characterCount: 24 } }] }],
+    };
+    const resolver = new ResearchResolver({
+      identities,
+      assessor: new ResearchAssessor(identities),
+      assess: async () => { throw new Error("provider_unavailable"); },
+      acquirer: new EvidenceAcquirer({ fixture: true }),
+    });
+    const result = await resolver.resolve(input);
+    expect(result.kind).toBe("resolution");
+    if (result.kind === "resolution") expect(result.resolution).toMatchObject({ status: "best_effort", stopReason: "provider_unavailable" });
+  });
+
   it("leaves an unavailable assessment visibly in the assessing phase", async () => {
     const input = await makeInput();
     input.problem.depth = 1;

@@ -116,7 +116,12 @@ export class ResearchResolver {
     const state = {
       ledger: cloneLedger(input.ledger),
       budget: { ...input.budget },
-      knowledge: joinKnowledge(input.problem.id, [input.knowledge]),
+      knowledge: joinKnowledge(input.problem.id, [input.knowledge, {
+        problemId: input.problem.id,
+        findings: [],
+        evidence: input.problem.context.availableEvidence,
+        unresolvedGapIds: [],
+      }]),
       tasks: [] as ResearchTaskRecord[],
       admittedSources: [] as CanonicalSource[],
       activeFingerprints: new Set<string>(),
