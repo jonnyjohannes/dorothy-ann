@@ -1,0 +1,5 @@
+import type { KeyboardEvent, ReactNode, RefObject } from "react";
+
+export function ListboxMenu<T>({ items, activeIndex, selectedIndex, ariaLabel, onActiveIndexChange, onSelect, renderItem, listboxRef, onKeyDown, id, className }: { items: readonly T[]; activeIndex: number; selectedIndex?: number; ariaLabel: string; onActiveIndexChange: (index: number) => void; onSelect: (item: T) => void; renderItem: (item: T, index: number) => ReactNode; listboxRef?: RefObject<HTMLDivElement | null>; onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void; id?: string; className?: string }) {
+  return <div ref={listboxRef} id={id} className={["ui-listbox-menu", className].filter(Boolean).join(" ")} role="listbox" aria-label={ariaLabel} tabIndex={onKeyDown ? -1 : undefined} onKeyDown={onKeyDown}>{items.map((item, index) => <div key={index} role="option" aria-selected={index === selectedIndex} className={index === activeIndex ? "ui-listbox-menu__option is-active" : "ui-listbox-menu__option"} onMouseEnter={() => onActiveIndexChange(index)} onClick={() => onSelect(item)}>{renderItem(item, index)}</div>)}</div>;
+}

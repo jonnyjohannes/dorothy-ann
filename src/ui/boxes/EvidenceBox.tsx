@@ -1,0 +1,29 @@
+import type { CSSProperties, ReactNode } from "react";
+import type { CanonicalSource } from "../../domain/types";
+import { sourceAccentSlotForIndex } from "../color-scheme";
+import styles from "../App.module.css";
+import type { BoxIntent } from "./box-types";
+
+function snippetContent(value: string): ReactNode {
+  if (typeof DOMParser === "undefined") return value;
+  const root = new DOMParser().parseFromString(`<div>${value}</div>`, "text/html").body.firstElementChild;
+  if (!root) return value;
+  const render = (node: ChildNode, key: string): ReactNode => {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+    if (node.nodeType !== Node.ELEMENT_NODE) return null;
+    const element = node as HTMLElement;
+    const tag = element.tagName.toLowerCase();
+    if (tag === "script" || tag === "style") return null;
+    const children = Array.from(element.childNodes).map((child, index) => render(child, `${key}-${index}`));
+    if (tag === "br") return <br key={key} />;
+    if (tag === "strong" || tag === "b") return <strong key={key}>{children}</strong>;
+    if (tag === "em" || tag === "i") return <em key={key}>{children}</em>;
+    if (tag === "mark") return <mark key={key}>{children}</mark>;
+    return children;
+  };
+  return Array.from(root.childNodes).map((node, index) => render(node, String(index)));
+}
+
+export function EvidenceBox({ sources, selectedSourceId, onIntent }: { sources: CanonicalSource[]; selectedSourceId?: string; onIntent: (intent: BoxIntent) => void }) {
+  return <aside className={styles.evidence} aria-label="Evidence"><h2 className={styles.srOnly}>Evidence</h2><ul className={styles.evidenceList}>{sources.map((source, index) => <li id={`source-${source.sourceId}`} key={source.sourceId} className={selectedSourceId === source.sourceId ? styles.evidenceItemActive : styles.evidenceItem} style={{ "--relational-accent": `var(--accent-${sourceAccentSlotForIndex(index, 8) + 1})` } as CSSProperties} aria-current={selectedSourceId === source.sourceId ? "true" : undefined} tabIndex={-1} onFocus={() => onIntent({ type: "source_open_requested", sourceId: String(source.sourceId) })}><a className={styles.sourceAccent} style={{ "--relational-accent": `var(--accent-${sourceAccentSlotForIndex(index, 8) + 1})` } as CSSProperties} href={source.url} target="_blank" rel="noreferrer" onFocus={() => onIntent({ type: "source_open_requested", sourceId: String(source.sourceId) })}><span aria-hidden="true">{index + 1}. </span><span>{source.title}</span></a><small>{source.displayUrl}</small>{source.snippet && <p>{snippetContent(source.snippet)}</p>}</li>)}</ul></aside>;
+}

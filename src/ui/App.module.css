@@ -1,8 +1,12 @@
 .shell {
+  width: 100%;
   min-height: 100vh;
-  padding: 0 2rem;
+  padding: 0 clamp(1rem, 3vw, 3rem);
   background: var(--paper);
   color: var(--ink);
+}
+.threadShell {
+  padding-bottom: clamp(12rem, 20vh, 18rem);
 }
 .header {
   position: sticky;
@@ -23,6 +27,12 @@
   min-width: 0;
 }
 .signature {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  border: 0;
+  padding: 0;
+  background: transparent;
   color: var(--ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.78rem;
@@ -30,6 +40,10 @@
   letter-spacing: -0.08em;
   white-space: nowrap;
   text-decoration: none;
+  cursor: pointer;
+}
+.signature:focus-visible {
+  border-radius: 0.2rem;
 }
 .brand {
   color: inherit;
@@ -53,11 +67,11 @@
   line-height: 1;
 }
 .hero {
-  width: min(100%, 1100px);
+  width: min(100%, 110rem);
   margin: calc(10vh + 2.5rem) auto 0;
 }
-.hero h1,
-.topic h1,
+.hero > h1,
+.topic > h1,
 .pageTitle {
   font-family: var(--display);
   font-size: clamp(2rem, 5vw, 3.5rem);
@@ -144,7 +158,16 @@
   line-height: 1.8;
 }
 .commandList p {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
   margin: 0;
+}
+.commandList p > span {
+  white-space: nowrap;
+}
+.commandList a {
+  color: inherit;
+  text-decoration: none;
 }
 .center {
   display: grid;
@@ -179,7 +202,7 @@
   color: var(--ink);
 }
 .unlockCard {
-  width: min(100%, 72rem);
+  width: min(100%, 110rem);
   margin: 28vh auto 0;
 }
 .unlockCard > .kicker {
@@ -222,8 +245,7 @@
   white-space: nowrap;
   border: 0;
 }
-.card button,
-.workbenchActions button {
+.card button {
   border: 1px solid var(--ink);
   border-radius: 999px;
   background: var(--ink);
@@ -308,19 +330,40 @@
   line-height: 1.4;
 }
 .themeControl {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) minmax(12rem, 16rem);
   align-items: center;
-  gap: 0.5rem;
+  gap: 1rem;
+  width: min(100%, 32rem);
   margin-top: 1rem;
   color: var(--muted);
   font-size: 0.8rem;
+  line-height: 1.2;
 }
-.themeControl select {
+.themeControl span {
+  min-width: 0;
+}
+.settingsSelect {
+  position: relative;
+  min-width: 0;
+}
+.settingsSelectTrigger {
+  width: 100%;
+  min-height: 2.25rem;
   border: 1px solid var(--line);
   border-radius: 0.4rem;
   background: var(--paper);
   color: var(--ink);
-  padding: 0.3rem;
+  padding: 0.55rem 0.8rem;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.settingsSelectTrigger[aria-expanded="true"],
+.settingsSelectTrigger:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 2px;
 }
 .topicActions {
   display: flex;
@@ -352,14 +395,12 @@
 }
 .topicLayout {
   display: block;
-  width: min(100%, 72rem);
-  margin: 0 auto;
-  padding-bottom: 8rem;
+  width: min(100%, 110rem);
+  margin: 0;
+  padding-bottom: max(10rem, calc(6rem + env(safe-area-inset-bottom)));
 }
 .researchLayout {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(15rem, 1fr);
-  gap: 2rem;
+  display: block;
 }
 .lookupLayout .sourcesBox { width: 100%; }
 .lookupLayout .scrollback { margin-bottom: 1rem; }
@@ -372,12 +413,11 @@
 }
 .evidence {
   display: block;
-  position: sticky;
-  top: 1rem;
-  align-self: start;
-  margin-top: 8vh;
-  padding: 1.25rem;
-  border-left: 1px solid var(--line);
+  width: 100%;
+  position: static;
+  margin-top: 3rem;
+  padding: 1.25rem 0;
+  border-block: 1px solid var(--line);
 }
 .evidence a,
 .resultList a,
@@ -390,13 +430,15 @@
   text-underline-offset: 0.12em;
 }
 .evidenceList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .evidenceItem {
-  border-bottom: 1px solid var(--line);
-  padding: 0.75rem 0;
+  min-width: 0;
+  padding: 1.25rem 1.5rem;
 }
 .evidenceItem small {
   display: block;
@@ -408,8 +450,8 @@
   line-height: 1.45;
 }
 .evidenceItemActive {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  outline: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--relational-accent, var(--accent)) 18%, transparent);
+  outline: 1px solid var(--relational-accent, var(--accent));
   outline-offset: -1px;
 }
 .citation {
@@ -417,9 +459,38 @@
   font-weight: 700;
   text-decoration-color: var(--accent);
 }
+.sourceAccent,
+.evidence a.sourceAccent,
+.scrollback a.sourceAccent {
+  color: var(--relational-accent, var(--ink));
+  text-decoration-color: var(--relational-accent, var(--accent));
+  text-decoration-thickness: 0.18em;
+  text-underline-offset: 0.12em;
+}
+.answerMarkdown { min-width: 0; }
+.answerHeading,
+.answerInlineAccent { color: var(--relational-accent, var(--ink)); }
+.answerInlineAccent { text-decoration-color: var(--relational-accent, var(--accent)); }
+.answerMarkdown h1,
+.answerMarkdown h2,
+.answerMarkdown h3,
+.answerMarkdown h4,
+.answerMarkdown h5,
+.answerMarkdown h6 { line-height: 1.1; }
+.answerMarkdown p,
+.answerMarkdown ul,
+.answerMarkdown ol,
+.answerMarkdown pre,
+.answerMarkdown blockquote { max-width: 70ch; }
+.routeLayout {
+  width: min(100%, 110rem);
+  min-height: calc(100vh - 5rem);
+  margin: 0 auto;
+  padding: clamp(1.5rem, 5vw, 5rem) 0 8rem;
+}
 .settings {
-  width: min(100%, 48rem);
-  margin: 10vh auto;
+  width: 100%;
+  margin: 0;
 }
 .settings h1 {
   font-size: clamp(2.4rem, 7vw, 4rem);
@@ -467,7 +538,9 @@
   display: flex;
   align-items: center;
   gap: 1rem;
+  margin-left: auto;
 }
+.iconButtonSuccess { color: #2f9e44; }
 .inlineSources { display: none; }
 .textButton {
   border: 0;
@@ -480,28 +553,31 @@
   cursor: pointer;
 }
 .routeHint { opacity: 0.7; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.08em; }
-.scrollback { max-width: 54rem; margin: 2rem auto 8rem; font-size: 1.05rem; line-height: 1.65; }
+.scrollback { max-width: 90rem; margin: 2rem 0 8rem; font-size: 1.05rem; line-height: 1.65; }
+.turnSeparator { margin: 3rem 0; border: 0; border-top: 1px solid var(--line); }
 .scrollback h1 { font-size: clamp(1.8rem, 4vw, 3rem); }
 .scrollback a { color: inherit; text-decoration-color: var(--accent); }
 .scrollback blockquote { margin-left: 0; margin-right: 1rem; border-left: 3px solid var(--accent); padding-left: 0.5rem; color: var(--muted); }
+.userTurn { margin-block: 1.5rem; }
 .promptBox {
   position: fixed;
   z-index: 3;
-  right: max(1rem, calc((100vw - 72rem) / 2));
+  right: clamp(1rem, 3vw, 3rem);
   bottom: max(1rem, env(safe-area-inset-bottom));
-  left: max(1rem, calc((100vw - 72rem) / 2));
+  left: clamp(1rem, 3vw, 3rem);
   display: flex;
   gap: 0.6rem;
-  padding: 0.65rem;
+  padding: 0.4rem 0.75rem;
   border: 1px solid var(--line);
   border-radius: 0;
   background: color-mix(in srgb, var(--paper) 96%, transparent);
   box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 12%);
   backdrop-filter: blur(10px);
 }
-.promptBox > input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); padding: 0.85rem 0.7rem; }
+.promptBox:focus-within { border-color: var(--accent); }
+.promptBox > input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); padding: 0.65rem 0.7rem; }
 .promptHint { align-self: center; color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
-.commandMessage { width: min(100%, 72rem); margin: 1rem auto; color: var(--muted); }
+.commandMessage { width: min(100%, 110rem); margin: 1rem auto; color: var(--muted); }
 .researchPlanLive {
   margin: 2rem 0;
   padding: 1rem 1.25rem;
@@ -529,8 +605,11 @@
 .loaderBars i:nth-child(2) { animation-delay: 0.18s; }
 .loaderBars i:nth-child(3) { animation-delay: 0.36s; }
 @keyframes loaderPulse { from { height: 0.35rem; opacity: 0.45; } to { height: 1.35rem; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .loaderBars i { animation: none; height: 0.8rem; opacity: 0.8; }
+}
 .commandOverlay { position: fixed; z-index: 4; inset: 0; display: grid; place-items: center; padding: clamp(1rem, 7vw, 7rem); background: color-mix(in srgb, var(--paper) 96%, transparent); }
-.threadPicker { width: min(72rem, 100%); min-height: min(82vh, 52rem); padding: clamp(1.5rem, 5vw, 5rem); border: 1px solid var(--line); border-radius: 0; background: var(--paper); box-shadow: var(--shadow); }
+.threadPicker { width: 100%; min-height: 0; padding: 0; background: transparent; }
 .threadPickerInline {
   width: 100%;
   min-height: 0;
@@ -551,14 +630,21 @@
 }
 .threadPicker ul { max-height: 55vh; overflow: auto; margin: 1rem 0; padding: 0; list-style: none; }
 .threadRow {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
   margin-block: 1.5rem;
   padding-block: 1.25rem;
 }
-.threadPicker li button { display: grid; min-width: 0; flex: 1; border: 0; background: transparent; color: var(--ink); padding: 0.8rem; text-align: left; cursor: pointer; }
-.threadPicker li .threadDelete { flex: 0 0 auto; padding-inline: 0.8rem; color: var(--muted); font-size: 0.75rem; }
-.threadPicker li .threadDelete:hover { color: var(--ink); }
+.threadPicker li button { display: grid; min-width: 0; border: 0; background: transparent; color: var(--ink); padding: 0.8rem; text-align: left; cursor: pointer; }
+.threadPicker li .threadDelete,
+.threadPicker li .threadActions { grid-column: 2; align-self: stretch; }
+.threadPicker li .threadDelete { width: 2.5rem; padding: 0.35rem 0.55rem; color: #d20f39; font-size: 1.1rem; font-weight: 700; line-height: 1; text-decoration: none; text-align: center; }
+.threadPicker li .threadDelete:hover { color: #e11d48; }
+.threadPicker li .threadActions { display: inline-flex; align-items: center; gap: 0.35rem; }
+.threadPicker li .threadActions button { display: inline-flex; width: auto; padding: 0.45rem 0.65rem; }
+:global(:root[data-theme="dark"]) .threadPicker li .threadDelete { color: #f38ba8; }
+:global(:root[data-theme="dark"]) .threadPicker li .threadDelete:hover { color: #f5a3b8; }
 .threadPicker li button small { color: var(--muted); margin-top: 0.25rem; }
 .threadPicker .threadSelected button { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .threadPicker li button:focus-visible { outline: none; }
@@ -609,38 +695,6 @@
   margin: 2rem 0;
   font-weight: 700;
 }
-.workbench {
-  max-width: 900px;
-  margin: 8vh auto;
-}
-.workbenchActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  margin-bottom: 1rem;
-}
-.workbench textarea,
-.preview {
-  width: 100%;
-  min-height: 60vh;
-  padding: 1rem;
-  border: 1px solid var(--line);
-  border-radius: 0.7rem;
-  background: var(--paper);
-  color: var(--ink);
-  font:
-    1rem/1.6 "Helvetica Neue",
-    Helvetica,
-    Arial,
-    sans-serif;
-}
-.preview {
-  overflow: auto;
-}
-.preview pre {
-  white-space: pre-wrap;
-  margin: 0;
-}
 .muted {
   color: var(--muted);
 }
@@ -672,17 +726,16 @@
     display: block;
   }
   .promptBox {
-    right: 0.75rem;
     bottom: max(0.75rem, env(safe-area-inset-bottom));
-    left: 0.75rem;
   }
   .promptHint { display: none; }
   .promptBox > button { padding-inline: 0.7rem; }
   .evidence {
-    position: static;
     margin: 2rem 0;
-    border-left: 0;
-    border-top: 1px solid var(--line);
+    padding-block: 0.75rem;
+  }
+  .evidenceItem {
+    padding: 1.1rem 0.75rem;
   }
   .hero,
   .topic {
