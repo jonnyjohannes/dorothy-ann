@@ -47,7 +47,8 @@ export function threadMarkdown(thread: Thread): string {
               return number && source ? `[${number}](${source.url})` : `[${number ?? "?"}]`;
             }).join(" ")
             : "";
-    return `## ${turn.userMessage.content}\n\n${answer}`;
+    const request = turn.userMessage.content.split("\n").map((line) => `> ${line}`).join("\n");
+    return `${request}\n\n---\n\n${answer}`;
   });
   const sourceSection = orderedSources.length === 0 ? "" : `\n\n## Sources\n\n${orderedSources.map((source, index) => `${index + 1}. [${markdownLabel(source.title)}](${source.url})`).join("\n")}`;
   return `${turns.join("\n\n---\n\n")}${sourceSection}`;

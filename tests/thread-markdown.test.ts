@@ -31,7 +31,7 @@ describe("thread markdown export", () => {
   });
 
   it("links numbered inline citations and appends matching sources", () => {
-    expect(threadMarkdown(thread)).toContain("It happened[1](https://example.com/b)");
+    expect(threadMarkdown(thread)).toContain("> What happened?\n\n---\n\nIt happened[1](https://example.com/b)");
     expect(threadMarkdown(thread)).toContain("## Sources\n\n1. [Beta source](https://example.com/b)");
     expect(threadMarkdown(thread)).not.toContain("Alpha");
   });
