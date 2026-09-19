@@ -16,6 +16,13 @@ export interface ResearchTimingRecord {
   event: "research_timing";
   schema_version: 1;
   terminal_status: "completed" | "failed" | "interrupted" | "executor_error";
+  answer_position?: "initial" | "follow_up";
+  context?: {
+    turns: number;
+    known_sources: number;
+    evidence_packs: number;
+    evidence_sources: number;
+  };
   resolution_status?: ResearchResolution["status"];
   stop_reason?: ResearchResolution["stopReason"];
   execution_ms: number;
@@ -117,6 +124,8 @@ export class ResearchTimingCollector {
 
   emit(summary: {
     terminalStatus: ResearchTimingRecord["terminal_status"];
+    answerPosition?: ResearchTimingRecord["answer_position"];
+    context?: ResearchTimingRecord["context"];
     resolution?: Pick<ResearchResolution, "status" | "stopReason" | "ledger">;
     ledger?: GapLedger;
   }): void {
@@ -126,6 +135,8 @@ export class ResearchTimingCollector {
       event: "research_timing",
       schema_version: 1,
       terminal_status: summary.terminalStatus,
+      ...(summary.answerPosition ? { answer_position: summary.answerPosition } : {}),
+      ...(summary.context ? { context: summary.context } : {}),
       ...(resolution ? { resolution_status: resolution.status, stop_reason: resolution.stopReason } : {}),
       execution_ms: duration(this.startedAt, this.now()),
       ...(this.resolutionMs === undefined ? {} : { resolution_ms: this.resolutionMs }),

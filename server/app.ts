@@ -149,7 +149,18 @@ function createExecutor(
         }
         return terminalFor(result);
       } finally {
-        timing?.emit({ terminalStatus: timingTerminalStatus, resolution: timingResolution, ledger: timingLedger });
+        timing?.emit({
+          terminalStatus: timingTerminalStatus,
+          answerPosition: request.answerPosition,
+          context: {
+            turns: request.context.turns.length,
+            known_sources: request.context.knownSources.length,
+            evidence_packs: request.context.availableEvidence.length,
+            evidence_sources: request.context.availableEvidence.reduce((total, pack) => total + pack.sources.length, 0),
+          },
+          resolution: timingResolution,
+          ledger: timingLedger,
+        });
       }
     },
   };

@@ -29,6 +29,8 @@ describe("research timing", () => {
     time = 50;
     collector.emit({
       terminalStatus: "completed",
+      answerPosition: "follow_up",
+      context: { turns: 1, known_sources: 2, evidence_packs: 1, evidence_sources: 1 },
       resolution: { status: "sufficient", stopReason: "sufficient", ledger: { gaps: [], searchesUsed: 1, sourcesConsumed: 1, assessmentsUsed: 1 } },
     });
 
@@ -36,6 +38,8 @@ describe("research timing", () => {
       event: "research_timing",
       schema_version: 1,
       terminal_status: "completed",
+      answer_position: "follow_up",
+      context: { turns: 1, known_sources: 2, evidence_packs: 1, evidence_sources: 1 },
       resolution_status: "sufficient",
       stop_reason: "sufficient",
       execution_ms: 50,
