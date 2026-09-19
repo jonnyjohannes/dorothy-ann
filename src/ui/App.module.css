@@ -344,6 +344,13 @@
   position: relative;
   min-width: 0;
 }
+.settingsSelect .ui-listbox-menu {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  left: 0;
+}
 .settingsSelectTrigger {
   width: 100%;
   min-height: 2.25rem;
@@ -361,32 +368,6 @@
   border-color: var(--accent);
   outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
   outline-offset: 2px;
-}
-.settingsSelectMenu {
-  position: absolute;
-  z-index: 5;
-  top: calc(100% + 0.35rem);
-  right: 0;
-  left: 0;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  background: var(--paper);
-  color: var(--ink);
-  box-shadow: 0 0.8rem 2rem color-mix(in srgb, var(--ink) 20%, transparent);
-}
-.settingsSelectMenu:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.settingsSelectOption {
-  padding: 0.7rem 0.8rem;
-  cursor: pointer;
-}
-.settingsSelectOption:hover,
-.settingsSelectOptionActive,
-.settingsSelectOption[aria-selected="true"] {
-  background: color-mix(in srgb, var(--accent) 22%, var(--paper));
-  color: var(--ink);
 }
 .topicActions {
   display: flex;
@@ -599,7 +580,7 @@
 }
 .promptBox:focus-within { border-color: var(--accent); }
 .promptBox > input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); padding: 0.65rem 0.7rem; }
-.promptBox > ul {
+.promptBox > .ui-listbox-menu {
   position: absolute;
   left: 0;
   bottom: calc(100% + 0.5rem);
@@ -608,14 +589,9 @@
   max-width: min(24rem, 90vw);
   margin: 0;
   padding: 0.35rem 0;
-  border: 1px solid var(--line);
-  background: var(--paper);
-  box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 18%);
-  list-style: none;
 }
-.promptBox > ul li { padding: 0.35rem 0.65rem; color: var(--muted); cursor: pointer; }
-.promptBox > ul li strong { color: var(--ink); }
-.promptBox > ul li[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 22%, var(--paper)); color: var(--ink); }
+.promptBox > .ui-listbox-menu__option { color: var(--muted); }
+.promptBox > .ui-listbox-menu .ui-listbox-menu__option strong { color: var(--ink); }
 .promptHint { align-self: center; color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
 .commandMessage { width: min(100%, 110rem); margin: 1rem auto; color: var(--muted); }
 .researchPlanLive {

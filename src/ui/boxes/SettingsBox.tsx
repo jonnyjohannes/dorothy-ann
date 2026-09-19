@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import styles from "../App.module.css";
+import { ListboxMenu } from "../primitives/ListboxMenu";
 import type { BoxIntent } from "./box-types";
 
 type SettingKey = "theme" | "colorScheme" | "primaryAccent";
@@ -51,7 +52,7 @@ function SettingsSelect({ label, value, options, onChange }: { label: string; va
 
   return <div className={styles.settingsSelect}>
     <button ref={trigger} type="button" className={styles.settingsSelectTrigger} aria-label={label} aria-haspopup="listbox" aria-expanded={open} aria-controls={listboxId} onClick={() => setOpen((current) => !current)} onKeyDown={onTriggerKeyDown}>{activeOption?.label}</button>
-    {open && <div ref={listbox} id={listboxId} className={styles.settingsSelectMenu} role="listbox" aria-label={label} tabIndex={-1} onKeyDown={onListboxKeyDown}>{options.map((option, index) => <div key={option.value} role="option" aria-selected={option.value === value} className={`${styles.settingsSelectOption} ${index === active ? styles.settingsSelectOptionActive : ""}`} onMouseEnter={() => setActive(index)} onClick={() => select(option)}>{option.label}</div>)}</div>}
+    {open && <ListboxMenu items={options} activeIndex={active} selectedIndex={options.findIndex((option) => option.value === value)} ariaLabel={label} id={listboxId} onActiveIndexChange={setActive} onSelect={select} listboxRef={listbox} onKeyDown={onListboxKeyDown} renderItem={(option) => option.label} />}
   </div>;
 }
 

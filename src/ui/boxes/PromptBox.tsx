@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import styles from "../App.module.css";
 import type { BoxIntent } from "./box-types";
+import { ListboxMenu } from "../primitives/ListboxMenu";
 import { useRotatingCaretColor } from "../use-rotating-caret-color";
 
 const COMMANDS = ["/new", "/search", "/settings", "/threads"] as const;
@@ -29,5 +30,5 @@ export function PromptBox({ value, disabled = false, onChange, onIntent }: { val
     }
     else if (event.key === "c" && (event.ctrlKey || event.metaKey) && input.current && input.current === document.activeElement && input.current.selectionStart === input.current.selectionEnd) { event.preventDefault(); onChange(""); }
   };
-  return <form className={styles.promptBox} onSubmit={submit}><input ref={input} autoFocus className={styles.promptInput} aria-label="Search query" value={value} disabled={disabled} placeholder="???" style={caret.style} onChange={(event) => { onChange(event.target.value); setActive(0); }} onKeyDown={onKeyDown} onFocus={(event) => { caret.onFocus(event); setEscapeArmed(false); }} onBlur={caret.onBlur} />{suggestionsOpen && suggestions.length > 0 && <ul role="listbox" aria-label="Commands">{suggestions.map((command, index) => <li key={command} role="option" aria-selected={index === active} onMouseDown={(event) => { event.preventDefault(); setActive(index); onChange(command === "/search" ? `${command} ` : command); setSuggestionsOpen(false); }}>{renderSuggestion(command)}</li>)}</ul>}</form>;
+  return <form className={styles.promptBox} onSubmit={submit}><input ref={input} autoFocus className={styles.promptInput} aria-label="Search query" value={value} disabled={disabled} placeholder="???" style={caret.style} onChange={(event) => { onChange(event.target.value); setActive(0); }} onKeyDown={onKeyDown} onFocus={(event) => { caret.onFocus(event); setEscapeArmed(false); }} onBlur={caret.onBlur} />{suggestionsOpen && suggestions.length > 0 && <ListboxMenu items={suggestions} activeIndex={active} ariaLabel="Commands" onActiveIndexChange={setActive} onSelect={(command) => { onChange(command === "/search" ? `${command} ` : command); setSuggestionsOpen(false); }} renderItem={(command) => renderSuggestion(command)} />}</form>;
 }
