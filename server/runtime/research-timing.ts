@@ -18,6 +18,7 @@ export interface ResearchTimingRecord {
   terminal_status: "completed" | "failed" | "interrupted" | "executor_error";
   answer_position?: "initial" | "follow_up";
   assessment_failure_code?: "provider_bad_request" | "provider_rate_limited" | "provider_unavailable" | "provider_failed" | "provider_interrupted" | "assessment_invalid_response";
+  assessment_directive?: "resolved" | "search" | "decompose";
   context?: {
     turns: number;
     known_sources: number;
@@ -68,6 +69,7 @@ export class ResearchTimingCollector {
   private resolutionMs: number | undefined;
   private firstAnswerSignalMs: number | undefined;
   private assessmentFailureCode: ResearchTimingRecord["assessment_failure_code"];
+  private assessmentDirective: ResearchTimingRecord["assessment_directive"];
 
   constructor(
     private readonly sink: ResearchTimingSink,
@@ -124,6 +126,10 @@ export class ResearchTimingCollector {
     this.firstAnswerSignalMs ??= duration(this.startedAt, this.now());
   }
 
+  markAssessmentDirective(value: unknown): void {
+    if (value === "resolved" || value === "search" || value === "decompose") this.assessmentDirective = value;
+  }
+
   markAssessmentFailure(error: unknown): void {
     const code = error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : undefined;
     const allowed: ResearchTimingRecord["assessment_failure_code"][] = ["provider_bad_request", "provider_rate_limited", "provider_unavailable", "provider_failed", "provider_interrupted", "assessment_invalid_response"];
@@ -145,6 +151,7 @@ export class ResearchTimingCollector {
       terminal_status: summary.terminalStatus,
       ...(summary.answerPosition ? { answer_position: summary.answerPosition } : {}),
       ...(this.assessmentFailureCode ? { assessment_failure_code: this.assessmentFailureCode } : {}),
+      ...(this.assessmentDirective ? { assessment_directive: this.assessmentDirective } : {}),
       ...(summary.context ? { context: summary.context } : {}),
       ...(resolution ? { resolution_status: resolution.status, stop_reason: resolution.stopReason } : {}),
       execution_ms: duration(this.startedAt, this.now()),
