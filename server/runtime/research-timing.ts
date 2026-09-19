@@ -19,7 +19,7 @@ export interface ResearchTimingRecord {
   terminal_status: "completed" | "failed" | "interrupted" | "executor_error";
   answer_position?: "initial" | "follow_up";
   assessment_failure_code?: "provider_bad_request" | "provider_rate_limited" | "provider_unavailable" | "provider_failed" | "provider_interrupted" | "assessment_invalid_response";
-  assessment_invalid_reason?: "empty_response" | "invalid_json" | "missing_directive" | "unknown_directive" | "invalid_search" | "invalid_resolved" | "invalid_decomposition";
+  assessment_invalid_reason?: "empty_response" | "invalid_json" | "missing_directive" | "unknown_directive" | "invalid_search_query" | "invalid_resolved" | "invalid_decomposition";
   assessment_directive?: "resolved" | "search" | "decompose";
   context?: {
     turns: number;
@@ -138,7 +138,7 @@ export class ResearchTimingCollector {
     const allowed: ResearchTimingRecord["assessment_failure_code"][] = ["provider_bad_request", "provider_rate_limited", "provider_unavailable", "provider_failed", "provider_interrupted", "assessment_invalid_response"];
     if (code && allowed.includes(code as ResearchTimingRecord["assessment_failure_code"])) this.assessmentFailureCode = code as ResearchTimingRecord["assessment_failure_code"];
     const reason = error && typeof error === "object" && "reason" in error && typeof error.reason === "string" ? error.reason : undefined;
-    const reasons: ResearchTimingRecord["assessment_invalid_reason"][] = ["empty_response", "invalid_json", "missing_directive", "unknown_directive", "invalid_search", "invalid_resolved", "invalid_decomposition"];
+    const reasons: ResearchTimingRecord["assessment_invalid_reason"][] = ["empty_response", "invalid_json", "missing_directive", "unknown_directive", "invalid_search_query", "invalid_resolved", "invalid_decomposition"];
     if (reason && reasons.includes(reason as ResearchTimingRecord["assessment_invalid_reason"])) this.assessmentInvalidReason = reason as ResearchTimingRecord["assessment_invalid_reason"];
   }
 

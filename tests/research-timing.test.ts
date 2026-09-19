@@ -25,7 +25,7 @@ describe("research timing", () => {
     for await (const part of llm.synthesizeResearch(synthesisInput)) parts.push(part);
     expect(parts).toHaveLength(1);
     collector.markAssessmentDirective("search");
-    collector.markAssessmentFailure({ code: "provider_rate_limited", reason: "invalid_search" });
+    collector.markAssessmentFailure({ code: "provider_rate_limited", reason: "invalid_search_query" });
     time = 45;
     collector.markFirstAnswerSignal();
     time = 50;
@@ -42,7 +42,7 @@ describe("research timing", () => {
       terminal_status: "completed",
       answer_position: "follow_up",
       assessment_failure_code: "provider_rate_limited",
-      assessment_invalid_reason: "invalid_search",
+      assessment_invalid_reason: "invalid_search_query",
       assessment_directive: "search",
       context: { turns: 1, known_sources: 2, evidence_packs: 1, evidence_sources: 1 },
       resolution_status: "sufficient",

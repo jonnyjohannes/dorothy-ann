@@ -202,7 +202,12 @@ export function createApp({ config, systemPrompts, threadStoreV3: injectedStore,
   const llm: LLMProvider = config.DOROTHY_FIXTURE_MODE
     ? new FixtureLlmProvider()
     : config.ANTHROPIC_API_KEY && config.ANTHROPIC_ASSESSMENT_MODEL && config.ANTHROPIC_SYNTHESIS_MODEL
-      ? new AnthropicProvider({ apiKey: config.ANTHROPIC_API_KEY, assessmentModel: config.ANTHROPIC_ASSESSMENT_MODEL, synthesisModel: config.ANTHROPIC_SYNTHESIS_MODEL })
+      ? new AnthropicProvider({
+        apiKey: config.ANTHROPIC_API_KEY,
+        assessmentModel: config.ANTHROPIC_ASSESSMENT_MODEL,
+        synthesisModel: config.ANTHROPIC_SYNTHESIS_MODEL,
+        onDiagnostic: (record) => logger.debug(record.event, { stage: record.stage, reason: record.reason }),
+      })
       : new UnavailableLlmProvider();
   const timingSink = researchTimingSink ?? (config.RESEARCH_TIMING_LOGS || logger.enabled("debug") ? loggerResearchTimingSink(logger, config.RESEARCH_TIMING_LOGS && !logger.enabled("debug") ? "info" : "debug") : undefined);
   const executor = createExecutor(config, systemPrompts, identities, search, llm, extractor, logger, timingSink);

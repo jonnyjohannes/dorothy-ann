@@ -112,9 +112,17 @@ describe("AnthropicProvider v3", () => {
     expect(result.directive).toMatchObject({ kind: "search", query: "independent reporting", priority: 1 });
   });
 
+  it("fills trusted search metadata when unstructured output supplies only a query", async () => {
+    const fake = client([{ content: [{ type: "text", text: JSON.stringify({ directive: { kind: "search", query: "Rio events September 19 2026" } }) }] }]);
+    const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: fake });
+    await expect(provider.assessResearch(baseAssessment)).resolves.toEqual({ directive: { kind: "search", query: "Rio events September 19 2026", purpose: baseAssessment.problem.purpose, successCriterion: baseAssessment.problem.successCriterion, priority: 1 } });
+  });
+
   it("falls back without structured output only for a classified 400 response", async () => {
     const requests: Array<Record<string, unknown>> = [];
+    const diagnostics: unknown[] = [];
     const provider = new AnthropicProvider({
+      onDiagnostic: (record) => diagnostics.push(record),
       assessmentModel: "high",
       synthesisModel: "balanced",
       client: { messages: { create: async (input: Record<string, unknown>) => {
@@ -127,6 +135,7 @@ describe("AnthropicProvider v3", () => {
     expect(requests).toHaveLength(2);
     expect(requests[0].output_config).toBeDefined();
     expect(requests[1].output_config).toBeUndefined();
+    expect(diagnostics).toEqual([{ event: "assessment_structured_output_fallback", stage: "assessing", reason: "provider_bad_request" }]);
   });
 
   it.each([401, 403, 404, 422])("does not replay permanent HTTP %s failures", async (status) => {

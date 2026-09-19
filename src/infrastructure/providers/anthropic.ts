@@ -120,7 +120,7 @@ export type AnthropicFailureCode =
   | "assessment_invalid_response"
   | "synthesis_invalid_response";
 
-export type AssessmentInvalidReason = "empty_response" | "invalid_json" | "missing_directive" | "unknown_directive" | "invalid_search" | "invalid_resolved" | "invalid_decomposition";
+export type AssessmentInvalidReason = "empty_response" | "invalid_json" | "missing_directive" | "unknown_directive" | "invalid_search_query" | "invalid_resolved" | "invalid_decomposition";
 
 export class AnthropicProviderError extends Error {
   readonly name = "AnthropicProviderError";
@@ -134,11 +134,13 @@ export interface AnthropicProviderOptions {
   assessmentModel: string;
   synthesisModel: string;
   client?: { messages: MessagesClient };
+  onDiagnostic?: (record: { event: "assessment_structured_output_fallback"; stage: "assessing"; reason: "provider_bad_request" }) => void;
 }
 
 /** Anthropic is deliberately kept behind the provider-neutral LLMProvider port. */
 export class AnthropicProvider implements LLMProvider {
   private readonly messages: MessagesClient;
+  private readonly onDiagnostic: AnthropicProviderOptions["onDiagnostic"];
   readonly assessmentModelRef: string;
   readonly synthesisModelRef: string;
 
@@ -157,6 +159,7 @@ export class AnthropicProvider implements LLMProvider {
     this.assessmentModelRef = options.assessmentModel;
     this.synthesisModelRef = options.synthesisModel;
     this.messages = options.client?.messages ?? new Anthropic({ apiKey: options.apiKey }).messages as unknown as MessagesClient;
+    this.onDiagnostic = options.onDiagnostic;
   }
 
   async assessResearch(input: ResearchAssessmentInput): Promise<ResearchAssessmentProposal> {
@@ -174,12 +177,13 @@ export class AnthropicProvider implements LLMProvider {
         };
         const response = await this.create(request, input.signal);
         const text = responseText(response);
-        const proposal = parseProposal(text, input.allowedSupportRefs);
+        const proposal = parseProposal(text, input.allowedSupportRefs, input.problem);
         if (proposal) return proposal;
         invalidReason = assessmentInvalidReason(text);
       } catch (error) {
         if (error instanceof AnthropicProviderError && error.code === "provider_bad_request" && structuredOutput) {
           structuredOutput = false;
+          this.onDiagnostic?.({ event: "assessment_structured_output_fallback", stage: "assessing", reason: "provider_bad_request" });
           continue;
         }
         if (error instanceof AnthropicProviderError && error.code !== "assessment_invalid_response") throw error;
@@ -378,12 +382,12 @@ function assessmentInvalidReason(text: string): AssessmentInvalidReason {
   const directive = objectValue(root.directive) ?? root;
   const kind = normalizeKind(directive.kind ?? directive.type ?? directive.action);
   if (!kind) return root.directive === undefined ? "missing_directive" : "unknown_directive";
-  if (kind === "search") return "invalid_search";
+  if (kind === "search") return "invalid_search_query";
   if (kind === "resolved") return "invalid_resolved";
   return "invalid_decomposition";
 }
 
-function parseProposal(text: string, allowedSupportRefs: ResearchAssessmentInput["allowedSupportRefs"]): ResearchAssessmentProposal | undefined {
+function parseProposal(text: string, allowedSupportRefs: ResearchAssessmentInput["allowedSupportRefs"], problem: ResearchAssessmentInput["problem"]): ResearchAssessmentProposal | undefined {
   for (const raw of jsonObjectCandidates(text)) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
     const root = raw as Record<string, unknown>;
@@ -397,7 +401,7 @@ function parseProposal(text: string, allowedSupportRefs: ResearchAssessmentInput
       if (result) return result;
     }
     if (kind === "search") {
-      const result = parseSearch(directive);
+      const result = parseSearch(directive, problem);
       if (result) return result;
     }
     if (kind === "decompose") {
@@ -423,13 +427,14 @@ function parseResolved(value: Record<string, unknown>, allowedSupportRefs: Resea
   return { directive: { kind: "resolved", observations } };
 }
 
-function parseSearch(value: Record<string, unknown>): ResearchAssessmentProposal | undefined {
+function parseSearch(value: Record<string, unknown>, problem: ResearchAssessmentInput["problem"]): ResearchAssessmentProposal | undefined {
   const query = value.query ?? value.search;
-  const purpose = value.purpose;
-  const successCriterion = value.successCriterion ?? value.success_criterion;
-  const priority = parsePriority(value.priority);
-  if (!bounded(query, 500) || !bounded(purpose, 240) || !bounded(successCriterion, 500) || !priority) return undefined;
-  return { directive: { kind: "search", query: query as string, purpose: purpose as string, successCriterion: successCriterion as string, priority } };
+  if (!bounded(query, 500)) return undefined;
+  const purpose = bounded(value.purpose, 240) ? value.purpose : problem.purpose;
+  const proposedCriterion = value.successCriterion ?? value.success_criterion;
+  const successCriterion = bounded(proposedCriterion, 500) ? proposedCriterion : problem.successCriterion;
+  const priority = parsePriority(value.priority) ?? 1;
+  return { directive: { kind: "search", query, purpose, successCriterion, priority } };
 }
 
 function parseDecompose(value: Record<string, unknown>): ResearchAssessmentProposal | undefined {
