@@ -344,13 +344,6 @@
   position: relative;
   min-width: 0;
 }
-.settingsSelect .ui-listbox-menu {
-  position: absolute;
-  z-index: 5;
-  top: calc(100% + 0.35rem);
-  right: 0;
-  left: 0;
-}
 .settingsSelectTrigger {
   width: 100%;
   min-height: 2.25rem;
@@ -580,18 +573,6 @@
 }
 .promptBox:focus-within { border-color: var(--accent); }
 .promptBox > input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); padding: 0.65rem 0.7rem; }
-.promptBox > .ui-listbox-menu {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 0.5rem);
-  width: max-content;
-  min-width: 12rem;
-  max-width: min(24rem, 90vw);
-  margin: 0;
-  padding: 0.35rem 0;
-}
-.promptBox > .ui-listbox-menu__option { color: var(--muted); }
-.promptBox > .ui-listbox-menu .ui-listbox-menu__option strong { color: var(--ink); }
 .promptHint { align-self: center; color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
 .commandMessage { width: min(100%, 110rem); margin: 1rem auto; color: var(--muted); }
 .researchPlanLive {

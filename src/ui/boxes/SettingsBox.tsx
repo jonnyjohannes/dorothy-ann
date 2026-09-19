@@ -52,7 +52,7 @@ function SettingsSelect({ label, value, options, onChange }: { label: string; va
 
   return <div className={styles.settingsSelect}>
     <button ref={trigger} type="button" className={styles.settingsSelectTrigger} aria-label={label} aria-haspopup="listbox" aria-expanded={open} aria-controls={listboxId} onClick={() => setOpen((current) => !current)} onKeyDown={onTriggerKeyDown}>{activeOption?.label}</button>
-    {open && <ListboxMenu items={options} activeIndex={active} selectedIndex={options.findIndex((option) => option.value === value)} ariaLabel={label} id={listboxId} onActiveIndexChange={setActive} onSelect={select} listboxRef={listbox} onKeyDown={onListboxKeyDown} renderItem={(option) => option.label} />}
+    {open && <ListboxMenu items={options} activeIndex={active} selectedIndex={options.findIndex((option) => option.value === value)} ariaLabel={label} id={listboxId} onActiveIndexChange={setActive} onSelect={select} listboxRef={listbox} onKeyDown={onListboxKeyDown} className="ui-listbox-menu--overlay settings-menu" renderItem={(option) => option.label} />}
   </div>;
 }
 

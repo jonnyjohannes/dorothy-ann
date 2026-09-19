@@ -72,6 +72,11 @@
 .ui-listbox-menu__option[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 22%, var(--paper)); }
 .ui-listbox-menu { border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
 .ui-listbox-menu:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.ui-listbox-menu--overlay { position: absolute; z-index: 5; }
+.settings-menu { top: calc(100% + 0.35rem); right: 0; left: 0; }
+.prompt-command-menu { right: 0; bottom: calc(100% + 0.5rem); left: 0; width: max-content; min-width: 12rem; max-width: min(24rem, 90vw); margin: 0; padding-block: 0.35rem; }
+.prompt-command-menu .ui-listbox-menu__option { color: var(--muted); }
+.prompt-command-menu .ui-listbox-menu__option strong { color: var(--ink); }
 .ui-status-text { margin: 0; color: var(--muted); }
 .ui-status-text--assertive { color: #b42318; }
 .ui-visually-hidden {
