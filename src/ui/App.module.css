@@ -327,19 +327,40 @@
   line-height: 1.4;
 }
 .themeControl {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) minmax(12rem, 16rem);
   align-items: center;
-  gap: 0.5rem;
+  gap: 1rem;
+  width: min(100%, 32rem);
   margin-top: 1rem;
   color: var(--muted);
   font-size: 0.8rem;
+  line-height: 1.2;
+}
+.themeControl span {
+  min-width: 0;
 }
 .themeControl select {
+  appearance: none;
+  width: 100%;
+  min-height: 2.25rem;
   border: 1px solid var(--line);
   border-radius: 0.4rem;
-  background: var(--paper);
-  color: var(--ink);
-  padding: 0.3rem;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 0.55rem 2rem 0.55rem 0.8rem;
+  text-align: left;
+  text-align-last: left;
+  font: inherit;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 0.95rem) 0.95rem, calc(100% - 0.7rem) 0.95rem;
+  background-size: 0.25rem 0.25rem, 0.25rem 0.25rem;
+  background-repeat: no-repeat;
+}
+.themeControl select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .topicActions {
   display: flex;
