@@ -6,6 +6,12 @@ const sourceA = { sourceId: "src_a" as never, title: "Alpha [source]", url: "htt
 const sourceB = { sourceId: "src_b" as never, title: "Beta source", url: "https://example.com/b", canonicalUrl: "https://example.com/b", displayUrl: "example.com/b", ordinal: 2 };
 const userMessage = (content: string) => ({ id: crypto.randomUUID() as never, role: "user" as const, content, createdAt: "2026-01-01T00:00:00.000Z" as never });
 
+const rawCitationThread = {
+  schemaVersion: 3, id: "thread_raw", title: "Topic", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", sources: [sourceA], legacyArchive: [], turns: [
+    { id: "turn_raw", kind: "research", status: "completed", createdAt: "2026-01-01T00:00:00.000Z", finishedAt: "2026-01-01T00:00:00.000Z", userMessage: userMessage("What happened?"), execution: { kind: "recorded", assessmentModelRef: "a", synthesisModelRef: "s", searchRef: "search" }, result: { completion: "sufficient", answer: { parts: [{ type: "text", markdown: "Raw [[cite:src_a]] marker." }] }, resolution: {} } },
+  ]
+} as unknown as Thread;
+
 const thread = {
   schemaVersion: 3,
   id: "thread_1",
@@ -20,6 +26,10 @@ const thread = {
 } as unknown as Thread;
 
 describe("thread markdown export", () => {
+  it("converts raw citation markers inside text parts", () => {
+    expect(threadMarkdown(rawCitationThread)).toContain("Raw [1](https://example.com/a) marker.");
+  });
+
   it("links numbered inline citations and appends matching sources", () => {
     expect(threadMarkdown(thread)).toContain("It happened[1](https://example.com/b)");
     expect(threadMarkdown(thread)).toContain("## Sources\n\n1. [Beta source](https://example.com/b)");
