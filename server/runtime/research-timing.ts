@@ -2,6 +2,7 @@ import type { GapLedger, ResearchResolution } from "../../src/domain/types.js";
 import type { ContentExtractor } from "../../src/ports/extraction.js";
 import type { LLMProvider } from "../../src/ports/llm.js";
 import type { SearchProvider } from "../../src/ports/providers.js";
+import type { Logger } from "./logger.js";
 
 export interface StageTiming {
   calls: number;
@@ -18,6 +19,7 @@ export interface ResearchTimingRecord {
   terminal_status: "completed" | "failed" | "interrupted" | "executor_error";
   answer_position?: "initial" | "follow_up";
   assessment_failure_code?: "provider_bad_request" | "provider_rate_limited" | "provider_unavailable" | "provider_failed" | "provider_interrupted" | "assessment_invalid_response";
+  assessment_invalid_reason?: "empty_response" | "invalid_json" | "missing_directive" | "unknown_directive" | "invalid_search" | "invalid_resolved" | "invalid_decomposition";
   assessment_directive?: "resolved" | "search" | "decompose";
   context?: {
     turns: number;
@@ -53,9 +55,9 @@ const duration = (started: number, finished: number): number => {
   return Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
 };
 
-export const jsonResearchTimingSink: ResearchTimingSink = (record) => {
-  console.info(JSON.stringify(record));
-};
+export function loggerResearchTimingSink(logger: Logger, level: "debug" | "info" = "debug"): ResearchTimingSink {
+  return (record) => logger[level](record.event, { stage: "resolving", ...record });
+}
 
 /** Per-execution, allowlisted research timing. Inputs and caught errors are never retained. */
 export class ResearchTimingCollector {
@@ -70,6 +72,7 @@ export class ResearchTimingCollector {
   private firstAnswerSignalMs: number | undefined;
   private assessmentFailureCode: ResearchTimingRecord["assessment_failure_code"];
   private assessmentDirective: ResearchTimingRecord["assessment_directive"];
+  private assessmentInvalidReason: ResearchTimingRecord["assessment_invalid_reason"];
 
   constructor(
     private readonly sink: ResearchTimingSink,
@@ -134,6 +137,9 @@ export class ResearchTimingCollector {
     const code = error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : undefined;
     const allowed: ResearchTimingRecord["assessment_failure_code"][] = ["provider_bad_request", "provider_rate_limited", "provider_unavailable", "provider_failed", "provider_interrupted", "assessment_invalid_response"];
     if (code && allowed.includes(code as ResearchTimingRecord["assessment_failure_code"])) this.assessmentFailureCode = code as ResearchTimingRecord["assessment_failure_code"];
+    const reason = error && typeof error === "object" && "reason" in error && typeof error.reason === "string" ? error.reason : undefined;
+    const reasons: ResearchTimingRecord["assessment_invalid_reason"][] = ["empty_response", "invalid_json", "missing_directive", "unknown_directive", "invalid_search", "invalid_resolved", "invalid_decomposition"];
+    if (reason && reasons.includes(reason as ResearchTimingRecord["assessment_invalid_reason"])) this.assessmentInvalidReason = reason as ResearchTimingRecord["assessment_invalid_reason"];
   }
 
   emit(summary: {
@@ -151,6 +157,7 @@ export class ResearchTimingCollector {
       terminal_status: summary.terminalStatus,
       ...(summary.answerPosition ? { answer_position: summary.answerPosition } : {}),
       ...(this.assessmentFailureCode ? { assessment_failure_code: this.assessmentFailureCode } : {}),
+      ...(this.assessmentInvalidReason ? { assessment_invalid_reason: this.assessmentInvalidReason } : {}),
       ...(this.assessmentDirective ? { assessment_directive: this.assessmentDirective } : {}),
       ...(summary.context ? { context: summary.context } : {}),
       ...(resolution ? { resolution_status: resolution.status, stop_reason: resolution.stopReason } : {}),

@@ -24,7 +24,8 @@ import { createPortableApp } from "../src/server/app.js";
 import type { TurnExecutor, TurnExecutionRequest, TurnExecutionTerminal } from "../src/server/turn-stream-boundary.js";
 import { createThreadStorageRoutes } from "../src/server/thread-storage-routes.js";
 import type { ThreadStore } from "../src/ports/storage-v3.js";
-import { jsonResearchTimingSink, ResearchTimingCollector, type ResearchTimingSink } from "./runtime/research-timing.js";
+import { loggerResearchTimingSink, ResearchTimingCollector, type ResearchTimingSink } from "./runtime/research-timing.js";
+import { createLogger, type Logger } from "./runtime/logger.js";
 
 class UnavailableSearchProvider implements SearchProvider {
   async search(): Promise<import("../src/domain/types.js").SearchResult[]> { throw new Error("provider_unavailable"); }
@@ -74,6 +75,7 @@ function createExecutor(
   search: SearchProvider,
   llm: LLMProvider,
   extractor: ContentExtractor | undefined,
+  logger: Logger,
   researchTimingSink?: ResearchTimingSink,
 ): TurnExecutor {
   const assessor = new ResearchAssessor(identities);
@@ -115,6 +117,9 @@ function createExecutor(
               return result;
             } catch (error) {
               timing?.markAssessmentFailure(error);
+              const code = error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : "unknown";
+              const reason = error && typeof error === "object" && "reason" in error && typeof error.reason === "string" ? error.reason : undefined;
+              logger.debug("assessment_failed", { stage: "assessing", failure_code: code, invalid_reason: reason });
               throw error;
             }
           },
@@ -180,9 +185,11 @@ export interface AppDependencies {
   systemPrompts: SystemPromptCatalog;
   threadStoreV3?: ThreadStore;
   researchTimingSink?: ResearchTimingSink;
+  logger?: Logger;
 }
 
-export function createApp({ config, systemPrompts, threadStoreV3: injectedStore, researchTimingSink }: AppDependencies) {
+export function createApp({ config, systemPrompts, threadStoreV3: injectedStore, researchTimingSink, logger: injectedLogger }: AppDependencies) {
+  const logger = injectedLogger ?? createLogger({ level: config.LOG_LEVEL });
   const identities = new IdentityPolicy(new WebCryptoIdentityHasher());
   const searchReady = config.DOROTHY_FIXTURE_MODE || Boolean(config.BRAVE_SEARCH_API_KEY);
   const llmReady = config.DOROTHY_FIXTURE_MODE || Boolean(config.ANTHROPIC_API_KEY && config.ANTHROPIC_ASSESSMENT_MODEL && config.ANTHROPIC_SYNTHESIS_MODEL);
@@ -197,8 +204,8 @@ export function createApp({ config, systemPrompts, threadStoreV3: injectedStore,
     : config.ANTHROPIC_API_KEY && config.ANTHROPIC_ASSESSMENT_MODEL && config.ANTHROPIC_SYNTHESIS_MODEL
       ? new AnthropicProvider({ apiKey: config.ANTHROPIC_API_KEY, assessmentModel: config.ANTHROPIC_ASSESSMENT_MODEL, synthesisModel: config.ANTHROPIC_SYNTHESIS_MODEL })
       : new UnavailableLlmProvider();
-  const timingSink = researchTimingSink ?? (config.RESEARCH_TIMING_LOGS ? jsonResearchTimingSink : undefined);
-  const executor = createExecutor(config, systemPrompts, identities, search, llm, extractor, timingSink);
+  const timingSink = researchTimingSink ?? (config.RESEARCH_TIMING_LOGS || logger.enabled("debug") ? loggerResearchTimingSink(logger, config.RESEARCH_TIMING_LOGS && !logger.enabled("debug") ? "info" : "debug") : undefined);
+  const executor = createExecutor(config, systemPrompts, identities, search, llm, extractor, logger, timingSink);
   const auth = config.APP_PASSPHRASE_SCRYPT_HASH && config.SESSION_SIGNING_KEYS ? new SessionAuth(config.APP_PASSPHRASE_SCRYPT_HASH, config.SESSION_SIGNING_KEYS) : undefined;
   const limiter: LoginAttemptLimiter = config.UPSTASH_REDIS_REST_URL && config.UPSTASH_REDIS_REST_TOKEN ? new UpstashLoginLimiter(config.UPSTASH_REDIS_REST_URL, config.UPSTASH_REDIS_REST_TOKEN) : new InMemoryLoginLimiter();
   const authenticate = async (context: Context) => {

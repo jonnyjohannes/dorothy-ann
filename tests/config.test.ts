@@ -6,6 +6,7 @@ describe("runtime configuration", () => {
     const config = loadConfig({}, { onDeprecation: vi.fn() });
 
     expect(config).toMatchObject({
+      LOG_LEVEL: "info",
       RESEARCH_TIMING_LOGS: false,
       MAX_SEARCH_RESULTS: 10,
       MAX_CONCURRENT_SEARCHES: 3,
@@ -20,6 +21,11 @@ describe("runtime configuration", () => {
       MAX_OUTPUT_TOKENS: 4_096,
       MAX_TURN_REQUEST_BYTES: 128_000,
     });
+  });
+
+  it("accepts standard log levels", () => {
+    expect(loadConfig({ LOG_LEVEL: "debug" }, { onDeprecation: vi.fn() }).LOG_LEVEL).toBe("debug");
+    expect(() => loadConfig({ LOG_LEVEL: "verbose" }, { onDeprecation: vi.fn() })).toThrow("invalid configuration: LOG_LEVEL");
   });
 
   it("accepts only explicit research timing log booleans", () => {

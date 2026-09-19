@@ -120,9 +120,11 @@ export type AnthropicFailureCode =
   | "assessment_invalid_response"
   | "synthesis_invalid_response";
 
+export type AssessmentInvalidReason = "empty_response" | "invalid_json" | "missing_directive" | "unknown_directive" | "invalid_search" | "invalid_resolved" | "invalid_decomposition";
+
 export class AnthropicProviderError extends Error {
   readonly name = "AnthropicProviderError";
-  constructor(readonly code: AnthropicFailureCode, readonly retryable: boolean) {
+  constructor(readonly code: AnthropicFailureCode, readonly retryable: boolean, readonly reason?: AssessmentInvalidReason) {
     super(code);
   }
 }
@@ -160,6 +162,7 @@ export class AnthropicProvider implements LLMProvider {
   async assessResearch(input: ResearchAssessmentInput): Promise<ResearchAssessmentProposal> {
     let correction: string | undefined;
     let structuredOutput = true;
+    let invalidReason: AssessmentInvalidReason = "empty_response";
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         const request: Parameters<MessagesClient["create"]>[0] = {
@@ -173,6 +176,7 @@ export class AnthropicProvider implements LLMProvider {
         const text = responseText(response);
         const proposal = parseProposal(text, input.allowedSupportRefs);
         if (proposal) return proposal;
+        invalidReason = assessmentInvalidReason(text);
       } catch (error) {
         if (error instanceof AnthropicProviderError && error.code === "provider_bad_request" && structuredOutput) {
           structuredOutput = false;
@@ -182,7 +186,7 @@ export class AnthropicProvider implements LLMProvider {
       }
       correction = "The previous response failed validation. Return exactly one compact JSON object and no explanation. For resolved, every observation must include proposition, statement, stance (supports|contradicts|qualifies), and support as an array of allowed reference objects. For search, include query, purpose, successCriterion, and priority. For decompose, include operator and 1-3 problems.";
     }
-    throw new AnthropicProviderError("assessment_invalid_response", true);
+    throw new AnthropicProviderError("assessment_invalid_response", true, invalidReason);
   }
 
   async *synthesizeResearch(input: ResearchSynthesisInput): AsyncIterable<AssistantContentPart> {
@@ -362,6 +366,21 @@ function jsonObjectCandidates(text: string): unknown[] {
     }
   }
   return candidates;
+}
+
+function assessmentInvalidReason(text: string): AssessmentInvalidReason {
+  if (!text.trim()) return "empty_response";
+  const candidates = jsonObjectCandidates(text);
+  if (candidates.length === 0) return "invalid_json";
+  const raw = candidates.find((candidate) => candidate && typeof candidate === "object" && !Array.isArray(candidate));
+  if (!raw) return "missing_directive";
+  const root = raw as Record<string, unknown>;
+  const directive = objectValue(root.directive) ?? root;
+  const kind = normalizeKind(directive.kind ?? directive.type ?? directive.action);
+  if (!kind) return root.directive === undefined ? "missing_directive" : "unknown_directive";
+  if (kind === "search") return "invalid_search";
+  if (kind === "resolved") return "invalid_resolved";
+  return "invalid_decomposition";
 }
 
 function parseProposal(text: string, allowedSupportRefs: ResearchAssessmentInput["allowedSupportRefs"]): ResearchAssessmentProposal | undefined {

@@ -149,7 +149,7 @@ describe("AnthropicProvider v3", () => {
     const invalid = JSON.stringify({ directive: { kind: "resolved", observations: [{ proposition: "p", statement: "s", stance: "supports", support: [{ type: "source", sourceId: "not-allowed" }] }] } });
     const fake = client([{ content: [{ type: "text", text: invalid }] }, { content: [{ type: "text", text: invalid }] }]);
     const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: fake });
-    await expect(provider.assessResearch(baseAssessment)).rejects.toMatchObject({ code: "assessment_invalid_response", retryable: true });
+    await expect(provider.assessResearch(baseAssessment)).rejects.toMatchObject({ code: "assessment_invalid_response", retryable: true, reason: "invalid_resolved" });
     expect(fake.requests).toHaveLength(2);
   });
 
