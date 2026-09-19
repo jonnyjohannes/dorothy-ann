@@ -3278,3 +3278,36 @@ The final implementation must prove at least:
 ## Open Questions
 
 No implementation-blocking product or architecture questions remain. The approved contextual-answer policy is structured prefix plus `answerTruncated`: Markdown and canonical citation tokens consume the Unicode code-point budget, citations are atomic, text alone may be truncated, and durable answers are unchanged. The selected legacy policy is the bounded read-only `Thread.legacyArchive` contract above: it preserves unsupported v1/v2 history without widening `Turn` or allowing legacy content into evidence-backed execution. Any implementation discovery that changes a public contract, dependency direction, approved ceiling, provider exposure, durable shape, migration fidelity, or browser behavior must stop work and amend this plan before continuing.
+
+
+## test questions
+
+1. Astrobiology + philosophy
+    If microbial life were discovered independently on both Mars and Europa, how should that update our estimate of how common intelligent life is—and which assumptions in the Drake equation would actually change?
+
+2. Consciousness + AI
+    What evidence would genuinely distinguish an AI that is conscious from one that only convincingly claims to be conscious, and do any proposed tests survive the philosophical-zombie objection?
+
+3. The fall of civilizations
+    Across the Roman Empire, Classic Maya civilization, and the Late Bronze Age collapse, which recurring causes of societal breakdown are actually supported by evidence, and which similarities are misleading?
+
+4. Deep time + existential perspective
+    If Earth’s entire history were compressed into one calendar year, when would multicellular life, dinosaurs, humans, agriculture, and the internet appear—and what does that timeline reveal about humanity’s relationship to planetary time?
+
+5. Animals doing democracy
+    Which non-human animals make genuinely collective decisions, how do bees, ants, and primates prevent dominant individuals from controlling the outcome, and is it scientifically defensible to call any of these systems democratic?
+
+6. Cosmic endings
+    Compare the evidence for heat death, vacuum decay, and a Big Rip: what would each ending look like, which observations constrain it, and which scenario is currently most plausible?
+
+7. Ancient technology mystery
+    Could a technically capable society have existed before humans and disappeared without an obvious geological trace, and what evidence would the “Silurian hypothesis” tell us to look for?
+
+8. Historical violence
+    Are humans becoming less violent over historical time? Compare the strongest evidence for the claim with the strongest methodological objections, and explain what conclusion the data can actually support.
+
+9. Language shaping reality
+    Compare the strongest evidence that language influences thought across color perception, spatial reasoning, and time—and determine whether any of it supports the stronger claim that language limits what we can think.
+
+10. A message for deep time
+    If humanity wanted to leave one message that could remain understandable for 100,000 years, what medium, location, symbols, and institutional practices would give it the best chance—and what do nuclear-waste warning projects teach us about why each approach might fail?
