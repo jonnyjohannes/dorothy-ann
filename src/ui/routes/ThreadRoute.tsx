@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { CanonicalSource, Thread, ThreadContext, ThreadId, TurnId, UserMessage } from "../../domain/types";
-import { projectCitationsToMarkdown } from "../../domain/citations";
 import { buildThreadContext } from "../../domain/thread-context";
 import { getBrowserThreadStore } from "../../infrastructure/browser/thread-store";
 import { createFetchTurnGateway } from "../../infrastructure/browser/turn-gateway";
@@ -13,6 +12,7 @@ import { TranscriptBox } from "../boxes/TranscriptBox";
 import { MarkdownContent } from "../primitives/MarkdownContent";
 import { sourceAccentSlotForIndex } from "../color-scheme";
 import { researchAnswerPosition } from "../policies/answer-position";
+import { threadMarkdown } from "../policies/thread-markdown";
 import type { BoxIntent } from "../boxes/box-types";
 import { workspaceController } from "../controllers/workspace-controller";
 import styles from "../App.module.css";
@@ -52,12 +52,6 @@ function sourceRecords(thread: Thread | null, live: CanonicalSource[]): Canonica
   for (const source of thread?.sources ?? []) values.set(String(source.sourceId), source);
   for (const source of live) values.set(String(source.sourceId), source);
   return [...values.values()];
-}
-function threadMarkdown(thread: Thread): string {
-  return thread.turns.map((turn) => {
-    const answer = turn.kind === "research" && turn.status === "completed" ? projectCitationsToMarkdown(turn.result.answer) : turn.status === "failed" ? turn.failure.message : turn.status === "interrupted" ? turn.interruption.message : turn.kind === "search" && turn.status === "completed" ? turn.result.destinations.map((destination) => `[${destination.sourceId}]`).join(" ") : "";
-    return `## ${turn.userMessage.content}\n\n${answer}`;
-  }).join("\n\n---\n\n");
 }
 function downloadMarkdown(markdown: string, filename: string): void {
   const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown" }));
