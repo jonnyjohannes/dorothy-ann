@@ -18,4 +18,4 @@ const identities = new IdentityPolicy(new WebCryptoIdentityHasher());
 const threadStoreV3 = !config.DOROTHY_FIXTURE_MODE && config.UPSTASH_REDIS_REST_URL && config.UPSTASH_REDIS_REST_TOKEN
   ? RedisThreadStore.fromUpstash(config.UPSTASH_REDIS_REST_URL, config.UPSTASH_REDIS_REST_TOKEN, identities)
   : undefined;
-serve({ fetch: createApp({ config, systemPrompts, threadStoreV3, logger }).fetch, port }, (info) => { logger.info("server_listening", { stage: "resolving", port: info.port }); });
+serve({ fetch: createApp({ config, systemPrompts, threadStoreV3, logger }).fetch, port }, (info) => { logger.info("server_listening", { stage: "runtime", port: info.port }); });

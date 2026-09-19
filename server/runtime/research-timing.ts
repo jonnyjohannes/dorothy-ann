@@ -21,6 +21,7 @@ export interface ResearchTimingRecord {
   assessment_failure_code?: "provider_bad_request" | "provider_rate_limited" | "provider_unavailable" | "provider_failed" | "provider_interrupted" | "assessment_invalid_response";
   assessment_invalid_reason?: "empty_response" | "invalid_json" | "missing_directive" | "unknown_directive" | "invalid_search_query" | "invalid_resolved" | "invalid_decomposition";
   assessment_directive?: "resolved" | "search" | "decompose";
+  assessment_directives?: Array<"resolved" | "search" | "decompose">;
   context?: {
     turns: number;
     known_sources: number;
@@ -72,6 +73,7 @@ export class ResearchTimingCollector {
   private firstAnswerSignalMs: number | undefined;
   private assessmentFailureCode: ResearchTimingRecord["assessment_failure_code"];
   private assessmentDirective: ResearchTimingRecord["assessment_directive"];
+  private readonly assessmentDirectives: NonNullable<ResearchTimingRecord["assessment_directives"]> = [];
   private assessmentInvalidReason: ResearchTimingRecord["assessment_invalid_reason"];
 
   constructor(
@@ -130,7 +132,10 @@ export class ResearchTimingCollector {
   }
 
   markAssessmentDirective(value: unknown): void {
-    if (value === "resolved" || value === "search" || value === "decompose") this.assessmentDirective = value;
+    if (value === "resolved" || value === "search" || value === "decompose") {
+      this.assessmentDirective = value;
+      this.assessmentDirectives.push(value);
+    }
   }
 
   markAssessmentFailure(error: unknown): void {
@@ -158,7 +163,7 @@ export class ResearchTimingCollector {
       ...(summary.answerPosition ? { answer_position: summary.answerPosition } : {}),
       ...(this.assessmentFailureCode ? { assessment_failure_code: this.assessmentFailureCode } : {}),
       ...(this.assessmentInvalidReason ? { assessment_invalid_reason: this.assessmentInvalidReason } : {}),
-      ...(this.assessmentDirective ? { assessment_directive: this.assessmentDirective } : {}),
+      ...(this.assessmentDirective ? { assessment_directive: this.assessmentDirective, assessment_directives: [...this.assessmentDirectives] } : {}),
       ...(summary.context ? { context: summary.context } : {}),
       ...(resolution ? { resolution_status: resolution.status, stop_reason: resolution.stopReason } : {}),
       execution_ms: duration(this.startedAt, this.now()),

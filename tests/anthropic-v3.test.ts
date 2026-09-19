@@ -138,6 +138,21 @@ describe("AnthropicProvider v3", () => {
     expect(diagnostics).toEqual([{ event: "assessment_structured_output_fallback", stage: "assessing", reason: "provider_bad_request" }]);
   });
 
+  it("does not let a throwing diagnostic sink alter fallback behavior", async () => {
+    let calls = 0;
+    const provider = new AnthropicProvider({
+      assessmentModel: "high",
+      synthesisModel: "balanced",
+      onDiagnostic: () => { throw new Error("diagnostic sink failed"); },
+      client: { messages: { create: async () => {
+        calls += 1;
+        if (calls === 1) throw { status: 400 };
+        return { content: [{ type: "text", text: JSON.stringify({ directive: { kind: "search", query: "q" } }) }] };
+      } } },
+    });
+    await expect(provider.assessResearch(baseAssessment)).resolves.toMatchObject({ directive: { kind: "search", query: "q" } });
+  });
+
   it.each([401, 403, 404, 422])("does not replay permanent HTTP %s failures", async (status) => {
     let calls = 0;
     const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: { messages: { create: async () => { calls += 1; throw { status, message: "private" }; } } } });

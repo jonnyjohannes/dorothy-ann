@@ -44,6 +44,7 @@ describe("research timing", () => {
       assessment_failure_code: "provider_rate_limited",
       assessment_invalid_reason: "invalid_search_query",
       assessment_directive: "search",
+      assessment_directives: ["search"],
       context: { turns: 1, known_sources: 2, evidence_packs: 1, evidence_sources: 1 },
       resolution_status: "sufficient",
       stop_reason: "sufficient",

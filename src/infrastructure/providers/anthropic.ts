@@ -183,7 +183,7 @@ export class AnthropicProvider implements LLMProvider {
       } catch (error) {
         if (error instanceof AnthropicProviderError && error.code === "provider_bad_request" && structuredOutput) {
           structuredOutput = false;
-          this.onDiagnostic?.({ event: "assessment_structured_output_fallback", stage: "assessing", reason: "provider_bad_request" });
+          try { this.onDiagnostic?.({ event: "assessment_structured_output_fallback", stage: "assessing", reason: "provider_bad_request" }); } catch { /* Diagnostics must never alter provider behavior. */ }
           continue;
         }
         if (error instanceof AnthropicProviderError && error.code !== "assessment_invalid_response") throw error;
