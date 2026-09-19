@@ -13,31 +13,25 @@ Dorothy Ann is a browser-based information resolver and researcher. Ordinary req
 
 ## research flow
 
-Ordinary research follows a simple retrieval-first path and only recurses when the retrieved evidence leaves genuinely independent gaps:
+Ordinary research follows one retrieval-first protocol. Continued research may be one focused search or a bounded decomposition; both return to assessment before the root answer is synthesized:
 
 ```text
 question
    |
    v
-exact Brave search
+exact-question retrieval when admissible evidence is absent
    |
    v
-extract top useful results
-   |
-   v
-can we answer simply and responsibly?
-   | yes                     | no
-   v                         v
-synthesize          recursively split material gaps
-                                 |
-                                 v
-                       targeted child searches
-                                 |
-                                 v
-                            join + synthesize
+extract useful results -> assess
+                         | resolved
+                         +-------------------------------> synthesize once
+                         | search
+                         +-> focused retrieval/extraction -> reassess
+                         | decompose(all | any)
+                         `-> bounded child resolution -> join -> reassess
 ```
 
-The root uses the exact user question for its first search when no admissible extracted evidence already exists. The assessor then evaluates the extracted evidence. Simple questions resolve and synthesize immediately; genuinely compound questions may decompose into bounded child problems, whose supported knowledge is joined and reassessed at the root. Children never produce separate user-facing answers. Search, source, assessment, and depth ceilings are shared across the complete tree and are hard limits rather than targets.
+The root uses the exact user question for its first search when no admissible extracted evidence already exists. The assessor returns one `resolved | search | decompose(all | any)` directive. `search` acquires focused missing evidence; `decompose` resolves genuinely independent child obligations and joins their supported knowledge. Both paths reassess the parent, and children never produce separate user-facing answers. A sufficient or useful best-effort root synthesizes exactly once; no useful supported evidence produces an insufficient outcome. Search, source, assessment, and depth ceilings are shared across the complete tree and are hard limits rather than targets.
 
 ## architecture
 
@@ -49,7 +43,7 @@ The package is strict TypeScript targeting Node 22. Domain and application code 
 - `src/infrastructure/` — Anthropic/Brave/extraction, browser gateway/storage, Redis, identity, and runtime adapters
 - `src/server/` — portable Hono composition and authenticated HTTP/SSE turn boundary
 - `server/` and `api/` — thin Node/Vercel runtime adapters
-- `src/ui/` — route composition, workspace/turn controllers, semantic primitives, and typed `*Box` components
+- `src/ui/` — route composition, workspace/turn controllers, semantic primitives, and typed `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, `UnlockBox`, and `SystemStatusBox` components; `Hotkeys` is the non-visible layout-control box
 - `tests/` — domain, application, contract, infrastructure, UI, and Playwright coverage
 
 `ASSESSOR.md` and `SYNTHESIZER.md` are the only target LLM system-prompt assets. Runtime loading keeps them out of browser bundles and durable product data; dynamic context, schemas, retries, and evidence remain typed user/protocol input.
@@ -69,12 +63,13 @@ Fixture mode is the default. Live provider credentials are optional for local im
 
 ### research timing logs
 
-Set `RESEARCH_TIMING_LOGS=true` to emit one server-side JSON summary per research execution. Logging is off by default. The versioned record contains only `event`, `schema_version`, bounded terminal/resolution/stop enums, integer `execution_ms`, optional `resolution_ms` and `first_answer_signal_ms`, ledger counts, and aggregate `search`, `extraction`, `assessment`, and `synthesis` stage timings (`calls`, `succeeded`, `failed`, `cumulative_ms`, `max_ms`, and optional `first_output_ms`). Concurrent call durations overlap, so use execution/resolution wall time for critical-path latency and cumulative stage time only as workload data.
+Set `RESEARCH_TIMING_LOGS=true` to emit one server-side structured summary per research execution. Logging is off by default; set `LOG_LEVEL=debug` for local research diagnostics (`info` is the example production default). The versioned allowlisted record contains only `event`, `schema_version`, bounded terminal/resolution/stop enums, answer position, bounded assessment directive history and failure/invalid-response enums, aggregate context counts, integer `execution_ms`, optional `resolution_ms` and `first_answer_signal_ms`, ledger counts, and aggregate `search`, `extraction`, `assessment`, and `synthesis` stage timings (`calls`, `succeeded`, `failed`, `cumulative_ms`, `max_ms`, and optional `first_output_ms`). Concurrent call durations overlap, so use execution/resolution wall time for critical-path latency and cumulative stage time only as workload data.
 
 These records never contain request or prompt text, extracted content, URLs/source metadata, provider/model names, execution/turn IDs, credentials, provider payloads, or error messages/stacks. Keep normal production log access and retention controls in place because even bounded timing/count metadata is operationally sensitive. Timing data is not added to SSE, `/api/status`, durable turns, or browser storage.
 
 ## documentation
 
+- [v1.1.0 release-candidate changelog](docs/releases/dorothy-ann-v1.1.0-rc.md) — durable detailed inventory, verification, and append-only RC patch log
 - [v1.1.0 architecture plan](docs/plans/dorothy-ann-v1.1.0.md) — implemented boxes, contracts, migration policy, verification, and handoff
 - [v1.0.0 plan](docs/plans/dorothy-ann-v1.0.0.md) — original product baseline
 - [Repository guide](AGENTS.md) — working boundaries, verification, secrets, and implementation rules

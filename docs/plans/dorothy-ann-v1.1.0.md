@@ -2,18 +2,18 @@
 
 ## Current State
 
-- Status: complete
+- Status: release candidate; implementation and regression hardening complete
 - Last updated: 2026-09-18
-- Current focus: prompt-owned evidence thresholds now trigger proportional recursion for complex questions
+- Current focus: bounded deployment smoke for the settled v1.1.0 candidate
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: restart/redeploy after the prompt change, then smoke one simple factual question and one multi-obligation comparison to observe direct resolution versus recursion
-- Shipped follow-up: ordinary prompt and `?q=` entry use one research path at `/threads/new`; `/search?q=` remains the explicit plain-search utility; `/topics`, `?kind=`, and `?mode=` are removed without compatibility redirects. Retrieval-first assessment remains unchanged. If an assessor requests further search or decomposition, the UI reports sticky recursion state alongside the current operation (`recursing · searching`, `recursing · extracting evidence`, or `recursing · assessing research`). Synthesis receives explicit initial/follow-up metadata; only the initial completed research answer is instructed to begin with “According to my research,” while all other synthesis behavior remains shared.
+- Next action: restart/redeploy, then visually check light/dark/auto and reduced-motion behavior and live-provider initial/follow-up, focused-search continuation, decomposition, and synthesis behavior
+- Shipped state: ordinary prompt and `/threads/new?q=...` entry create a `ResearchTurn`; `/search <query>` and `/search?q=...` create the explicit raw-link `SearchTurn`; punctuation has no routing semantics. Retrieval-first resolution supports `resolved | search | decompose(all | any)`, parent reassessment, and exactly one root synthesis for sufficient or useful best-effort outcomes. Follow-up policy requires support for materially new claims and fresh retrieval for time-sensitive facts. The application owns transcript request/response and turn separation, while synthesis forbids model-authored headings and horizontal rules. Markdown export links cited sources, and allowlisted structured diagnostics expose bounded research decisions without prompt, request, source, provider, or payload content.
 
 ## Post-release singular research-flow amendment
 
 Approved after auditing the shipped code path from prompt submission through retrieval, recursive resolution, synthesis, and durable commit:
 
-- Ordinary `PromptBox` submissions and `?q=<question>` entry both create a `ResearchTurn` at `/threads/new?q=<question>`; punctuation has no routing semantics.
+- Ordinary `PromptBox` submissions and `/threads/new?q=<question>` entry both create a `ResearchTurn`; punctuation has no routing semantics.
 - Canonical UI routes are `/threads`, `/threads/new?q=...`, `/threads/:threadId`, `/search?q=...`, `/settings`, and `/unlock`. Remove `/topics`, `?kind=`, and `?mode=` completely, with no compatibility aliases or redirects.
 - `/search <query>` navigates to the explicit `/search?q=<query>` utility and retains the existing one-provider-call `SearchTurn` behavior without extraction, assessment, or synthesis.
 - Every research turn retains the singular retrieval-first resolver: exact-question Brave search, bounded source extraction, assessment, then immediate root synthesis when `resolved` or continued recursive `search | decompose` work before one root synthesis.
@@ -42,7 +42,11 @@ Verification: responsive UI regression tests, full test suite, typecheck, lint, 
 
 ## Handoff
 
-Plan Ledger item 30 is complete. `ASSESSOR.md` now keeps single-fact resolution cheap while requiring complex comparative/causal/contested/multi-obligation research to cover every explicit obligation, corroborate its central conclusion with two materially independent sources, and contain four materially independent sources overall before `resolved`. It explicitly rejects URL count, syndication, repeated reports, and same-publisher pages as automatic independence. The policy remains prose-only and can be tuned without application changes. Verification passes: lint, typecheck, 219 tests, production build, and `git diff --check`. Restart/redeploy is required because prompts load once at startup.
+The v1.1.0 release candidate is settled through Plan Ledger item 36. Items 31–35 record the final hardening after the previous 219-test checkpoint: Markdown exports now link referenced sources and convert raw citation markers; `TranscriptBox` and `SYNTHESIZER.md` establish application-owned request/response and inter-turn separation; follow-ups retain admitted evidence through assessor failure and require retrieval for materially new or time-sensitive claims; structured logging records only allowlisted answer-position, context-count, directive-history, failure-reason, timing, and ledger fields; and sparse provider search directives normalize without widening the protocol. The current full suite passes with 231 tests. The durable release inventory is [`docs/releases/dorothy-ann-v1.1.0-rc.md`](../releases/dorothy-ann-v1.1.0-rc.md), where subsequent RC patches can be appended without rewriting this handoff.
+
+Remaining release work is deployment observation rather than implementation: visually check light/dark/auto and reduced-motion behavior, then smoke live-provider initial and follow-up answers, a focused-search continuation, and a decomposed research question. Prompt changes require restart/redeploy because prompt assets load once at startup.
+
+Earlier completed checkpoints follow. Plan Ledger item 30 established prompt-owned sufficiency thresholds: `ASSESSOR.md` keeps single-fact resolution cheap while requiring complex comparative/causal/contested/multi-obligation research to cover every explicit obligation, corroborate its central conclusion with two materially independent sources, and contain four materially independent sources overall before `resolved`. It explicitly rejects URL count, syndication, repeated reports, and same-publisher pages as automatic independence. That checkpoint passed lint, typecheck, 219 tests, production build, and `git diff --check`.
 
 Plan Ledger item 29 is complete. The post-release visual polish now uses warm gray `--paper`/`--ink` tokens with matching light/dark selection inversion, highlights the fixed prompt border while its input subtree is focused, rotates the full selected scheme accent palette on the native PromptBox and thread-search carets every two seconds with reduced-motion and live-preference fallbacks, and removes the global PromptBox from settings and threads while retaining the dedicated thread finder. Verification passes: lint, typecheck, 219 tests, production build, and `git diff --check`. Browser visual smoke across light/dark/auto and reduced-motion modes remains the deployment follow-up.
 
@@ -79,7 +83,7 @@ Decisions made so far:
 - Budget exhaustion with useful supported evidence produces a bounded best-effort synthesis that identifies unresolved uncertainty; no useful supported evidence produces an insufficient-evidence failure.
 - `Thread` and `Turn` remain the central data-model components. Durable `Turn` is a discriminated terminal `SearchTurn | ResearchTurn` union; pending/running execution exists only as controller-owned `ActiveTurn` state. Every validated terminal outcome is committed when storage is functioning; retryable commit failure retains the exact candidate, while permanent corruption is an explicit blocking exception rather than false durable history.
 - The target persistence wrapper is `StoredThreadRecord`: an adapter-only record with an opaque CAS revision and expiry around the complete `Thread`. `ThreadStore` now has settled atomic commit, idempotency, source reconciliation, ordering, retention, deletion-tombstone, and import/export contracts.
-- The agreed visual regions are `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, and `UnlockBox`. Boxes receive typed view state and emit intent; `WorkspaceController` coordinates routes/cross-box projection and delegates effects to owning controllers/capabilities.
+- The agreed visual regions are `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, `UnlockBox`, and `SystemStatusBox`. Boxes receive typed view state and emit intent; `WorkspaceController` coordinates routes/cross-box projection and delegates effects to owning controllers/capabilities.
 - `Hotkeys` is an explicit layout-control box, not a visible region. It translates unhandled global keyboard events and current layout context into semantic intents without navigating, focusing DOM nodes, cancelling work, or invoking system capabilities directly.
 - `ThreadsBox` has one canonical `/threads` route with aggressive `fzf@0.5.2`-backed filtering and keyboard behavior, not separate route and overlay presentations. The exact package version is pinned behind one pure generic adapter used by fixture-locked `rankThreads` and `rankPromptSuggestions` policies. Deletion uses an inline terminal-style confirmation, never `window.confirm`.
 - `UnlockBox` is part of the shared box vocabulary so global visual-system changes include authentication. It owns only ephemeral passphrase entry and emits authentication intent without persisting or logging the passphrase.
@@ -97,7 +101,7 @@ Decisions made so far:
 - Controller ownership is split explicitly: `WorkspaceController` owns route/cross-box projection and command delegation; browser `TurnController` owns one `ActiveTurn`, stale-event rejection, terminal construction, and atomic commit; `TurnGateway` adapts the client stream; server `TurnExecutor` dispatches provider-neutral search/research; `TurnStreamBoundary` owns only authenticated HTTP/SSE validation, heartbeat, serialization, and cancellation wiring.
 - `ThreadStore` uses opaque CAS revisions and idempotent atomic terminal commits. It never stores empty threads, inserts raced turns by `(createdAt, id)`, preserves first-admission source metadata, expires seven days from durable `updatedAt`, tombstones explicit deletion, refreshes imported records with new local revisions, and exposes identical local/remote behavior. Execution provenance belongs on each terminal turn, with distinct assessment/synthesis/search refs where applicable.
 - Browser UI keeps product-level `*Box` components but standardizes their implementation on a small semantic primitive vocabulary: `Stack`, `Inline`, `Surface`, `Action`, `TextField`, `FuzzyListbox`, `StatusText`, `MarkdownContent`, and `VisuallyHidden`. `PromptBox` gains a pinned-fzf command suggester, layered single/double-Escape behavior, and a native caret whose color cycles discretely through scheme accents; native caret thickness is retained for browser/IME/accessibility safety.
-- Root synthesis begins conversationally rather than with a Markdown title. The canonical synthesis prompt explicitly forbids an opening heading, encourages descriptive Markdown after the opening paragraph, and one streaming-safe leading-line normalizer demotes a violating initial heading without changing internal Markdown.
+- Root synthesis begins conversationally rather than with a Markdown title. The canonical synthesis prompt forbids all model-authored headings and horizontal rules, encourages descriptive non-separator Markdown after the opening paragraph, and one streaming-safe leading-line normalizer defensively demotes a violating initial heading without changing the remaining content.
 - The only target LLM system prompts are editable root assets `ASSESSOR.md` and `SYNTHESIZER.md`. Runtime adapters load them once at startup into a typed `SystemPromptCatalog`; all actual provider `system` parameters use one file unchanged, while dynamic context/schema/retry envelopes remain typed code-owned user input. Prompt edits require local restart or redeploy.
 - The implementability closure bundle is approved: semantic research ceilings remain fixed; only bounded operational limits use canonical env vars; legacy `MAX_CONTEXT_CHARS` and `ANTHROPIC_MODEL` have one-release v1.1 fallbacks removed in v1.2; Node 22 is canonical; deterministic typed IDs use full SHA-256/base64url over explicit normalized material; prompt files have exact Node/Vercel startup paths/inclusion.
 - Model `ResearchAssessmentProposal` is untrusted strategy/observation text plus support refs. `ResearchAssessor` derives IDs, attaches supplied evidence collections, and constructs trusted knowledge. Recursive/batched knowledge carries deterministic `EvidencePack[]`, and `buildThreadContext` now has exact turn/text/evidence/source/request-byte projection rules.
@@ -107,7 +111,7 @@ Decisions made so far:
 
 Implementability gate result: **ready**. The closure bundle is normative, model proposals are separated from trusted state, recursive evidence is collection-shaped, provider/context/identity/controller/storage/transport contracts are exact, current responsibilities map to target files, and the ordered implementation/ledger slices are independently verifiable. Unsupported v1/v2 answers migrate into a bounded read-only archive outside `Turn`; they remain visible but never masquerade as evidence-backed research or enter future context. See [`## Implementability Gate`](#implementability-gate).
 
-Read this plan, then the completed [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md), `src/domain/types.ts`, `src/domain/schemas.ts`, `src/ports/`, `server/research.ts`, `server/app.ts`, and `src/ui/App.tsx` before implementation. Begin at the first unchecked Plan Ledger item, keep Current State/Handoff/ledger synchronized, and stop to amend this plan if implementation would change a settled contract.
+For release work, read Current State, Handoff, the completed Plan Ledger, and the [v1.1.0 RC changelog](../releases/dorothy-ann-v1.1.0-rc.md), then inspect the current domain, application, port, infrastructure, server, runtime, and UI boundaries cited below. Keep these surfaces synchronized, and stop to amend this plan if any future implementation would change a settled contract.
 
 ## Summary
 
@@ -121,7 +125,7 @@ This makes meaningful discussion and safe refactoring harder than necessary. We 
 
 ## Goals
 
-- Canonize `SearchTurn` and `ResearchTurn` as the only request/response turn contracts, selected by the existing `?` input macro rather than persistent application mode.
+- Canonize `SearchTurn` and `ResearchTurn` as the only request/response turn contracts: ordinary non-command input creates research and only explicit `/search` creates raw retrieval, without punctuation or persistent application-mode routing.
 - Define each architectural box using typed inputs, one owned capability, typed outputs/events, invariants, a failure contract, and an implementation boundary.
 - Standardize initial and follow-up research questions on one recursive `resolved | search | decompose` protocol.
 - Recursively transform unresolved problems into supported knowledge, join child knowledge deterministically, and converge toward zero material evidence gaps.
@@ -528,10 +532,10 @@ type SearchTurn =
 
 A successfully executed search with no destinations is a completed `empty` result, not a failure. The non-empty tuple makes `completion: "results"` truthful. Search metadata is admitted once to the thread source catalog, while the terminal turn retains only query-relative destination references. Failed and interrupted variants cannot carry partial destinations; `SearchProvider.search` is one atomic provider-neutral operation.
 
-The turn kind is selected per submission: trailing `?` creates research; otherwise the submission creates search. It is not durable global UI mode.
+The turn kind is selected per submission: ordinary non-command input creates research, while only explicit `/search <query>` or `/search?q=...` creates raw search. Punctuation has no routing semantics, and turn kind is not a durable global UI mode.
 
 ```text
-current request + prior thread context + macro-selected turn kind
+current request + prior thread context + explicitly selected turn kind
                          |
                          v
                       [ Turn ]
@@ -961,7 +965,7 @@ interface SearchResponse {
 
 ### `ResearchTurn`
 
-**Capability:** answer one `?`-selected question by recursively reducing material evidence gaps into supported knowledge within shared explicit limits, then synthesizing exactly once at the root.
+**Capability:** answer one ordinary non-command question by recursively reducing material evidence gaps into supported knowledge within shared explicit limits, then synthesizing exactly once at the root.
 
 ```text
 question + ThreadContext + shared explicit limits
@@ -1626,7 +1630,7 @@ root question + ThreadContext + final KnowledgeUnit
 
 The canonical synthesis-system-prompt contract includes this instruction:
 
-> Begin directly with a conversational answer. Never start the response with a Markdown heading or title (#, ##, etc.). After the opening paragraph, descriptive Markdown of all kinds are encouraged.
+> Begin directly with a conversational answer. Never output Markdown headings or horizontal rules. After the opening paragraph, use bold or italic labels, lists, tables, code, quotations, and whitespace when they improve scanability.
 
 This language lives in root `SYNTHESIZER.md`, used unchanged by initial and follow-up research through `SystemPromptCatalog`. Prompt changes are holistic: the canonical asset, provider-boundary expectations, behavioral fixtures, and presentation fallback are updated together rather than patching one call site. `ASSESSOR.md` remains separate and does not inherit user-facing style instructions.
 
@@ -1635,7 +1639,7 @@ Streaming buffers through the first non-empty logical line. If that line's first
 **Invariants**
 
 - Answers the current question in conversational context.
-- Begins with conversational prose rather than a Markdown heading; descriptive headings, lists, emphasis, quotations, code, tables, and other Markdown remain encouraged after the opening paragraph.
+- Begins with conversational prose rather than a Markdown heading; emphasized labels, lists, quotations, code, tables, and whitespace remain encouraged after the opening paragraph, while headings and horizontal rules remain forbidden.
 - Uses only supplied supported findings and evidence for factual support.
 - Cites only source IDs reachable through the final knowledge unit.
 - Assessor directives cannot become direct answer content; internal findings may inform the answer only with their validated support.
@@ -1856,7 +1860,7 @@ The controller performs this sequence:
 ```text
 validate submission + retry link
           |
-classify trailing ? + allocate execution/turn IDs
+classify ordinary research or explicit /search + allocate execution/turn IDs
           |
 load Thread -> derive bounded ThreadContext
           |
@@ -2266,19 +2270,19 @@ function rankFuzzyCandidates<TId extends string>(
 ): FuzzyMatch<TId>[];
 ```
 
-`fzf@0.5.2` is approved and pinned by this plan but is not yet installed; installation occurs with the browser component ledger item. `rankFuzzyCandidates` becomes the only module that imports it. `rankThreads` and `rankPromptSuggestions` convert product records into/out of these project-owned values and apply their own deterministic empty-query/equal-score ordering. Rendering receives text and positions and creates text nodes; matcher output is never HTML.
+`fzf@0.5.2` is installed and pinned. `rankFuzzyCandidates` is the only module that imports it. `rankThreads` and `rankPromptSuggestions` convert product records into/out of these project-owned values and apply their own deterministic empty-query/equal-score ordering. Rendering receives text and positions and creates text nodes; matcher output is never HTML.
 
 ## Layout Components
 
 The agreed layout vocabulary is:
 
 - `PromptBox`
-- `TranscriptBox` (currently `TurnTranscriptBox`)
+- `TranscriptBox`
 - `EvidenceBox`
 - `BrandBox`
 - `StickyHeader`
 - `SettingsBox`
-- `ThreadsBox` with `fzf@0.5.2`-backed filtering and keyboard behavior (currently `ThreadPicker`)
+- `ThreadsBox` with `fzf@0.5.2`-backed filtering and keyboard behavior
 - `UnlockBox`
 - `SystemStatusBox`
 
@@ -2362,11 +2366,11 @@ StickyHeader   -- contextual intents ------> WorkspaceController
 **Capability:** capture one raw user submission while preserving an editable terminal-like draft during active work.
 
 ```ts
-type PromptCommandId = "new" | "threads" | "settings";
+type PromptCommandId = "new" | "search" | "threads" | "settings";
 
 interface PromptSuggestion {
   id: PromptCommandId;
-  command: "/new" | "/threads" | "/settings";
+  command: "/new" | "/search <query>" | "/threads" | "/settings";
   description: string;
   aliases: string[];
 }
@@ -2562,9 +2566,9 @@ durable turns + read-only legacy archive
 - Initial and follow-up requests use the same rendering path.
 - A `SearchTurn` presents its request and bounded result summary without inventing an assistant answer; ranked destinations remain in `EvidenceBox`.
 - A `ResearchTurn` may show bounded safe progress and streamed root-answer content in place. Raw assessor payloads, hidden reasoning, and provider diagnostics are never rendered.
-- Every active/durable research answer and preserved archive answer uses the same `MarkdownContent` primitive; archive rendering supplies its separate entry-local citation-link resolver and cannot produce v3 evidence citations. Paragraphs, internal headings, lists, nested lists, emphasis, blockquotes, links, citations, inline/fenced code, tables, and thematic breaks remain available rather than being flattened into a lowest-common-denominator transcript format.
-- `MarkdownContent` sanitizes/escapes untrusted markup and protocols while preserving the application's color-constellation typography for headings, emphasis, quotations, code, tables, links, and citations. Rendering a streamed answer and its committed replacement produces equivalent structure once content matches.
-- The leading conversational-opening normalizer runs only on v3 research answers before Markdown rendering; it may demote only a violating first ATX heading and never removes internal headings or other descriptive formatting. Archive Markdown bypasses this synthesis-policy fallback and is otherwise preserved through the same sanitizer/renderer.
+- Every active/durable research answer and preserved archive answer uses the same `MarkdownContent` primitive; archive rendering supplies its separate entry-local citation-link resolver and cannot produce v3 evidence citations. Synthesized answers may use paragraphs, bold/italic section labels, lists, nested lists, emphasis, blockquotes, links, citations, inline/fenced code, tables, and whitespace. Model-authored headings and horizontal rules are forbidden because the application owns transcript separation. Preserved archive answers may retain their historical Markdown.
+- `MarkdownContent` sanitizes/escapes untrusted markup and protocols while preserving the application's color-constellation typography for emphasis, quotations, code, tables, links, and citations. Rendering a streamed answer and its committed replacement produces equivalent structure once content matches.
+- The leading conversational-opening normalizer remains a defensive compatibility fallback for v3 research answers: it may demote only a violating first ATX heading. It does not make model-authored headings an encouraged output. Archive Markdown bypasses this synthesis-policy fallback and is otherwise preserved through the same sanitizer/renderer.
 - Progress announcements are polite and phase-level; token deltas are not individually announced to screen readers. Completion and terminal status remain perceivable.
 - Citation activation emits typed evidence intent. The box does not query, focus, or mutate `EvidenceBox` DOM.
 - Retry is emitted only for a retryable terminal presentation; the box does not restart work itself.
@@ -3150,7 +3154,7 @@ Verdict: **ready**. The approved closure bundle and read-only legacy archive pol
 | Current State / Handoff | pass | Status, settled decisions, resume instructions, and implementation entrypoint are current. |
 | Interfaces defined | pass | Model proposals are separated from trusted state; assessment/synthesis inputs, evidence collections, identity/storage/transport/controller/box contracts, and route-discriminated views are typed. |
 | Atomic implementation steps | pass | Eighteen ordered implementation slices name concrete files, compatibility boundaries, deliverables, and focused checks; each must leave strict typecheck green. |
-| Plan Ledger | pass | Nineteen rows include this planning gate plus one row per implementation slice with verification. |
+| Plan Ledger | pass | The planning gate, ordered implementation slices, and subsequent release-hardening amendments are recorded with verification. |
 | Dependencies explicit | pass | Exact fzf/Node/model/env/prompt/runtime/provider/storage/browser dependencies and current → target files are named. |
 | Edge cases | pass | Limits, trust boundaries, malformed model/transport state, identity collisions, context truncation, cancellation, permanent commit failure, legacy unsupported history, retention/import, keyboard/IME, and accessibility are explicit. |
 | Testability | pass | Every box/archive boundary has observable invariants/failures and the sequence names contract, fixture, algebraic, boundary, UI, e2e, bundle, and deployment assertions. |
@@ -3161,7 +3165,7 @@ Gate corrections include untrusted `ResearchAssessmentProposal` normalization, `
 
 ## Implementation Plan
 
-Execute in order. Every step must leave strict typecheck green; temporary v3/legacy consumer bridges are removed in step 17, not retained as public compatibility layers; focused legacy input schemas and deterministic migration remain private compatibility code.
+The ordered implementation sequence below is complete and retained as architectural history. Every step left strict typecheck green; temporary v3/legacy consumer bridges were removed in step 17 rather than retained as public compatibility layers; focused legacy input schemas and deterministic migration remain private compatibility code. The grouped RC hardening slices after step 18 describe the settled post-cutover work without replaying individual commits.
 
 1. **Runtime/config scaffold** — change `package.json` to Node 22 and add exact `fzf@0.5.2`; add canonical/deprecated environment parsing in `server/runtime/config.ts` and `.env.example`; add default root `ASSESSOR.md`/`SYNTHESIZER.md`, `src/ports/system-prompts.ts`, `server/runtime/system-prompts.ts`, and Vercel inclusion without switching provider calls yet. Verify config bounds/fallback warnings, byte-exact loading, missing/empty/oversize failure, frontend exclusion, and Node/Vercel smoke fixtures.
 2. **Parallel v3 model and schemas** — add target types initially in `src/domain/model-v3.ts`, strict schemas in `src/domain/schemas-v3.ts`, and private bounded v1/v2 input schemas in `src/domain/legacy-input-schemas.ts` while current consumers retain legacy types. Verify every terminal/archive union, field/code-point bound, execution provenance, source/archive-reference closure, archive-only thread validity, and legacy-input rejection without yet converting identities.
@@ -3173,7 +3177,7 @@ Execute in order. Every step must leave strict typecheck green; temporary v3/leg
 8. **Research assessor** — implement `src/application/research-assessor.ts` to build bounded input, validate proposals/support, derive IDs, and construct trusted directives/knowledge. Verify every directive, 1–24 observation bounds, unsupported refs, duplicate normalization, no trusted provider IDs/evidence, and assessment-call accounting.
 9. **Evidence acquisition** — move Brave and extraction adapters to `src/infrastructure/`; implement `src/application/evidence-acquirer.ts` with three-request rank-layer allocation, shared-source handling, one search/request, and independent three-worker extraction. Verify all budgets, duplicate/known/available sources, partial failures, no backfill, deterministic completion-order independence, and provider/fixture parity.
 10. **Recursive resolver** — implement `src/application/research-resolver.ts` over `GapLedger`, `joinKnowledge`, assessor, and acquirer. Verify `resolved/search/decompose(all|any)`, depth/branch/budget ceilings, parent reassessment, cycles, no-new-knowledge, useful best effort, insufficient outcome, checkpoints, and no child turn/answer.
-11. **Synthesis and turn executors** — implement `src/application/answer-synthesizer.ts`, leading-line normalizer, `execute-search-turn.ts`, `execute-research-turn.ts`, and `turn-executor.ts`. Verify exactly-one root synthesis, conversational opening fallback, liberal Markdown/citation reachability, empty/refused/failure paths, search's exactly-one provider call/no LLM/extraction, source records, and execution provenance.
+11. **Synthesis and turn executors** — implement `src/application/answer-synthesizer.ts`, the defensive leading-line normalizer, `execute-search-turn.ts`, `execute-research-turn.ts`, and `turn-executor.ts`. Verify exactly-one root synthesis, conversational opening fallback, citation reachability, model prohibition of headings/horizontal rules, empty/refused/failure paths, search's exactly-one provider call/no LLM/extraction, source records, and execution provenance.
 12. **Portable turn boundary** — add `src/server/app.ts` and `src/server/turn-stream-boundary.ts`; adapt auth/status/storage routes and make root `server/app.ts` only a temporary re-export if needed. Verify request-byte/schema/auth limits, accepted sequence one, contiguous typed events, heartbeat comments, cancellation, one executor invocation, terminal/error closure, and Node/Vercel fixture parity.
 13. **Browser gateway and turn controller** — implement `src/infrastructure/browser/turn-gateway.ts`, `src/ui/controllers/turn-controller.ts`, and transcript/evidence projection helpers. Verify event runtime validation, stale/duplicate/gap handling, active state, source-closed checkpoints, local cancellation/loss, exact terminal construction, CAS rebase/idempotency, retryable commit retention, and blocking non-retryable escalation.
 14. **Browser primitives and fuzzy policies** — add layout/action/field/status/hidden/Markdown/fuzzy primitives and the sole `fzf@0.5.2` adapter; implement `rankThreads`/`rankPromptSuggestions` and shared visual/caret tokens. Verify native semantics, sanitization, rank/highlight fixtures, reduced motion, no fzf type leakage, and no prompt content in frontend assets.
@@ -3181,6 +3185,14 @@ Execute in order. Every step must leave strict typecheck green; temporary v3/leg
 16. **Workspace/routes cutover** — implement route-discriminated `WorkspaceController`, focused route components, and slim `App.tsx`; switch all browser requests/history/evidence/header rendering to the target gateway/controllers/boxes. Verify initial/follow-up path parity, no queue/duplication, `/threads` sole presentation, `:` focus, single/double Escape, safe navigation/cancellation, responsive/focus/e2e behavior.
 17. **Legacy removal and canonical naming** — move v3 types/schemas/storage port to canonical filenames and update imports; delete temporary legacy consumer bridges, old `server/research.ts`, chat/planner/lookup modes/endpoints, current adapters/components, duplicate prompt strings, overlay picker, and obsolete CSS; retain only the focused private v1/v2 untrusted-input schemas and deterministic migration code. Repository-search forbidden vocabulary/paths; run lint/typecheck/tests/build and `git diff --check`.
 18. **Shipped architecture and acceptance** — update `README.md`, root `AGENTS.md`, plan Current State/Handoff/ledger, `.env.example`, and operator setup to implemented reality. Run `npm ci`, lint, typecheck, all tests, build, e2e, built-asset secret/prompt inspection, local fixture smoke, and deployment/runtime smoke; commit independently verified milestones with `<|°_°|>`.
+
+Completed RC hardening slices, recorded as Plan Ledger items 31–35:
+
+- **Export integrity** — link referenced sources in Markdown exports and convert valid raw citation markers without inventing unresolved links.
+- **Transcript/synthesis ownership** — render application-owned request/response and inter-turn separation; prohibit model-authored headings and horizontal rules while retaining expressive non-separator Markdown.
+- **Follow-up evidence policy** — retain admitted follow-up evidence through assessor failure and require direct support or fresh retrieval for materially new and time-sensitive claims.
+- **Structured diagnostics** — standardize allowlisted server logging and bounded research timing/context/directive/failure records; never log prompt, request, source, provider, payload, credential, or identifier content.
+- **Directive normalization** — normalize sparse provider search directives into the exact protocol without changing the provider-neutral directive vocabulary.
 
 ## Plan Ledger
 
@@ -3216,10 +3228,16 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [x] 28. Synthesis-part terminal regression — deliverable: coalesce provider streaming text chunks into durable Markdown segments and enforce answer-part/text bounds before terminal assembly so response length cannot surface as `invalid_terminal`; verify: 300-chunk schema-valid answer and post-coalescing overflow fixtures plus lint, typecheck, 218 tests, production build, six isolated-port e2e tests, and `git diff --check`.
 - [x] 29. Post-release visual polish — deliverable: warm gray paper/ink light-dark tokens with global selection inversion, focused prompt accent border, full-scheme native caret rotation on PromptBox/thread search with reduced-motion fallback, and no global PromptBox on settings/threads; verify: UI regression tests, lint, typecheck, full tests, production build, and `git diff --check`.
 - [x] 30. Prompt-owned recursion threshold — deliverable: simple factual/navigation problems may resolve from one authoritative source, while comparative/causal/contested/multi-obligation problems require complete obligation coverage, two-source central corroboration, and four materially independent sources overall; verify: exact prompt-asset assertions, lint, typecheck, 219 tests, production build, and `git diff --check`.
+- [x] 31. Markdown export integrity — deliverable: export only referenced sources as linked citations/source entries and convert valid raw citation markers while preserving unresolved markers; verify: focused thread-Markdown regressions and current 231-test suite.
+- [x] 32. Transcript and synthesis separator ownership — deliverable: `TranscriptBox` inserts request/response and inter-turn separators, while `SYNTHESIZER.md` forbids model-authored headings and horizontal rules and keeps non-separator Markdown available; verify: prompt/UI/export regressions and current 231-test suite.
+- [x] 33. Follow-up evidence and freshness policy — deliverable: resolver initialization retains admitted contextual evidence through assessor failure, and `ASSESSOR.md` requires support for materially new follow-up obligations and fresh retrieval for time-sensitive facts; verify: resolver/prompt regressions and current 231-test suite.
+- [x] 34. Structured research diagnostics — deliverable: `LOG_LEVEL`-controlled structured logging and one opt-in allowlisted timing record with answer position, aggregate context, directive history, bounded failure/invalid reason, timings, and ledger counts; verify: config/logger/timing/server regressions and current 231-test suite.
+- [x] 35. Sparse search-directive normalization — deliverable: Anthropic structured responses that omit optional search strings are normalized to the exact provider-neutral search directive without relaxing other directive validation; verify: provider regressions and current 231-test suite.
+- [x] 36. Release-candidate documentation alignment — deliverable: current README/AGENTS/plan/prompt vocabulary, operator diagnostics, durable appendable RC changelog, and stable PR draft; verify: `npm run lint`, full 231-test suite, 40 focused prompt/provider/export/UI tests, local Markdown-link validation across five changed documentation files, and `git diff --check`.
 
 ## Verification
 
-Latest regression verification: `npm run lint`, `npm run typecheck`, `npm test` (219 tests), `npm run build`, and `git diff --check` all pass. Browser visual smoke across light/dark/auto and reduced-motion modes remains the deployment follow-up. The default Playwright command reused unrelated authenticated servers on ports 5173/8787; this environmental run reached `/unlock` before the isolated-port suite passed. Live-provider obedience to the initial-only preamble and visual observation of a recursive continuation remain deployment smoke checks.
+Current release-candidate verification: `npm run lint` and `npm test` pass, with 29 test files and 231 tests. A focused prompt/provider/export/UI run passes 40 tests, local Markdown-link validation passes across all five changed documentation files, and `git diff --check` is clean. The last full pre-hardening checkpoint also passed `npm run typecheck`, `npm run build`, and the isolated-port Playwright suite; the post-checkpoint changes added focused provider, resolver, prompt, export/UI, config, logger, and timing regressions. Browser visual smoke across light/dark/auto and reduced-motion modes remains a deployment follow-up. The default Playwright command previously reused unrelated authenticated servers on ports 5173/8787 and reached `/unlock` before the isolated-port suite passed. Live-provider smoke should cover the initial-only preamble, direct follow-up wording, a focused-search continuation, and a decomposed recursive continuation.
 
 The final implementation must prove at least:
 
@@ -3245,7 +3263,7 @@ The final implementation must prove at least:
 - Budget exhaustion with useful evidence produces best-effort synthesis with uncertainty; no useful evidence produces insufficient-evidence failure.
 - Partial sibling failures preserve viable evidence and provenance.
 - Synthesis receives typed bounded thread context and the final root knowledge unit, emits only citations reachable through that unit, and fails on empty output.
-- Root `SYNTHESIZER.md` applies shared grounding, citation, voice, and Markdown rules to every answer; explicit `answerPosition` requires only the initial completed research answer to begin with `According to my research` and forbids repeating it on follow-ups. Prompt edits update the canonical asset, provider-boundary expectations, behavioral fixtures, and the streaming leading-line fallback together.
+- Root `SYNTHESIZER.md` applies shared grounding, citation, voice, and Markdown rules to every answer; explicit `answerPosition` requires only the initial completed research answer to begin with `According to my research` and forbids repeating it on follow-ups. The application owns transcript separators, so model output uses emphasized labels, lists, tables, code, quotes, and whitespace rather than headings or horizontal rules. Prompt edits update the canonical asset, provider-boundary expectations, behavioral fixtures, and the streaming leading-line fallback together.
 - The streaming fallback buffers through the first non-empty line and demotes only a violating leading ATX marker; it performs no second synthesis and leaves all internal Markdown untouched.
 - Structured assessment retry and dynamic problem/context/evidence/schema envelopes remain typed user/protocol input; no adapter or retry appends hidden system text to either editable Markdown asset.
 - Search and research failures cross boxes as bounded typed failures without provider payloads.
@@ -3259,7 +3277,7 @@ The final implementation must prove at least:
 - Prompt command suggestions open for `/`, support arrows plus Tab completion and Enter execution, and consume their own Escape before global handling. One eligible idle Escape blurs a focused prompt and arms the 500 ms detector; a second requests a new thread, while cancellation/confirmation/composition/modified Escapes never count.
 - Prompt caret color cycles discretely through selected-scheme accent tokens using the native caret, falls back safely, and becomes static under reduced motion; no simulated thick caret compromises native editing/IME/accessibility.
 - `Hotkeys` is installed once, emits semantic intents rather than effects, focuses a mounted prompt with passive unmodified `:`, follows the settled box-local/cancel/blur/double-Escape precedence, never steals unrelated editable or composing input, and never invokes navigation/system capabilities directly.
-- `TranscriptBox` renders durable/active turns and read-only archive entries through one merged ordered view model and one sanitized `MarkdownContent` primitive; archive entries are persistently labeled “legacy, not evidence-verified,” never expose retry/evidence actions, and resolve only bounded entry-local source aliases. Active progress/streaming is replaced by matching durable completion without duplicate requests or answers, liberal internal Markdown and color-constellation styling are preserved, and initial/follow-up requests use the same v3 path.
+- `TranscriptBox` renders durable/active turns and read-only archive entries through one merged ordered view model and one sanitized `MarkdownContent` primitive; archive entries are persistently labeled “legacy, not evidence-verified,” never expose retry/evidence actions, and resolve only bounded entry-local source aliases. Active progress/streaming is replaced by matching durable completion without duplicate requests or answers. The application separates each request from its response and each response from the next turn; synthesized content cannot impersonate those boundaries with headings or horizontal rules. Initial/follow-up requests use the same v3 path.
 - `EvidenceBox` renders one thread-wide canonical set; duplicate sources retain one application-derived stable `SourceId` and display ordinal, citations resolve by ID, occurrences preserve turn/rank/role provenance, and destination-to-evidence promotion does not duplicate an entry.
 - `BrandBox` exposes one keyboard/pointer-equivalent activation target and emits only `new_thread_requested`; tagline rotation is non-live and respects reduced motion.
 - Every canonical page composes the same minimal `StickyHeader`: one landmark with one `Surface`/`Inline`, `BrandBox`, only applicable contextual actions, and at most one feedback region; actions remain accessible and never perform effects directly.
