@@ -5,6 +5,9 @@
   background: var(--paper);
   color: var(--ink);
 }
+.threadShell {
+  padding-bottom: clamp(12rem, 20vh, 18rem);
+}
 .header {
   position: sticky;
   top: 0;
