@@ -45,9 +45,11 @@ describe("FileSystemPromptSource", () => {
     const catalog = await new FileSystemPromptSource().load();
     expect(catalog.assessor).toBe(await readFile(new URL("../ASSESSOR.md", import.meta.url), "utf8"));
     expect(catalog.assessor).toContain("For a single factual, navigational, or current-state problem, prefer one focused search over decomposition.");
-    expect(catalog.assessor).toContain("one sufficiently authoritative source may justify `resolved`");
+    expect(catalog.assessor).toContain("For the root problem (depth 0), return `resolved` only when");
+    expect(catalog.assessor).toContain("at least two materially independent sources");
     expect(catalog.assessor).toContain("at least four materially independent sources overall");
     expect(catalog.assessor).toContain("do not count syndicated copies");
+    expect(catalog.assessor).toContain("source count alone is not proof");
     expect(catalog.synthesizer).toBe(await readFile(new URL("../SYNTHESIZER.md", import.meta.url), "utf8"));
     expect(catalog.synthesizer).toContain("When it is `initial`, begin exactly with `According to my research`");
     expect(catalog.synthesizer).toContain("When it is `follow_up`, answer directly without repeating");
