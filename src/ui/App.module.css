@@ -449,19 +449,47 @@
   color: var(--muted);
   line-height: 1.45;
 }
-.evidence a.mediaAttachment {
+.evidence .mediaAttachment {
   display: block;
   width: 100%;
+  aspect-ratio: 16 / 9;
   margin: 0.85rem 0 0;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ink) 5%, var(--paper));
   text-decoration: none;
 }
 .mediaThumbnail {
   display: block;
   width: 100%;
-  aspect-ratio: 16 / 9;
-  border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--ink) 5%, var(--paper));
+  height: 100%;
   object-fit: contain;
+}
+.videoPlayButton {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  display: grid;
+  width: 4rem;
+  height: 4rem;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 70%);
+  border-radius: 50%;
+  background: rgb(0 0 0 / 65%);
+  cursor: pointer;
+}
+.videoPlayButton:focus-visible {
+  outline: 3px solid var(--relational-accent, var(--accent));
+  outline-offset: 3px;
+}
+.videoPlayIcon {
+  width: 0;
+  height: 0;
+  margin-left: 0.25rem;
+  border-block: 0.65rem solid transparent;
+  border-left: 1rem solid white;
 }
 .evidenceItemActive {
   background: color-mix(in srgb, var(--relational-accent, var(--accent)) 18%, transparent);

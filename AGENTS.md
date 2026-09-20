@@ -23,7 +23,7 @@ Ordinary non-command input and `/threads/new?q=...` create a `ResearchTurn` rega
 
 The visible product boxes are `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, `UnlockBox`, and `SystemStatusBox`; `Hotkeys` is the non-visible layout-control box. The application owns transcript separators. Synthesized answers may use emphasized labels, lists, tables, code, quotes, and whitespace, but must not generate headings or horizontal rules.
 
-The search-result-kind amendment is under active development on this feature branch and tracked in [`docs/plans/dorothy-ann-search-result-kinds.md`](docs/plans/dorothy-ann-search-result-kinds.md). Its prompt-input URL is `/threads/new?q=<prompt input>`, with a shared classifier for bare research plus `/link`, `/image`, and `/video` `SearchTurn` result kinds. Media results remain durable bounded source records but never enter extraction or factual research evidence. Do not describe this amendment as release-ready until its plan reaches `done`.
+The search-result-kind amendment is tracked in [`docs/plans/dorothy-ann-search-result-kinds.md`](docs/plans/dorothy-ann-search-result-kinds.md). Its prompt-input URL is `/threads/new?q=<prompt input>`, with a shared classifier for bare research plus `/link`, `/image`, and `/video` `SearchTurn` result kinds. Media results remain durable bounded source records but never enter extraction or factual research evidence. Supported video thumbnails use explicit click-to-load inline playback with linked-thumbnail fallback; titles remain external source-page links. Do not describe this amendment as release-ready unless its plan status is `done`.
 
 ## implementation workflow
 

@@ -1,4 +1,5 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
+import ReactPlayer from "react-player";
 import type { SourceRecord } from "../../domain/types";
 import { sourceAccentSlotForIndex } from "../color-scheme";
 import styles from "../App.module.css";
@@ -24,6 +25,45 @@ function snippetContent(value: string): ReactNode {
   return Array.from(root.childNodes).map((node, index) => render(node, String(index)));
 }
 
+interface LinkedMediaThumbnailProps {
+  href: string;
+  label: string;
+  thumbnailUrl: string;
+}
+
+function LinkedMediaThumbnail({ href, label, thumbnailUrl }: LinkedMediaThumbnailProps) {
+  return <a className={styles.mediaAttachment} href={href} target="_blank" rel="noreferrer" aria-label={label}><img className={styles.mediaThumbnail} src={thumbnailUrl} alt="" loading="lazy" /></a>;
+}
+
+interface VideoMediaProps extends LinkedMediaThumbnailProps {
+  title: string;
+  videoUrl: string;
+}
+
+function VideoMedia({ href, label, thumbnailUrl, title, videoUrl }: VideoMediaProps) {
+  const [playbackFailed, setPlaybackFailed] = useState(false);
+  const canPlay = ReactPlayer.canPlay?.(videoUrl) === true;
+
+  if (!canPlay || playbackFailed) {
+    return <LinkedMediaThumbnail href={href} label={label} thumbnailUrl={thumbnailUrl} />;
+  }
+
+  return <div className={styles.mediaAttachment}>
+    <ReactPlayer
+      src={videoUrl}
+      light={<img className={styles.mediaThumbnail} src={thumbnailUrl} alt="" loading="lazy" />}
+      playing
+      controls
+      playsInline
+      width="100%"
+      height="100%"
+      previewTabIndex={-1}
+      playIcon={<button type="button" className={styles.videoPlayButton} aria-label={`Play video: ${title}`}><span className={styles.videoPlayIcon} aria-hidden="true" /></button>}
+      onError={() => setPlaybackFailed(true)}
+    />
+  </div>;
+}
+
 export function EvidenceBox({ sources, selectedSourceId, onIntent }: { sources: SourceRecord[]; selectedSourceId?: string; onIntent: (intent: BoxIntent) => void }) {
   return <aside className={styles.evidence} aria-label="Evidence"><h2 className={styles.srOnly}>Evidence</h2><ul className={styles.evidenceList}>{sources.map((source, index) => {
     const kind = "kind" in source ? source.kind : "link";
@@ -37,7 +77,9 @@ export function EvidenceBox({ sources, selectedSourceId, onIntent }: { sources: 
       <a className={styles.sourceAccent} style={{ "--relational-accent": `var(--accent-${sourceAccentSlotForIndex(index, 8) + 1})` } as CSSProperties} href={primary} target="_blank" rel="noreferrer" aria-label={`${label}: ${source.title}`} onFocus={() => onIntent({ type: "source_open_requested", sourceId: String(source.sourceId) })}><span aria-hidden="true">{index + 1}. </span><span>{source.title}</span></a>
       <small>{source.displayUrl}</small>
       {mediaAttachment
-        ? <a className={styles.mediaAttachment} href={primary} target="_blank" rel="noreferrer" aria-label={`${label} preview: ${source.title}`}><img className={styles.mediaThumbnail} src={thumbnailUrl} alt="" loading="lazy" /></a>
+        ? kind === "video" && "videoUrl" in source
+          ? <VideoMedia href={primary} label={`${label} preview: ${source.title}`} thumbnailUrl={thumbnailUrl} title={source.title} videoUrl={source.videoUrl} />
+          : <LinkedMediaThumbnail href={primary} label={`${label} preview: ${source.title}`} thumbnailUrl={thumbnailUrl} />
         : source.snippet && <p>{snippetContent(source.snippet)}</p>}
     </li>;
   })}</ul></aside>;

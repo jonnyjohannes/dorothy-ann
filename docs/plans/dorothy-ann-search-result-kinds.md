@@ -2,13 +2,13 @@
 
 ## Current State
 
-- Status: implementing
-- Verification: focused checks, lint, typecheck, 241 tests, build, scoped diff check, and four isolated-server browser flows pass; two pre-existing contrast checks and repository-wide diff-check remain blocked
+- Status: done
+- Verification: focused ReactPlayer/EvidenceBox tests (26), lint, typecheck, full tests (249), build, dependency resolution, and `git diff --check` pass; four fresh isolated-server functional browser flows pass; two pre-existing contrast checks fail at 4.34:1
 - Owner: Dorothy Ann product/domain boundary
-- Executor: unassigned; continuing on `feature/img-n-video-search`
+- Executor: worker on `feature/img-n-video-search`
 - Last updated: 2026-09-20
-- Current focus: add the approved click-to-load ReactPlayer video experience without changing link/image behavior
-- Next action: implement and verify the reopened P5 ReactPlayer slice, then resume repository verification in P6
+- Current focus: implementation and verification complete
+- Next action: independent review, then commit the completed feature branch milestone
 - Branch / PR / session: `feature/img-n-video-search`
 
 ## Abstract
@@ -54,14 +54,14 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` verified, `[!]` blocked.
   - Deliverable: implement the approved identity rule for media asset URLs and source-page URLs, and persist enough bounded metadata for EvidenceBox to reproduce link/image/video results after reload without storing provider payloads.
   - Verify: source identity, terminal closure, storage, import/export, reload, and source-order tests cover repeated media, asset/page URL relationships, and metadata bounds.
   - Evidence: discriminated ThreadSourceRecord schemas preserve canonical media identity, source-page metadata, ordinals, closure, and reload-safe bounded records.
-- [~] P5 — enforce extraction and presentation boundaries
+- [x] P5 — enforce extraction and presentation boundaries
   - Deliverable: keep only link results eligible for `ContentExtractor`; render all three result kinds through the appropriate `EvidenceBox` presentation; add click-to-load ReactPlayer playback for supported video URLs while preserving keyboard, focus, citation identity, accessibility, responsive behavior, and external title activation.
   - Verify: extraction exclusion tests and UI/browser tests cover link, image, and video result cells, ReactPlayer-supported and unsupported URLs, click-to-load behavior, safe fallback, empty results, and bounded failures.
-  - Evidence: extractor rejects media before fetch; EvidenceBox preserves the link-result title/source decoration for every kind and renders a bounded detached media attachment in place of the snippet when a thumbnail is available; source IDs, evidence anchors, accent selection, and focus remain shared. `/link`, `/image`, and `/video` appear on separate command-list lines with no Alt+A assignment; focused UI tests pass. ReactPlayer dependency and player behavior remain to implement.
-- [ ] P6 — run focused and repository verification
+  - Evidence: extractor rejects media before fetch; EvidenceBox preserves the link-result title/source decoration for every kind and renders a bounded detached media attachment in place of the snippet when a thumbnail is available; source IDs, evidence anchors, accent selection, and focus remain shared. `/link`, `/image`, and `/video` appear on separate command-list lines with no Alt+A assignment. `react-player@^3.4.0` gates video activation through `ReactPlayer.canPlay`, uses the Brave thumbnail as an explicit light-mode preview, starts component-local controlled playback only after activation, preserves the external title link, and restores the linked thumbnail on unsupported URLs or runtime errors. Focused ReactPlayer and existing EvidenceBox tests pass (26 tests).
+- [x] P6 — run focused and repository verification
   - Deliverable: update README/AGENTS and affected tests/docs after the active plan amendment is accepted; record actual verification and remaining environmental blockers.
   - Verify: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `npm run test:e2e`, `git diff --check`, and `git status`.
-  - Evidence: `npm run lint`, `npm run typecheck`, `npm test -- --run` (241 tests), and `npm run build` pass. A fresh isolated-server Playwright run passes all four functional flows; both accessibility cases expose the pre-existing light-theme `--muted: #666666` on `--paper: #e0e0e0` contrast ratio of 4.34:1. Scoped `git diff --check -- . ':!SYNTHESIZER.md'` passes; repository-wide diff-check remains blocked by the unrelated pre-existing blank line at EOF in `SYNTHESIZER.md`. No files are staged.
+  - Evidence: focused ReactPlayer/EvidenceBox tests (26), `npm run lint`, `npm run typecheck`, `npm test -- --run` (249 tests), `npm run build`, `npm ls react-player --depth=0`, and repository-wide `git diff --check` pass. A fresh isolated-server Playwright run passes all four functional flows; both accessibility cases still expose the pre-existing light-theme `--muted: #666666` on `--paper: #e0e0e0` contrast ratio of 4.34:1. `git status` confirms the expected implementation files and no staged files.
 
 ## Desired Outcome
 
@@ -82,7 +82,7 @@ The amendment is implemented in the current working tree:
 - `SearchResult` and durable `ThreadSourceRecord` are discriminated link/image/video unions with bounded normalized metadata and common canonical media identity fields.
 - Brave web/image/video normalization strips provider payloads, validates safe bounded fields, and preserves deterministic ordering/deduplication.
 - Media records remain durable and renderable but are rejected before `ContentExtractor` and never become factual research evidence.
-- README, AGENTS, and the active v1.1 plan describe the shipped contract. P6 remains open only for recorded verification blockers.
+- README and AGENTS describe the implemented click-to-load player contract; P5 and P6 are complete with the known pre-existing contrast failure recorded.
 
 ## Scope
 
@@ -233,7 +233,7 @@ Add `react-player` as a runtime dependency (initial target `^3.4.0`, lockfile au
 
 `EvidenceBox` result cells branch on the discriminated result kind while preserving one shared card anatomy and the existing activation/accessibility rules. All kinds use the same numbered accented title, source metadata position, increased title/cell spacing, active/focused state, stable `SourceId`, and `#source-<SourceId>` citation anchor. Image/video cells apply `coalesce(detached media attachment, description snippet)`: a thumbnail renders as a detached full-card-width `16:9` tile with `object-fit: contain`, replacing the snippet; unusual source aspect ratios are centered rather than cropped or stretched, and without a thumbnail the snippet renders normally. Image titles and thumbnails activate the source page when available. Video titles remain external source-page links, while supported video thumbnails activate ReactPlayer in place; unsupported or failed players use the linked thumbnail fallback. There is no separate `Open image` / `Open video` link. This preserves the existing link presentation as the baseline and lets future admitted media evidence use the same citation-selection behavior without a new citation UI. Media cells must not expose provider payloads or imply content inspection that did not occur.
 
-The active v1.1 plan's Current State, Handoff, canonical vocabulary, route contracts, PromptBox section, SearchTurn section, implementation ledger, README, and AGENTS have been reconciled before implementation. This child plan is now implementing against that approved contract.
+The active v1.1 plan's Current State, Handoff, canonical vocabulary, route contracts, PromptBox section, SearchTurn section, implementation ledger, README, and AGENTS were reconciled before implementation. This child plan is complete against that approved contract.
 
 ## Verification
 
@@ -258,11 +258,11 @@ The active v1.1 plan's Current State, Handoff, canonical vocabulary, route contr
 
 - Live Brave link/image/video smoke has not run; fixture mode and provider normalization tests pass.
 - Fresh isolated-server functional browser flows pass, but both accessibility projects expose the existing 4.34:1 light-theme muted-text contrast ratio.
-- Repository-wide `git diff --check` remains blocked only by the unrelated pre-existing `SYNTHESIZER.md` EOF blank line; the scoped implementation diff check passes.
-- Visual confirmation of result-kind secondary-action labels remains a non-blocking deployment follow-up.
+- Repository-wide `git diff --check` passes.
+- Live provider playback was not exercised; focused tests mock the player/provider boundary to avoid network calls.
 
 ## Open Questions
 
 - **Active-plan reconciliation** — owner: plan maintainer — complete: the active v1.1 plan and synchronized README/AGENTS describe the shipped prompt-input and search-result-kind contract.
 - **Result-kind display identity** — owner: UI/product decision — complete: all kinds share link-style title/source decoration, breathing room, and citation behavior; media uses the bounded detached-attachment-or-snippet rule, and both title and thumbnail activate the source page without a separate media action.
-- **Portable video player** — owner: product/security — approved: add `react-player` as the provider-adapter dependency. Use `canPlay`, light mode with the Brave thumbnail, explicit click-to-load, provider controls, no pre-activation autoplay, title-as-external-link behavior, and linked-thumbnail fallback on unsupported URLs or runtime failure. Persist only the canonical video/source metadata already approved; never persist embed HTML or player state.
+- **Portable video player** — owner: product/security — complete: `react-player` uses `canPlay`, light mode with the Brave thumbnail, explicit click-to-load, provider controls, no pre-activation autoplay, title-as-external-link behavior, and linked-thumbnail fallback on unsupported URLs or runtime failure. Only the canonical video/source metadata is persisted; embed HTML and player state remain ephemeral.
