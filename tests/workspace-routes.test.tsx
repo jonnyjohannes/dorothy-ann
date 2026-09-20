@@ -72,6 +72,18 @@ describe("workspace controller", () => {
     expect(controller.command({ type: "command_requested", command: "/link" })).toEqual({ type: "invalid", message: "Usage: /link <query>" });
     expect(controller.command({ type: "new_thread_requested" })).toEqual({ type: "navigate", to: "/", replace: true });
   });
+  it("populates and focuses the prompt from the visible search command actions", () => {
+    render(<MemoryRouter><HomeRoute /></MemoryRouter>);
+    const commands = Array.from(screen.getByLabelText("Commands").querySelectorAll("p"), (row) => row.firstElementChild?.textContent);
+    expect(commands).toEqual(["/new", "/threads", "/link", "/image", "/video", "/settings"]);
+    expect(screen.getAllByText("{query}")).toHaveLength(3);
+    expect(screen.queryByText("<query>")).not.toBeInTheDocument();
+    const prompt = screen.getByLabelText("Search query");
+    prompt.blur();
+    fireEvent.click(screen.getByRole("button", { name: "/image" }));
+    expect(prompt).toHaveValue("/image ");
+    expect(prompt).toHaveFocus();
+  });
   it("routes ordinary questions and explicit result searches through one prompt URL", () => {
     const view = render(<MemoryRouter><Routes><Route path="/" element={<HomeRoute />} /><Route path="*" element={<LocationProbe />} /></Routes></MemoryRouter>);
     const prompt = screen.getByLabelText("Search query");
