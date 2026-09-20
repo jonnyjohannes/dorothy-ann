@@ -29,6 +29,13 @@ describe("v3 domain schemas", () => {
     expect(threadV3Schema.safeParse(baseThread).success).toBe(true);
   });
 
+  it("accepts bounded media source records with canonical media identity", () => {
+    const image = { kind: "image", sourceId: hash("src", "i"), ordinal: 1, title: "Cat", url: "https://cdn.example/cat.jpg", canonicalUrl: "https://cdn.example/cat.jpg", displayUrl: "cdn.example", imageUrl: "https://cdn.example/cat.jpg", sourcePageUrl: "https://example.com/cats", thumbnailUrl: "https://cdn.example/thumb.jpg", width: 640, height: 480 };
+    const mediaThread = { ...baseThread, sources: [image], turns: [{ ...searchTurn, result: { completion: "results", resultKind: "image", destinations: [{ sourceId: image.sourceId, rank: 1 }] } }] };
+    expect(threadV3Schema.safeParse(mediaThread).success).toBe(true);
+    expect(threadV3Schema.safeParse({ ...mediaThread, sources: [{ ...image, canonicalUrl: "https://cdn.example/other.jpg" }] }).success).toBe(false);
+  });
+
   it("represents pending work outside the durable Turn union", () => {
     expect(turnV3Schema.safeParse({ ...searchTurn, status: "running" }).success).toBe(false);
   });

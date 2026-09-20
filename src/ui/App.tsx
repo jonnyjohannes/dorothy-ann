@@ -44,7 +44,6 @@ export function GlobalShortcuts() {
       if (event.isComposing) return;
       if (event.altKey && event.code === "KeyS") { event.preventDefault(); navigate("/threads"); return; }
       if (event.altKey && event.code === "KeyC") { event.preventDefault(); navigate("/settings"); return; }
-      if (event.altKey && event.code === "KeyA" && !event.ctrlKey && !event.metaKey) { event.preventDefault(); window.dispatchEvent(new Event("dorothy-ann-search-shortcut")); return; }
       if (event.key === "i" && !event.ctrlKey && !event.altKey && !event.metaKey && !isEditable) {
         const prompt = document.querySelector<HTMLInputElement>('input[aria-label="Search query"]:not(:disabled)');
         if (prompt) { event.preventDefault(); prompt.focus(); return; }
@@ -93,7 +92,6 @@ export function App() {
     <Route path="/threads" element={<ThreadsRoute />} />
     <Route path="/threads/new" element={<ThreadRoute />} />
     <Route path="/threads/:threadId" element={<ThreadRoute />} />
-    <Route path="/search" element={<ThreadRoute initialKind="search" />} />
     <Route path="/new" element={<HomeRoute />} />
     <Route path="*" element={<HomeRoute />} />
   </Routes></AuthGate></>;

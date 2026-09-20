@@ -2,9 +2,11 @@ import { collectTurnSourceIds } from "../../application/commit-terminal-turn.js"
 import type {
   AssistantContent,
   CanonicalSource,
+  SourceRecord,
   ExecutionId,
   ResearchCheckpoint,
   ResearchResolution,
+  SearchResultKind,
   ThreadContext,
   ThreadId,
   Turn,
@@ -21,6 +23,7 @@ export interface TurnStartInput {
   turnId: TurnId;
   executionId: ExecutionId;
   kind: "search" | "research";
+  resultKind?: SearchResultKind;
   request: string;
   userMessage: UserMessage;
   createdAt: UserMessage["createdAt"];
@@ -36,7 +39,7 @@ export interface TurnControllerView {
   lastSequence: number;
   events: TurnGatewayEvent[];
   answerDraft: string;
-  sources: CanonicalSource[];
+  sources: SourceRecord[];
   researchState?: { kind: "checkpoint"; checkpoint: ResearchCheckpoint } | { kind: "resolution"; resolution: ResearchResolution };
 }
 
@@ -55,16 +58,16 @@ export type TurnControllerResult =
 interface Candidate {
   input: TurnStartInput;
   turn: Turn;
-  sourceRecords: CanonicalSource[];
+  sourceRecords: SourceRecord[];
 }
 interface ActiveRun {
   input: TurnStartInput;
   abort: AbortController;
   events: TurnGatewayEvent[];
   answerDraft: string;
-  sources: Map<string, CanonicalSource>;
+  sources: Map<string, SourceRecord>;
   researchState?: { kind: "checkpoint"; checkpoint: ResearchCheckpoint } | { kind: "resolution"; resolution: ResearchResolution };
-  terminalSources?: CanonicalSource[];
+  terminalSources?: SourceRecord[];
   cancelled?: "user_cancelled" | "navigation";
 }
 
@@ -79,7 +82,7 @@ function controllerErrorMessage(error: TurnControllerError): string {
   return "Research execution failed.";
 }
 function gatewayRequest(input: TurnStartInput): TurnGatewayRequest {
-  if (input.kind === "search") return { executionId: input.executionId, turnId: input.turnId, kind: "search", query: input.request };
+  if (input.kind === "search") return { executionId: input.executionId, turnId: input.turnId, kind: "search", resultKind: input.resultKind ?? "link", query: input.request };
   if (!input.context || !input.answerPosition) throw new Error("research context and answer position required");
   return { executionId: input.executionId, turnId: input.turnId, kind: "research", question: input.request, context: input.context, answerPosition: input.answerPosition };
 }
@@ -183,7 +186,7 @@ export class TurnController {
     return { ok: true, turn: parsed.data };
   }
 
-  private sourcesForTerminal(active: ActiveRun, turn: Turn): CanonicalSource[] {
+  private sourcesForTerminal(active: ActiveRun, turn: Turn): SourceRecord[] {
     const sourceIds = collectTurnSourceIds(turn);
     return (active.terminalSources ?? [...active.sources.values()]).filter((source) => sourceIds.has(source.sourceId));
   }

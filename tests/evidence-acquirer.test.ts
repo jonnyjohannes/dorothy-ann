@@ -15,6 +15,7 @@ const request = (problemId: string, priority: 1 | 2 | 3, createdOrder: number): 
 });
 
 const source = (id: string, rank: number): SearchResult => ({
+  kind: "link",
   sourceId: id as SearchResult["sourceId"],
   rank,
   title: id,

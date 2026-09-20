@@ -16,7 +16,6 @@ describe("workspace controller", () => {
     expect(controller.route("/")).toEqual({ kind: "home" });
     expect(controller.route("/threads")).toEqual({ kind: "threads" });
     expect(controller.route("/threads/new")).toEqual({ kind: "new_thread" });
-    expect(controller.route("/search")).toEqual({ kind: "search" });
     expect(controller.route("/settings")).toEqual({ kind: "settings" });
     expect(controller.route("/unlock")).toEqual({ kind: "unlock" });
     expect(controller.route("/threads/thread-1")).toEqual({ kind: "thread", threadId: "thread-1" });
@@ -62,15 +61,17 @@ describe("workspace controller", () => {
     expect(researchAnswerPosition([{ kind: "research", status: "failed" }, { kind: "research", status: "interrupted" }] as never)).toBe("initial");
     expect(researchAnswerPosition([{ kind: "research", status: "completed" }] as never)).toBe("follow_up");
   });
-  it("defaults ordinary input to research and reserves search for an explicit utility", () => {
+  it("defaults ordinary input to research and classifies explicit result kinds", () => {
     expect(controller.command({ type: "command_requested", command: "/threads" })).toEqual({ type: "navigate", to: "/threads" });
     expect(controller.command({ type: "prompt_submitted", value: "what" })).toEqual({ type: "submit", value: "what", kind: "research" });
     expect(controller.command({ type: "prompt_submitted", value: "what?" })).toEqual({ type: "submit", value: "what?", kind: "research" });
-    expect(controller.command({ type: "command_requested", command: "/search  apollo 11 landing  " })).toEqual({ type: "submit", value: "apollo 11 landing", kind: "search" });
-    expect(controller.command({ type: "command_requested", command: "/search" })).toEqual({ type: "invalid", message: "Usage: /search <query>" });
+    expect(controller.command({ type: "command_requested", command: "/link  apollo 11 landing  " })).toEqual({ type: "submit", value: "apollo 11 landing", kind: "search", resultKind: "link" });
+    expect(controller.command({ type: "command_requested", command: "/image apollo" })).toEqual({ type: "submit", value: "apollo", kind: "search", resultKind: "image" });
+    expect(controller.command({ type: "command_requested", command: "/video apollo" })).toEqual({ type: "submit", value: "apollo", kind: "search", resultKind: "video" });
+    expect(controller.command({ type: "command_requested", command: "/link" })).toEqual({ type: "invalid", message: "Usage: /link <query>" });
     expect(controller.command({ type: "new_thread_requested" })).toEqual({ type: "navigate", to: "/", replace: true });
   });
-  it("routes ordinary questions to research and /search to ranked-link retrieval", () => {
+  it("routes ordinary questions and explicit result searches through one prompt URL", () => {
     const view = render(<MemoryRouter><Routes><Route path="/" element={<HomeRoute />} /><Route path="*" element={<LocationProbe />} /></Routes></MemoryRouter>);
     const prompt = screen.getByLabelText("Search query");
     fireEvent.change(prompt, { target: { value: "when did apollo 11 land?" } });
@@ -80,9 +81,9 @@ describe("workspace controller", () => {
 
     render(<MemoryRouter><Routes><Route path="/" element={<HomeRoute />} /><Route path="*" element={<LocationProbe />} /></Routes></MemoryRouter>);
     const search = screen.getByLabelText("Search query");
-    fireEvent.change(search, { target: { value: "/search apollo 11 landing" } });
+    fireEvent.change(search, { target: { value: "/image apollo 11 landing" } });
     fireEvent.submit(search.closest("form")!);
-    expect(screen.getByTestId("location")).toHaveTextContent("/search?q=apollo%2011%20landing");
+    expect(screen.getByTestId("location")).toHaveTextContent("/threads/new?q=%2Fimage%20apollo%2011%20landing");
   });
   it.each(["/threads", "/settings"])("uses unmodified i to focus the prompt from %s", (path) => {
     render(<MemoryRouter initialEntries={[path]}><GlobalShortcuts /><input aria-label="Search query" /></MemoryRouter>);
@@ -96,6 +97,14 @@ describe("workspace controller", () => {
     prompt.focus();
     fireEvent.keyDown(prompt, { key, code, altKey: true });
     expect(screen.getByTestId("location")).toHaveTextContent(path);
+  });
+  it("does not assign Alt+A to any search result kind", () => {
+    render(<MemoryRouter initialEntries={["/"]}><Routes><Route path="*" element={<><GlobalShortcuts /><input aria-label="Search query" /><LocationProbe /></>} /></Routes></MemoryRouter>);
+    const prompt = screen.getByLabelText("Search query");
+    prompt.focus();
+    fireEvent.keyDown(prompt, { key: "a", code: "KeyA", altKey: true });
+    expect(screen.getByTestId("location")).toHaveTextContent(/^\/$/u);
+    expect(prompt).toHaveValue("");
   });
   it.each(["/threads", "/settings"])("leaves %s on Escape", (path) => {
     render(<MemoryRouter initialEntries={[path]}><Routes><Route path="*" element={<><GlobalShortcuts /><LocationProbe /></>} /></Routes></MemoryRouter>);

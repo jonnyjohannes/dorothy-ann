@@ -38,9 +38,13 @@ class UnavailableLlmProvider implements LLMProvider {
 
 class FixtureSearchProvider implements SearchProvider {
   constructor(private readonly identities: IdentityPolicy) {}
-  async search(query: string): Promise<import("../src/domain/types.js").SearchResult[]> {
-    const canonicalUrl = "https://example.com/fixture";
-    return [{ sourceId: await this.identities.sourceId(canonicalUrl), rank: 1, title: `Fixture result for ${query}`, url: canonicalUrl, canonicalUrl, displayUrl: "example.com/fixture", snippet: "A safe fixture result for local development." }];
+  async search(query: string, options: import("../src/ports/providers.js").SearchOptions): Promise<import("../src/domain/types.js").SearchResult[]> {
+    const kind = options.resultKind ?? "link";
+    const canonicalUrl = kind === "image" ? "https://example.com/fixture.jpg" : kind === "video" ? "https://example.com/fixture.mp4" : "https://example.com/fixture";
+    const sourceId = await this.identities.sourceId(canonicalUrl);
+    if (kind === "image") return [{ kind, sourceId, rank: 1, title: `Fixture image for ${query}`, url: canonicalUrl, canonicalUrl, imageUrl: canonicalUrl, sourcePageUrl: "https://example.com/fixture", displayUrl: "example.com", thumbnailUrl: canonicalUrl }];
+    if (kind === "video") return [{ kind, sourceId, rank: 1, title: `Fixture video for ${query}`, url: canonicalUrl, canonicalUrl, videoUrl: canonicalUrl, sourcePageUrl: "https://example.com/fixture", displayUrl: "example.com", thumbnailUrl: "https://example.com/fixture.jpg", durationSeconds: 30 }];
+    return [{ kind, sourceId, rank: 1, title: `Fixture result for ${query}`, url: canonicalUrl, canonicalUrl, displayUrl: "example.com/fixture", snippet: "A safe fixture result for local development." }];
   }
 }
 
@@ -83,7 +87,7 @@ function createExecutor(
     async execute(request, onSignal, signal) {
       if (request.kind === "search") {
         await onSignal({ type: "phase", phase: "searching" });
-        const result = await executeSearchTurn({ turnId: request.turnId, userMessage: requestMessage(request), createdAt: new Date().toISOString() as never, provider: search, maxResults: request.maxResults, signal, searchRef: "brave" });
+        const result = await executeSearchTurn({ turnId: request.turnId, userMessage: requestMessage(request), createdAt: new Date().toISOString() as never, provider: search, maxResults: request.maxResults, resultKind: request.resultKind, signal, searchRef: "brave" });
         if (result.sources.length) await onSignal({ type: "source_delta", sources: result.sources, occurrences: result.sources.map((source) => ({ sourceId: source.sourceId, role: "search_destination" as const, rank: result.turn.status === "completed" && result.turn.result.completion === "results" ? result.turn.result.destinations.find((destination) => destination.sourceId === source.sourceId)?.rank : undefined })) });
         return terminalFor(result);
       }

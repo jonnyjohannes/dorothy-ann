@@ -13,6 +13,13 @@ describe("Brave v3 normalization", () => {
     expect(result[0]).toMatchObject({ title: "Example", canonicalUrl: "https://example.com/path", sourceId: "src_test", rank: 1 });
   });
 
+  it("normalizes official image and video endpoint envelopes by media identity", async () => {
+    const image = await normalizeBravePayload({ type: "images", results: [{ title: "Cat", url: "https://example.com/cats", source: "example.com", properties: { url: "https://cdn.example/cat.jpg", width: 640, height: 480 }, thumbnail: { src: "https://cdn.example/cat-thumb.jpg" } }] }, 5, { sourceId: async (url) => `src_${url.includes("cat") ? "A".repeat(43) : "B".repeat(43)}` as never }, "image");
+    expect(image[0]).toMatchObject({ kind: "image", imageUrl: "https://cdn.example/cat.jpg", canonicalUrl: "https://cdn.example/cat.jpg", sourcePageUrl: "https://example.com/cats", thumbnailUrl: "https://cdn.example/cat-thumb.jpg", creator: "example.com", width: 640, height: 480 });
+    const video = await normalizeBravePayload({ type: "videos", results: [{ title: "Clip", url: "https://example.com/watch", thumbnail: { src: "https://cdn.example/thumb.jpg" }, video: { duration: "01:30", creator: "Creator" } }] }, 5, { sourceId: async () => `src_${"C".repeat(43)}` as never }, "video");
+    expect(video[0]).toMatchObject({ kind: "video", videoUrl: "https://example.com/watch", canonicalUrl: "https://example.com/watch", thumbnailUrl: "https://cdn.example/thumb.jpg", creator: "Creator", durationSeconds: 90 });
+  });
+
   it("bounds untrusted result metadata before it reaches terminal validation", async () => {
     const result = await normalizeBravePayload({ web: { results: [
       { title: "🚌".repeat(501), url: "https://example.com/usable", description: "evidence ".repeat(200) },
@@ -22,8 +29,10 @@ describe("Brave v3 normalization", () => {
     expect([...result[0].title]).toHaveLength(500);
     expect([...(result[0].snippet ?? "")]).toHaveLength(1_000);
     expect(result[0].canonicalUrl).toBe("https://example.com/usable");
-    const { rank: _rank, ...canonical } = result[0];
-    expect(_rank).toBe(1);
+    const canonical = { ...result[0] };
+    delete canonical.rank;
+    delete canonical.kind;
+    expect(result[0].rank).toBe(1);
     expect(canonicalSourceV3Schema.safeParse(canonical).success).toBe(true);
   });
 });

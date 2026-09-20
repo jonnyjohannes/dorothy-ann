@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import type { CanonicalSource, Thread, ThreadContext, ThreadId, TurnId, UserMessage } from "../../domain/types";
+import type { SearchResultKind, SourceRecord, Thread, ThreadContext, ThreadId, TurnId, UserMessage } from "../../domain/types";
 import { buildThreadContext } from "../../domain/thread-context";
 import { getBrowserThreadStore } from "../../infrastructure/browser/thread-store";
 import { createFetchTurnGateway } from "../../infrastructure/browser/turn-gateway";
@@ -15,6 +15,7 @@ import { researchAnswerPosition } from "../policies/answer-position";
 import { threadMarkdown } from "../policies/thread-markdown";
 import type { BoxIntent } from "../boxes/box-types";
 import { workspaceController } from "../controllers/workspace-controller";
+import { classifyPromptInput } from "../controllers/prompt-classifier";
 import styles from "../App.module.css";
 
 const gateway = createFetchTurnGateway();
@@ -47,8 +48,8 @@ export function ResearchStatus({ answerDraft, events = [] }: { answerDraft: stri
 }
 
 function emptyContext(threadId: ThreadId): ThreadContext { return { threadId, turns: [], knownSources: [], availableEvidence: [] }; }
-function sourceRecords(thread: Thread | null, live: CanonicalSource[]): CanonicalSource[] {
-  const values = new Map<string, CanonicalSource>();
+function sourceRecords(thread: Thread | null, live: SourceRecord[]): SourceRecord[] {
+  const values = new Map<string, SourceRecord>();
   for (const source of thread?.sources ?? []) values.set(String(source.sourceId), source);
   for (const source of live) values.set(String(source.sourceId), source);
   return [...values.values()];
@@ -66,12 +67,13 @@ function CheckGlyph() { return <svg {...glyphProps()}><path d="m5 12 4 4L19 6" /
 function CopyGlyph() { return <svg {...glyphProps()}><rect x="8" y="8" width="11" height="11" rx="1.5" /><path d="M16 8V6.5A1.5 1.5 0 0 0 14.5 5h-7A1.5 1.5 0 0 0 6 6.5v7A1.5 1.5 0 0 0 7.5 15H8" /></svg>; }
 function ExportGlyph() { return <svg {...glyphProps()}><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg>; }
 
-export function ThreadRoute({ initialKind = "research" }: { initialKind?: "search" | "research" }) {
+export function ThreadRoute() {
   const { threadId: routeThreadId } = useParams();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const threadId = useMemo(() => (routeThreadId === "new" || !routeThreadId ? uuid() : routeThreadId) as ThreadId, [routeThreadId]);
-  const query = params.get("q")?.trim() ?? "";
+  const queryValues = params.getAll("q");
+  const query = queryValues.length === 1 ? (params.get("q") ?? "") : "";
   const [thread, setThread] = useState<Thread | null>(null);
   const threadRef = useRef<Thread | null>(null);
   const [view, setView] = useState<TurnControllerView>({ active: false, lastSequence: 0, events: [], answerDraft: "", sources: [] });
@@ -92,7 +94,7 @@ export function ThreadRoute({ initialKind = "research" }: { initialKind?: "searc
     return () => { cancelled = true; };
   }, [threadId]);
 
-  const run = useCallback(async (request: string, kind: "search" | "research") => {
+  const run = useCallback(async (request: string, kind: "search" | "research", resultKind?: SearchResultKind) => {
     setActiveRequest(request);
     const createdAt = timestamp();
     const turnId = uuid() as TurnId;
@@ -106,17 +108,21 @@ export function ThreadRoute({ initialKind = "research" }: { initialKind?: "searc
     const activeController = new TurnController(gateway, store, timestamp, setView);
     controller.current = activeController;
     setMessage("");
-    const result = await activeController.run({ threadId, turnId, executionId, kind, request, userMessage, createdAt, expectedRevision: record.ok ? record.value?.revision ?? null : null, create: current ? undefined : { id: threadId, title: request.slice(0, 60), createdAt }, context, answerPosition: kind === "research" ? answerPosition : undefined, gatewayOptions: { maxResults: 5, researchLimits: {} } });
+    const result = await activeController.run({ threadId, turnId, executionId, kind, resultKind, request, userMessage, createdAt, expectedRevision: record.ok ? record.value?.revision ?? null : null, create: current ? undefined : { id: threadId, title: request.slice(0, 60), createdAt }, context, answerPosition: kind === "research" ? answerPosition : undefined, gatewayOptions: { maxResults: 5, researchLimits: {} } });
     setActiveRequest("");
     if (result.ok) { threadRef.current = result.record.thread; setThread(result.record.thread); if (routeThreadId === "new" || !routeThreadId) navigate(`/threads/${encodeURIComponent(String(threadId))}`, { replace: true }); }
     else setMessage(result.error === "commit_retryable" ? "The result was not saved. Retry save." : result.message ?? "That turn could not be completed.");
   }, [navigate, routeThreadId, threadId]);
 
   useEffect(() => {
-    if (!query || started.current) return;
+    if (started.current) return;
     started.current = true;
-    void run(query, initialKind);
-  }, [initialKind, query, run]);
+    if (queryValues.length > 1) { setMessage("The prompt URL must contain exactly one q parameter."); return; }
+    if (!query.trim()) return;
+    const submission = classifyPromptInput(query);
+    if (submission.kind === "invalid") { setMessage(submission.message); return; }
+    void run(submission.kind === "search" ? submission.query : submission.value, submission.kind, submission.kind === "search" ? submission.resultKind : undefined);
+  }, [query, queryValues.length, run]);
 
   const showSuccess = (action: "copy" | "export") => {
     if (feedbackTimer.current !== undefined) window.clearTimeout(feedbackTimer.current);
@@ -131,7 +137,7 @@ export function ThreadRoute({ initialKind = "research" }: { initialKind?: "searc
   const onIntent = (intent: BoxIntent) => {
     const command = workspaceController.command(intent);
     if (!command) return;
-    if (command.type === "submit") { setValue(""); setMessage(""); void run(command.value, initialKind === "search" && intent.type === "prompt_submitted" ? "search" : command.kind); }
+    if (command.type === "submit") { setValue(""); setMessage(""); void run(command.value, command.kind, command.kind === "search" ? command.resultKind : undefined); }
     else if (command.type === "navigate") navigate(command.to, { replace: command.replace });
     else if (command.type === "invalid") setMessage(command.message);
     else if (command.type === "retry") void controller.current?.retryCommit();

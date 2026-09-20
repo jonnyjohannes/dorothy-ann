@@ -19,9 +19,11 @@ This is one strict-TypeScript npm package targeting Node 22.
 
 Domain/application code must not import React, Hono, Vercel, provider SDKs, Node-only APIs, or IndexedDB adapters. Keep provider, runtime, persistence, authentication, and extraction implementations behind their documented ports. Do not add global client state or speculative abstraction layers.
 
-Ordinary non-command input and `/threads/new?q=...` create a `ResearchTurn` regardless of punctuation. `/search <query>` and `/search?q=...` explicitly create a `SearchTurn`. Research nodes use `resolved | search | decompose(all | any)` directives; root outcomes are `sufficient | best_effort | insufficient`, followed by at most one root synthesis. Active execution is controller-only. Durable history contains terminal v3 turns and bounded read-only migrated legacy archive entries; legacy archive content never becomes evidence, context, retry input, or a child turn.
+Ordinary non-command input and `/threads/new?q=...` create a `ResearchTurn` regardless of punctuation. `/link`, `/image`, and `/video` prompt commands explicitly create a `SearchTurn` with the corresponding result kind. Research nodes use `resolved | search | decompose(all | any)` directives; root outcomes are `sufficient | best_effort | insufficient`, followed by at most one root synthesis. Active execution is controller-only. Durable history contains terminal v3 turns and bounded read-only migrated legacy archive entries; legacy archive content never becomes evidence, context, retry input, or a child turn.
 
 The visible product boxes are `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, `UnlockBox`, and `SystemStatusBox`; `Hotkeys` is the non-visible layout-control box. The application owns transcript separators. Synthesized answers may use emphasized labels, lists, tables, code, quotes, and whitespace, but must not generate headings or horizontal rules.
+
+The search-result-kind amendment is shipped and tracked in [`docs/plans/dorothy-ann-search-result-kinds.md`](docs/plans/dorothy-ann-search-result-kinds.md). The sole prompt-input URL is `/threads/new?q=<prompt input>`, with a shared classifier for bare research plus `/link`, `/image`, and `/video` `SearchTurn` result kinds. Media results remain durable bounded source records but never enter extraction or factual research evidence.
 
 ## implementation workflow
 

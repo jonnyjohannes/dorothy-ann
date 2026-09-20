@@ -39,8 +39,78 @@ export interface CanonicalSource {
   snippet?: string;
   publishedAt?: IsoTimestamp;
 }
-export interface SearchResult extends CanonicalSource { rank: number }
-export interface ThreadSourceRecord extends CanonicalSource { ordinal: number }
+export type SearchResultKind = "link" | "image" | "video";
+export interface LinkSearchResult extends CanonicalSource { kind: "link"; rank: number }
+export interface ImageSearchResult {
+  kind: "image";
+  sourceId: SourceId;
+  rank: number;
+  title: string;
+  url: string;
+  canonicalUrl: string;
+  imageUrl: string;
+  sourcePageUrl?: string;
+  thumbnailUrl?: string;
+  displayUrl: string;
+  snippet?: string;
+  creator?: string;
+  width?: number;
+  height?: number;
+  publishedAt?: IsoTimestamp;
+}
+export interface VideoSearchResult {
+  kind: "video";
+  sourceId: SourceId;
+  rank: number;
+  title: string;
+  url: string;
+  canonicalUrl: string;
+  videoUrl: string;
+  sourcePageUrl?: string;
+  thumbnailUrl?: string;
+  displayUrl: string;
+  snippet?: string;
+  creator?: string;
+  durationSeconds?: number;
+  publishedAt?: IsoTimestamp;
+}
+export type SearchResult = LinkSearchResult | ImageSearchResult | VideoSearchResult;
+export interface LinkSourceRecord extends CanonicalSource { kind: "link"; ordinal: number }
+export interface ImageSourceRecord {
+  kind: "image";
+  sourceId: SourceId;
+  ordinal: number;
+  title: string;
+  url: string;
+  canonicalUrl: string;
+  displayUrl: string;
+  imageUrl: string;
+  sourcePageUrl?: string;
+  thumbnailUrl?: string;
+  snippet?: string;
+  creator?: string;
+  width?: number;
+  height?: number;
+  publishedAt?: IsoTimestamp;
+}
+export interface VideoSourceRecord {
+  kind: "video";
+  sourceId: SourceId;
+  ordinal: number;
+  title: string;
+  url: string;
+  canonicalUrl: string;
+  displayUrl: string;
+  videoUrl: string;
+  sourcePageUrl?: string;
+  thumbnailUrl?: string;
+  snippet?: string;
+  creator?: string;
+  durationSeconds?: number;
+  publishedAt?: IsoTimestamp;
+}
+export type ThreadSourceRecord = LinkSourceRecord | ImageSourceRecord | VideoSourceRecord;
+export type SourceRecord = CanonicalSource | Omit<ImageSourceRecord, "ordinal"> | Omit<VideoSourceRecord, "ordinal">;
 
 export interface ExtractedPageSnapshot {
   text: string;
@@ -202,8 +272,8 @@ export interface ResearchExecutionProvenance {
 export interface UnavailableExecutionProvenance { kind: "unavailable" }
 export interface SearchDestinationRef { sourceId: SourceId; rank: number }
 export type SearchTurnResult =
-  | { completion: "results"; destinations: [SearchDestinationRef, ...SearchDestinationRef[]] }
-  | { completion: "empty"; destinations: [] };
+  | { completion: "results"; resultKind?: SearchResultKind; destinations: [SearchDestinationRef, ...SearchDestinationRef[]] }
+  | { completion: "empty"; resultKind?: SearchResultKind; destinations: [] };
 export type SearchTurnFailure =
   | { code: "provider_unavailable" | "invalid_response" | "search_failed"; message: string; retryable: boolean }
   | { code: "rate_limited"; message: string; retryable: true; retryAfterSeconds?: number };

@@ -28,7 +28,7 @@ export function SettingsRoute() {
     const command = workspaceController.command(intent);
     if (!command) return;
     if (command.type === "navigate") navigate(command.to, { replace: command.replace });
-    else if (command.type === "submit") navigate(turnLocation(command.value, command.kind));
+    else if (command.type === "submit") navigate(turnLocation(command.kind === "search" ? `/${command.resultKind} ${command.value}` : command.value));
     else if (command.type === "invalid") setMessage(command.message);
   };
   return <main className={styles.shell}>
