@@ -19,13 +19,12 @@ afterEach(() => {
   cleanup();
 });
 
-describe("EvidenceBox ReactPlayer light preview", () => {
-  it("renders an accessible Brave thumbnail without loading a provider player", async () => {
+describe("EvidenceBox viewport provider boundary", () => {
+  it("keeps the linked Brave thumbnail when viewport observation is unavailable", () => {
     render(<EvidenceBox sources={[supportedVideo]} onIntent={vi.fn()} />);
 
-    const activation = await screen.findByRole("button", { name: "Play video: Supported preview" });
-    expect(activation).toBeInTheDocument();
-    expect(activation.parentElement?.querySelector("img")).toHaveAttribute("src", "https://cdn.example/preview.jpg");
+    const fallback = screen.getByRole("link", { name: "Video result preview: Supported preview" });
+    expect(fallback.querySelector("img")).toHaveAttribute("src", "https://cdn.example/preview.jpg");
     expect(document.querySelector("video, iframe")).toBeNull();
     expect(screen.getByRole("link", { name: "Video result: Supported preview" })).toHaveAttribute("href", "https://publisher.example/videos/preview");
   });

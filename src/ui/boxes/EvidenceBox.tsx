@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import ReactPlayer from "react-player";
 import type { SourceRecord } from "../../domain/types";
 import { sourceAccentSlotForIndex } from "../color-scheme";
@@ -36,31 +36,53 @@ function LinkedMediaThumbnail({ href, label, thumbnailUrl }: LinkedMediaThumbnai
 }
 
 interface VideoMediaProps extends LinkedMediaThumbnailProps {
-  title: string;
   videoUrl: string;
 }
 
-function VideoMedia({ href, label, thumbnailUrl, title, videoUrl }: VideoMediaProps) {
+function useViewportEntry(enabled: boolean) {
+  const boundaryRef = useRef<HTMLDivElement>(null);
+  const [hasEnteredViewport, setHasEnteredViewport] = useState(false);
+
+  useEffect(() => {
+    if (!enabled || hasEnteredViewport || typeof IntersectionObserver === "undefined") return;
+    const boundary = boundaryRef.current;
+    if (!boundary) return;
+
+    let active = true;
+    const observer = new IntersectionObserver((entries) => {
+      if (!active || !entries.some((entry) => entry.isIntersecting)) return;
+      setHasEnteredViewport(true);
+      observer.disconnect();
+    });
+    observer.observe(boundary);
+
+    return () => {
+      active = false;
+      observer.disconnect();
+    };
+  }, [enabled, hasEnteredViewport]);
+
+  return { boundaryRef, hasEnteredViewport };
+}
+
+function VideoMedia({ href, label, thumbnailUrl, videoUrl }: VideoMediaProps) {
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const canPlay = ReactPlayer.canPlay?.(videoUrl) === true;
+  const { boundaryRef, hasEnteredViewport } = useViewportEntry(canPlay && !playbackFailed);
+  const showPlayer = canPlay && hasEnteredViewport && !playbackFailed;
 
-  if (!canPlay || playbackFailed) {
-    return <LinkedMediaThumbnail href={href} label={label} thumbnailUrl={thumbnailUrl} />;
-  }
-
-  return <div className={styles.mediaAttachment}>
-    <ReactPlayer
-      src={videoUrl}
-      light={<img className={styles.mediaThumbnail} src={thumbnailUrl} alt="" loading="lazy" />}
-      playing
-      controls
-      playsInline
-      width="100%"
-      height="100%"
-      previewTabIndex={-1}
-      playIcon={<button type="button" className={styles.videoPlayButton} aria-label={`Play video: ${title}`}><span className={styles.videoPlayIcon} aria-hidden="true" /></button>}
-      onError={() => setPlaybackFailed(true)}
-    />
+  return <div ref={boundaryRef} className={styles.mediaAttachment}>
+    {showPlayer
+      ? <ReactPlayer
+          src={videoUrl}
+          playing={false}
+          controls
+          playsInline
+          width="100%"
+          height="100%"
+          onError={() => setPlaybackFailed(true)}
+        />
+      : <a className={styles.mediaFallbackLink} href={href} target="_blank" rel="noreferrer" aria-label={label}><img className={styles.mediaThumbnail} src={thumbnailUrl} alt="" loading="lazy" /></a>}
   </div>;
 }
 
@@ -78,7 +100,7 @@ export function EvidenceBox({ sources, selectedSourceId, onIntent }: { sources: 
       <small>{source.displayUrl}</small>
       {mediaAttachment
         ? kind === "video" && "videoUrl" in source
-          ? <VideoMedia href={primary} label={`${label} preview: ${source.title}`} thumbnailUrl={thumbnailUrl} title={source.title} videoUrl={source.videoUrl} />
+          ? <VideoMedia href={primary} label={`${label} preview: ${source.title}`} thumbnailUrl={thumbnailUrl} videoUrl={source.videoUrl} />
           : <LinkedMediaThumbnail href={primary} label={`${label} preview: ${source.title}`} thumbnailUrl={thumbnailUrl} />
         : source.snippet && <p>{snippetContent(source.snippet)}</p>}
     </li>;

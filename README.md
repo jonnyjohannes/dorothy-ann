@@ -35,7 +35,7 @@ The root uses the exact user question for its first search when no admissible ex
 
 ## search result kinds
 
-`/threads/new?q=<prompt input>` is the sole prompt-input URL. The shared classifier is used for typed and URL input: bare text creates a `ResearchTurn`, while `/link <query>`, `/image <query>`, and `/video <query>` create link, image, and video `SearchTurn` result kinds. Media results are retained as bounded durable source records for reload and export; they never enter factual extraction. Supported video thumbnails load an inline player only after explicit activation; the title and unsupported or failed thumbnails remain external source-page links.
+`/threads/new?q=<prompt input>` is the sole prompt-input URL. The shared classifier is used for typed and URL input: bare text creates a `ResearchTurn`, while `/link <query>`, `/image <query>`, and `/video <query>` create link, image, and video `SearchTurn` result kinds. Media results are retained as bounded durable source records for reload and export; they never enter factual extraction. Supported video cards mount a paused inline provider player when they enter the viewport; offscreen, unsupported, or failed cards retain the linked-thumbnail fallback, and titles remain external source-page links.
 
 ## architecture
 
