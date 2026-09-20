@@ -449,6 +449,22 @@
   color: var(--muted);
   line-height: 1.45;
 }
+.mediaAttachment {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.mediaThumbnail {
+  display: block;
+  width: 7.5rem;
+  height: 4.5rem;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  object-fit: cover;
+}
+.mediaAttachment small { margin: 0; }
+.mediaAttachment a { margin: 0; }
 .evidenceItemActive {
   background: color-mix(in srgb, var(--relational-accent, var(--accent)) 18%, transparent);
   outline: 1px solid var(--relational-accent, var(--accent));
