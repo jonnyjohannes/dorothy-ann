@@ -451,17 +451,17 @@
 }
 .evidence a.mediaAttachment {
   display: block;
-  width: fit-content;
+  width: 100%;
   margin: 0.85rem 0 0;
   text-decoration: none;
 }
 .mediaThumbnail {
   display: block;
-  width: 7.5rem;
-  height: 4.5rem;
-  max-width: 100%;
+  width: 100%;
+  aspect-ratio: 16 / 9;
   border: 1px solid var(--line);
-  object-fit: cover;
+  background: color-mix(in srgb, var(--ink) 5%, var(--paper));
+  object-fit: contain;
 }
 .evidenceItemActive {
   background: color-mix(in srgb, var(--relational-accent, var(--accent)) 18%, transparent);
