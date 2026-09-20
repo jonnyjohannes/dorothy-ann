@@ -7,8 +7,8 @@
 - Owner: Dorothy Ann product/domain boundary
 - Executor: muscle executor on `release/v1.2.0`
 - Last updated: 2026-09-20
-- Current focus: resolve or explicitly defer the remaining P6 accessibility and unrelated whitespace blockers
-- Next action: decide whether to include the existing light-theme muted-color contrast repair; preserve unrelated `SYNTHESIZER.md` edits
+- Current focus: finish P6 after live media-envelope and compact evidence-presentation follow-ups
+- Next action: decide whether to include the existing light-theme muted-color contrast repair; then rerun fresh isolated-server e2e and preserve unrelated `SYNTHESIZER.md` edits
 - Branch / PR / session: current working tree on `release/v1.2.0`
 
 ## Abstract
@@ -57,7 +57,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` verified, `[!]` blocked.
 - [x] P5 — enforce extraction and presentation boundaries
   - Deliverable: keep only link results eligible for `ContentExtractor`; render all three result kinds through the appropriate `EvidenceBox` presentation while preserving keyboard, focus, activation, accessibility, and responsive behavior.
   - Verify: extraction exclusion tests and UI/browser tests cover link, image, and video result cells, safe activation, empty results, and bounded failures.
-  - Evidence: extractor rejects media before fetch; EvidenceBox renders image/video metadata and activation targets; `/link`, `/image`, and `/video` appear on separate command-list lines with no Alt+A assignment; focused UI and full tests pass.
+  - Evidence: extractor rejects media before fetch; EvidenceBox preserves the link-result title/source decoration for every kind and renders a bounded detached media attachment in place of the snippet when a thumbnail is available; source IDs, evidence anchors, accent selection, focus, and primary/secondary activation remain shared. `/link`, `/image`, and `/video` appear on separate command-list lines with no Alt+A assignment; focused UI tests pass.
 - [~] P6 — run focused and repository verification
   - Deliverable: update README/AGENTS and affected tests/docs after the active plan amendment is accepted; record actual verification and remaining environmental blockers.
   - Verify: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `npm run test:e2e`, `git diff --check`, and `git status`.
@@ -122,7 +122,7 @@ The amendment is implemented in the current working tree:
 - **Activation** — the source page is the primary activation target when available; the canonical media asset/video URL is retained as a secondary activation target. When no source page exists, the media URL is primary.
 - **Evidence role** — media results use an explicit media-search-result role and never become ordinary research evidence or ContentExtractor input.
 - **User request preservation** — durable user content preserves the raw command input; the normalized provider query is carried separately in execution/search data.
-- **Media presentation** — images may show bounded thumbnails; videos show bounded thumbnails without embedding or autoplay. Media activation follows the approved primary/secondary URL policy.
+- **Media presentation** — every result kind keeps the same numbered title, constellation accent, source metadata, focus, and citation-anchor treatment. Image/video cards use `coalesce(detached media attachment, description snippet)`: when a thumbnail exists it replaces the snippet in a bounded detached `120 × 72` row; otherwise the snippet renders normally. Videos never embed or autoplay. Media activation follows the approved primary/secondary URL policy.
 - **Media numeric bounds** — image width and height are positive integers at most `100_000`; video duration is a positive integer number of seconds at most `86_400`. URLs and text use the existing canonical source bounds unless a result-specific field states otherwise.
 - **Prompt URL lifecycle** — `/threads/new?q=...` is a one-shot invocation URL. A single decoded, validated `q` is classified and submitted on initial entry using the same policy as PromptBox input. After acceptance, navigation replaces the invocation URL with the resulting durable thread route. Refresh does not replay a consumed invocation; explicitly opening the invocation URL again starts a new request.
 - **Prompt URL edge cases** — missing or empty `q` shows an empty new-thread PromptBox and does not create a turn; empty `q` is normalized away. Repeated `q` parameters and malformed decoding produce an inline bounded route error and no execution. Authentication failure/displacement drops the invocation; after unlocking, the user may submit again manually rather than resuming hidden route state.
@@ -229,7 +229,7 @@ Keep `ContentExtractor` link-specific. The application must reject or skip image
 
 ### Presentation and documentation
 
-Update `EvidenceBox` result cells to branch on the discriminated result kind while preserving the existing activation intent and accessibility rules. Image/video cells must expose bounded title, destination, source-page context when available, and appropriate alt/accessible text; they must not expose provider payloads or imply content inspection that did not occur.
+`EvidenceBox` result cells branch on the discriminated result kind while preserving one shared card anatomy and the existing activation/accessibility rules. All kinds use the same numbered accented title, source metadata position, spacing, active/focused state, stable `SourceId`, and `#source-<SourceId>` citation anchor. Image/video cells apply `coalesce(detached media attachment, description snippet)`: a thumbnail renders as a detached, left-aligned `120 × 72` attachment with `object-fit: cover` and the secondary asset action, replacing the snippet; without a thumbnail, the snippet renders normally. This preserves the existing link presentation as the baseline and lets future admitted media evidence use the same citation-selection behavior without a new citation UI. Media cells must not expose provider payloads or imply content inspection that did not occur.
 
 The active v1.1 plan's Current State, Handoff, canonical vocabulary, route contracts, PromptBox section, SearchTurn section, implementation ledger, README, and AGENTS have been reconciled before implementation. This child plan is now implementing against that approved contract.
 
@@ -262,4 +262,4 @@ The active v1.1 plan's Current State, Handoff, canonical vocabulary, route contr
 ## Open Questions
 
 - **Active-plan reconciliation** — owner: plan maintainer — complete: the active v1.1 plan and synchronized README/AGENTS describe the shipped prompt-input and search-result-kind contract.
-- **Result-kind display identity** — owner: UI/product decision — non-blocking: the executor may choose accessible labels and exact secondary-action presentation for image/video cells while preserving the approved primary source-page activation policy.
+- **Result-kind display identity** — owner: UI/product decision — complete: all kinds share link-style title/source decoration and citation behavior; media uses the bounded detached-attachment-or-snippet rule with the approved primary source-page and secondary asset activation policy.
