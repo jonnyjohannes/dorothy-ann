@@ -5,11 +5,11 @@
 - Status: implementing
 - Verification: focused checks, lint, typecheck, 241 tests, build, scoped diff check, and four isolated-server browser flows pass; two pre-existing contrast checks and repository-wide diff-check remain blocked
 - Owner: Dorothy Ann product/domain boundary
-- Executor: muscle executor on `release/v1.2.0`
+- Executor: unassigned; continuing on `feature/img-n-video-search`
 - Last updated: 2026-09-20
 - Current focus: finish P6 after live media-envelope and compact evidence-presentation follow-ups
 - Next action: decide whether to include the existing light-theme muted-color contrast repair; then rerun fresh isolated-server e2e and preserve unrelated `SYNTHESIZER.md` edits
-- Branch / PR / session: current working tree on `release/v1.2.0`
+- Branch / PR / session: `feature/img-n-video-search`
 
 ## Abstract
 
