@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { SearchResultKind, SourceRecord, Thread, ThreadContext, ThreadId, TurnId, UserMessage } from "../../domain/types";
 import { buildThreadContext } from "../../domain/thread-context";
 import { getBrowserThreadStore } from "../../infrastructure/browser/thread-store";
@@ -17,6 +17,7 @@ import type { BoxIntent } from "../boxes/box-types";
 import { workspaceController } from "../controllers/workspace-controller";
 import { classifyPromptInput } from "../controllers/prompt-classifier";
 import styles from "../App.module.css";
+import { threadSelectorState } from "../navigation-state";
 
 const gateway = createFetchTurnGateway();
 const contextLimits = { maxThreadContextTurns: 8, maxThreadContextChars: 24_000, maxEvidenceCharsPerSource: 48_000, maxEvidenceCharsTotal: 96_000, maxTurnRequestBytes: 128_000 } as const;
@@ -71,6 +72,7 @@ export function ThreadRoute() {
   const { threadId: routeThreadId } = useParams();
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const threadId = useMemo(() => (routeThreadId === "new" || !routeThreadId ? uuid() : routeThreadId) as ThreadId, [routeThreadId]);
   const queryValues = params.getAll("q");
   const query = queryValues.length === 1 ? (params.get("q") ?? "") : "";
@@ -138,7 +140,7 @@ export function ThreadRoute() {
     const command = workspaceController.command(intent);
     if (!command) return;
     if (command.type === "submit") { setValue(""); setMessage(""); void run(command.value, command.kind, command.kind === "search" ? command.resultKind : undefined); }
-    else if (command.type === "navigate") navigate(command.to, { replace: command.replace });
+    else if (command.type === "navigate") navigate(command.to, { replace: command.replace, state: command.to === "/threads" ? threadSelectorState(location) : undefined });
     else if (command.type === "invalid") setMessage(command.message);
     else if (command.type === "retry") void controller.current?.retryCommit();
   };

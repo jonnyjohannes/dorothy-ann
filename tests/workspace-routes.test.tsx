@@ -6,6 +6,7 @@ import { WorkspaceController } from "../src/ui/controllers/workspace-controller"
 import { ResearchStatus } from "../src/ui/routes/ThreadRoute";
 import { researchAnswerPosition } from "../src/ui/policies/answer-position";
 import { HomeRoute } from "../src/ui/routes/HomeRoute";
+import { threadSelectorReturnTo, threadSelectorState } from "../src/ui/navigation-state";
 
 afterEach(() => cleanup());
 function LocationProbe() { const location = useLocation(); return <output data-testid="location">{location.pathname}{location.search}</output>; }
@@ -97,6 +98,19 @@ describe("workspace controller", () => {
     prompt.focus();
     fireEvent.keyDown(prompt, { key, code, altKey: true });
     expect(screen.getByTestId("location")).toHaveTextContent(path);
+  });
+  it("returns from the thread selector to the thread that launched it", () => {
+    render(<MemoryRouter initialEntries={["/threads/thread-1?view=latest"]}><Routes><Route path="*" element={<><GlobalShortcuts /><LocationProbe /></>} /></Routes></MemoryRouter>);
+    fireEvent.keyDown(window, { key: "s", code: "KeyS", altKey: true });
+    expect(screen.getByTestId("location")).toHaveTextContent("/threads");
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByTestId("location")).toHaveTextContent("/threads/thread-1?view=latest");
+  });
+  it("bounds thread-selector return state to safe internal locations", () => {
+    expect(threadSelectorState({ pathname: "/threads/thread-1", search: "?view=latest" })).toEqual({ returnTo: "/threads/thread-1?view=latest" });
+    expect(threadSelectorReturnTo({ returnTo: "/threads/thread-1?view=latest" })).toBe("/threads/thread-1?view=latest");
+    expect(threadSelectorReturnTo({ returnTo: "https://example.com" })).toBe("/");
+    expect(threadSelectorReturnTo({ returnTo: "//example.com" })).toBe("/");
   });
   it("does not assign Alt+A to any search result kind", () => {
     render(<MemoryRouter initialEntries={["/"]}><Routes><Route path="*" element={<><GlobalShortcuts /><input aria-label="Search query" /><LocationProbe /></>} /></Routes></MemoryRouter>);
