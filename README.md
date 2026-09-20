@@ -23,15 +23,15 @@ exact-question retrieval when admissible evidence is absent
    |
    v
 extract useful results -> assess
-                         | resolved
+                         | root resolved with ≥2 materially independent sources
                          +-------------------------------> synthesize once
-                         | search
+                         | search (including unmet root corroboration)
                          +-> focused retrieval/extraction -> reassess
                          | decompose(all | any)
                          `-> bounded child resolution -> join -> reassess
 ```
 
-The root uses the exact user question for its first search when no admissible extracted evidence already exists. The assessor returns one `resolved | search | decompose(all | any)` directive. `search` acquires focused missing evidence; `decompose` resolves genuinely independent child obligations and joins their supported knowledge. Both paths reassess the parent, and children never produce separate user-facing answers. A sufficient or useful best-effort root synthesizes exactly once; no useful supported evidence produces an insufficient outcome. Search, source, assessment, and depth ceilings are shared across the complete tree and are hard limits rather than targets.
+The root uses the exact user question for its first search when no admissible extracted evidence already exists. The assessor returns one `resolved | search | decompose(all | any)` directive. `search` acquires focused missing evidence; `decompose` resolves genuinely independent child obligations and joins their supported knowledge. Both paths reassess the parent, and children never produce separate user-facing answers. A root `resolved` directive targets at least two materially independent evidence sources supporting the central conclusion, including for straightforward factual questions; when that target is unmet, the assessor requests one focused corroboration search where the existing budget permits. Independence is model-judged: different URLs or domains, syndicated copies, repeated reports, and same-publisher pages are not automatically independent, and the application does not enforce source count or publisher lineage. This target applies to the root only; child obligations retain their existing behavior. A sufficient or useful best-effort root synthesizes exactly once; no useful supported evidence produces an insufficient outcome. Search, source, assessment, and depth ceilings are shared across the complete tree and are hard limits rather than targets.
 
 ## architecture
 
