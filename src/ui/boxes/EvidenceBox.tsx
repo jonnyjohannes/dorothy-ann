@@ -37,9 +37,8 @@ export function EvidenceBox({ sources, selectedSourceId, onIntent }: { sources: 
       <a className={styles.sourceAccent} style={{ "--relational-accent": `var(--accent-${sourceAccentSlotForIndex(index, 8) + 1})` } as CSSProperties} href={primary} target="_blank" rel="noreferrer" aria-label={`${label}: ${source.title}`} onFocus={() => onIntent({ type: "source_open_requested", sourceId: String(source.sourceId) })}><span aria-hidden="true">{index + 1}. </span><span>{source.title}</span></a>
       <small>{source.displayUrl}</small>
       {mediaAttachment
-        ? <div className={styles.mediaAttachment}><img className={styles.mediaThumbnail} src={thumbnailUrl} alt="" loading="lazy" /><small><a href={source.url} target="_blank" rel="noreferrer">Open {kind}</a></small></div>
+        ? <a className={styles.mediaAttachment} href={primary} target="_blank" rel="noreferrer" aria-label={`${label} preview: ${source.title}`}><img className={styles.mediaThumbnail} src={thumbnailUrl} alt="" loading="lazy" /></a>
         : source.snippet && <p>{snippetContent(source.snippet)}</p>}
-      {media && sourcePageUrl && !mediaAttachment && <small><a href={source.url} target="_blank" rel="noreferrer">Open {kind}</a></small>}
     </li>;
   })}</ul></aside>;
 }
