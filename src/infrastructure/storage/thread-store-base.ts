@@ -1,11 +1,11 @@
 import { commitTerminalTurn, type TerminalCommitIdentity } from "../../application/commit-terminal-turn.js";
 import { legacyStoredThreadInputSchema } from "../../domain/legacy-input-schemas.js";
 import { migrateLegacyThread, type LegacyMigrationIdentities } from "../../domain/migrations.js";
+import { threadExpiryAt } from "../../domain/retention.js";
 import type { IsoTimestamp, Thread, ThreadId, ThreadSummary } from "../../domain/types.js";
 import { threadV3Schema } from "../../domain/schemas.js";
 import type { CommitTerminalTurnInput, CommitTerminalTurnValue, ImportIssueSummary, ImportReport, InspectedThreadImport, RemoveThreadInput, StoredThreadRecord, StoredThreadSummary, ThreadBackup, ThreadRevision, ThreadStore, ThreadStoreFailure, ThreadStoreResult, ValidatedImportCandidate } from "../../ports/storage-v3.js";
 
-const RETENTION_MS = 7 * 86_400_000;
 const MAX_ISSUES = 20;
 export interface ThreadTombstone { deletedAt: IsoTimestamp; expiresAt: IsoTimestamp }
 export interface PersistedThreadState { record: StoredThreadRecord | null; tombstone: ThreadTombstone | null }
@@ -15,7 +15,7 @@ interface CandidateData { entries: ImportEntry[]; preview: InspectedThreadImport
 const unavailable = <T>(code: "storage_unavailable" | "quota_exceeded" = "storage_unavailable"): ThreadStoreResult<T> => ({ ok: false, failure: { code, retryable: true } });
 const terminalFailure = <T>(code: "revision_conflict" | "thread_not_found" | "thread_deleted" | "invalid_record" | "integrity_failure"): ThreadStoreResult<T> => ({ ok: false, failure: { code, retryable: code === "revision_conflict" } as ThreadStoreFailure });
 const timestamp = (date: Date) => date.toISOString() as IsoTimestamp;
-const expiryAt = (activity: string) => timestamp(new Date(Date.parse(activity) + RETENTION_MS));
+const expiryAt = (activity: IsoTimestamp) => threadExpiryAt(activity);
 const summary = (thread: Thread): ThreadSummary => {
   const last = thread.turns.at(-1);
   return { id: thread.id, title: thread.title, createdAt: thread.createdAt, updatedAt: thread.updatedAt, lastRequestPreview: last?.userMessage.content.slice(0, 120), turnCount: thread.turns.length, legacyArchiveCount: thread.legacyArchive.length };

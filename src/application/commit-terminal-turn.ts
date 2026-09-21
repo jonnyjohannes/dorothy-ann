@@ -1,8 +1,7 @@
 import type { CanonicalSource, KnowledgeUnit, ResearchCheckpoint, ResearchResolution, ResearchTurn, SourceId, Thread, ThreadSourceRecord, Turn } from "../domain/types.js";
 import { sourceRecordV3Schema, threadV3Schema, turnV3Schema } from "../domain/schemas.js";
+import { threadExpiryAt } from "../domain/retention.js";
 import type { CommitTerminalTurnInput, CommitTerminalTurnValue, StoredThreadRecord, ThreadRevision, ThreadStoreFailure, ThreadStoreResult } from "../ports/storage-v3.js";
-
-const RETENTION_MS = 7 * 24 * 60 * 60 * 1_000;
 
 export interface TerminalCommitIdentity {
   sourceId(canonicalUrl: string): Promise<SourceId>;
@@ -140,7 +139,7 @@ export async function commitTerminalTurn(
   const record: StoredThreadRecord = {
     recordVersion: 1,
     revision,
-    expiresAt: new Date(Date.parse(updatedAt) + RETENTION_MS).toISOString() as StoredThreadRecord["expiresAt"],
+    expiresAt: threadExpiryAt(updatedAt),
     thread: parsedThread.data,
   };
   return { ok: true, value: { disposition: "committed", record } };
