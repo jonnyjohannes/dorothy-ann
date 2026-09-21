@@ -236,7 +236,7 @@ export function createApp({ config, systemPrompts, threadStoreV3: injectedStore,
   });
   const statusRoutes = new Hono();
   statusRoutes.get("/", (context) => context.json({ fixtureMode: config.DOROTHY_FIXTURE_MODE, provider: searchReady && llmReady, search: searchReady, llm: llmReady, storage: Boolean(injectedStore) }));
-  const app = createPortableApp({ executor, maxRequestBytes: config.MAX_TURN_REQUEST_BYTES, maxResults: config.MAX_SEARCH_RESULTS, researchLimits: { maxCandidatesPerSearch: 5, maxSourcesPerRequest: 3, maxConcurrentSearches: config.MAX_CONCURRENT_SEARCHES, maxConcurrentExtractions: config.MAX_CONCURRENT_EXTRACTIONS, extractionMaxCharacters: config.MAX_EXTRACTED_CHARS_PER_PAGE, extractionTimeoutMs: config.EXTRACTION_TIMEOUT_MS }, authenticate, routes: { auth: authRoutes, status: statusRoutes, storage: injectedStore ? createThreadStorageRoutes(injectedStore) : undefined } });
+  const app = createPortableApp({ executor, maxRequestBytes: config.MAX_TURN_REQUEST_BYTES, maxResults: config.MAX_SEARCH_RESULTS, researchLimits: { maxCandidatesPerSearch: 5, maxSourcesPerRequest: 3, maxConcurrentSearches: config.MAX_CONCURRENT_SEARCHES, maxConcurrentExtractions: config.MAX_CONCURRENT_EXTRACTIONS, extractionMaxCharacters: config.MAX_EXTRACTED_CHARS_PER_PAGE, extractionTimeoutMs: config.EXTRACTION_TIMEOUT_MS }, authenticate, onDiagnostic: (record) => logger.debug(record.event, record), routes: { auth: authRoutes, status: statusRoutes, storage: injectedStore ? createThreadStorageRoutes(injectedStore) : undefined } });
   app.get("/api/health", (context) => context.json({ ok: true, fixtureMode: config.DOROTHY_FIXTURE_MODE }));
   return app;
 }

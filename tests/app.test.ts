@@ -40,6 +40,24 @@ describe("portable v3 Hono API", () => {
     expect(body).not.toContain("event: turn.error");
   });
 
+  it("keeps three context evidence packs valid when a follow-up search adds fresh evidence", async () => {
+    const problemId = `problem_${"B".repeat(43)}`;
+    const availableEvidence = Array.from({ length: 3 }, (_, index) => ({
+      problemId,
+      requestOrder: index,
+      query: `prior question ${index}`,
+      createdAt: `2026-01-01T00:0${index}:00.000Z`,
+      sources: [{ sourceId: `src_${String.fromCharCode(65 + index).repeat(43)}`, page: { text: `Prior evidence ${index}.`, extractedAt: `2026-01-01T00:0${index}:00.000Z`, characterCount: 17 } }],
+    }));
+    const knownSources = Array.from({ length: 3 }, (_, index) => ({ sourceId: `src_${String.fromCharCode(65 + index).repeat(43)}`, title: `Prior source ${index}`, url: `https://example.com/prior-${index}`, canonicalUrl: `https://example.com/prior-${index}`, displayUrl: `example.com/prior-${index}` }));
+    const response = await app.request("http://localhost/api/turn/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ executionId, turnId, kind: "research", question: "what happened next?", answerPosition: "follow_up", context: { threadId: "00000000-0000-4000-8000-000000000003", turns: [], knownSources, availableEvidence } }) });
+    const body = await response.text();
+    expect(body).toContain("event: turn.research_state");
+    expect(body).toContain('"phase":"synthesizing"');
+    expect(body).toContain("event: turn.terminal");
+    expect(body).not.toContain('"code":"invalid_event"');
+  });
+
   it("emits one sanitized opt-in timing summary outside the SSE contract", async () => {
     const records: ResearchTimingRecord[] = [];
     const timedApp = createApp({

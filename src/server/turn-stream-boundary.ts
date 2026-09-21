@@ -69,6 +69,11 @@ export type TurnExecutionEvent =
   | (TurnExecutionEventBase & { type: "answer_delta"; delta: string })
   | (TurnExecutionEventBase & { type: "terminal"; terminal: TurnExecutionTerminal });
 
+export type TurnStreamDiagnostic =
+  | { event: "turn_sse_frame"; stage: "transport"; frame_type: TurnExecutionEvent["type"]; frame_bytes: number }
+  | { event: "turn_invalid_signal"; stage: "transport"; signal_type: TurnExecutionSignal["type"] }
+  | { event: "turn_stream_end"; stage: "transport"; request_aborted: boolean; executor_aborted: boolean; protocol_invalid: boolean; terminal_sent: boolean };
+
 export interface TurnStreamBoundaryOptions {
   executor: TurnExecutor;
   maxRequestBytes: number;
@@ -77,6 +82,7 @@ export interface TurnStreamBoundaryOptions {
   authenticate?: (context: Context) => boolean | Promise<boolean>;
   sameOrigin?: (context: Context) => boolean;
   heartbeatMs?: number;
+  onDiagnostic?: (record: TurnStreamDiagnostic) => void;
 }
 
 const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu);
@@ -182,8 +188,11 @@ export function createTurnStreamBoundary(options: TurnStreamBoundaryOptions): Ho
       const write = async (type: TurnExecutionEvent["type"], payload: Omit<TurnExecutionEvent, keyof TurnExecutionEventBase | "type">) => {
         const event = { executionId: request.executionId, turnId: request.turnId, sequence, type, ...payload } as TurnExecutionEvent;
         sequence += 1;
-        await writer.write(`id: ${event.sequence}\nevent: ${eventName(type)}\ndata: ${JSON.stringify(event)}\n\n`);
+        const frame = `id: ${event.sequence}\nevent: ${eventName(type)}\ndata: ${JSON.stringify(event)}\n\n`;
+        try { options.onDiagnostic?.({ event: "turn_sse_frame", stage: "transport", frame_type: type, frame_bytes: new TextEncoder().encode(frame).byteLength }); } catch { /* Diagnostics must never alter stream behavior. */ }
+        await writer.write(frame);
       };
+
       await write("accepted", { kind: request.kind });
       const heartbeat = setInterval(() => { void writer.write(`: heartbeat\n\n`); }, options.heartbeatMs ?? 15_000);
       try {
@@ -191,6 +200,7 @@ export function createTurnStreamBoundary(options: TurnStreamBoundaryOptions): Ho
           if (terminalSent) return;
           if (!validateSignal(signal, requestForExecutor)) {
             protocolInvalid = true;
+            try { options.onDiagnostic?.({ event: "turn_invalid_signal", stage: "transport", signal_type: signal.type }); } catch { /* Diagnostics must never alter stream behavior. */ }
             abort.abort();
             return;
           }
@@ -208,6 +218,9 @@ export function createTurnStreamBoundary(options: TurnStreamBoundaryOptions): Ho
       } finally {
         clearInterval(heartbeat);
         context.req.raw.signal.removeEventListener("abort", abortRequest);
+        try {
+          options.onDiagnostic?.({ event: "turn_stream_end", stage: "transport", request_aborted: context.req.raw.signal.aborted, executor_aborted: abort.signal.aborted, protocol_invalid: protocolInvalid, terminal_sent: terminalSent });
+        } catch { /* Diagnostics must never alter stream behavior. */ }
       }
     });
   });

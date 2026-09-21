@@ -65,6 +65,14 @@ const cloneLedger = (ledger: GapLedger): GapLedger => ({
   sourcesConsumed: ledger.sourcesConsumed,
 });
 
+const MAX_KNOWLEDGE_EVIDENCE_PACKS = 3;
+const evidenceOrder = (left: ResearchResolution["knowledge"]["evidence"][number], right: ResearchResolution["knowledge"]["evidence"][number]): number => right.requestOrder - left.requestOrder || right.createdAt.localeCompare(left.createdAt) || left.query.localeCompare(right.query);
+function joinBoundedKnowledge(problemId: ResearchProblem["id"], units: readonly KnowledgeUnit[]): KnowledgeUnit {
+  const joined = joinKnowledge(problemId, units);
+  if (joined.evidence.length <= MAX_KNOWLEDGE_EVIDENCE_PACKS) return joined;
+  const evidence = [...joined.evidence].sort(evidenceOrder).slice(0, MAX_KNOWLEDGE_EVIDENCE_PACKS).sort((left, right) => left.requestOrder - right.requestOrder || left.createdAt.localeCompare(right.createdAt) || left.query.localeCompare(right.query));
+  return { ...joined, evidence };
+}
 const useful = (knowledge: KnowledgeUnit): boolean => knowledge.findings.length > 0 || knowledge.evidence.some((pack) => pack.sources.length > 0);
 const key = (knowledge: KnowledgeUnit): string => JSON.stringify(knowledge);
 const normalized = (value: string): string => value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLowerCase();
@@ -116,7 +124,10 @@ export class ResearchResolver {
     const state = {
       ledger: cloneLedger(input.ledger),
       budget: { ...input.budget },
-      knowledge: joinKnowledge(input.problem.id, [input.knowledge, {
+      // Keep the context evidence available to resolution, but bound the joined
+      // accumulator because a follow-up can add fresh packs before state crosses
+      // the stream boundary.
+      knowledge: joinBoundedKnowledge(input.problem.id, [input.knowledge, {
         problemId: input.problem.id,
         findings: [],
         evidence: input.problem.context.availableEvidence,
@@ -222,8 +233,8 @@ export class ResearchResolver {
         }
       }
       if (directive.kind === "resolved") {
-        const merged = joinKnowledge(problem.id, [before, directive.knowledge]);
-        state.knowledge = joinKnowledge(problem.id, [state.knowledge, merged]);
+        const merged = joinBoundedKnowledge(problem.id, [before, directive.knowledge]);
+        state.knowledge = joinBoundedKnowledge(problem.id, [state.knowledge, merged]);
         if (key(before) === key(merged)) {
           gap.status = "blocked";
           return { kind: "resolution", knowledge: merged, stopReason: "no_new_knowledge" };
@@ -252,8 +263,8 @@ export class ResearchResolver {
           delete canonical.rank;
           if (!state.admittedSources.some((existing) => existing.sourceId === source.sourceId)) state.admittedSources.push(canonical);
         }
-        const afterSearch = joinKnowledge(problem.id, [before, { problemId: problem.id, findings: [], evidence: acquisition.evidence, unresolvedGapIds: [] }]);
-        state.knowledge = joinKnowledge(problem.id, [state.knowledge, afterSearch]);
+        const afterSearch = joinBoundedKnowledge(problem.id, [before, { problemId: problem.id, findings: [], evidence: acquisition.evidence, unresolvedGapIds: [] }]);
+        state.knowledge = joinBoundedKnowledge(problem.id, [state.knowledge, afterSearch]);
         const acquiredEvidenceIds = new Set(acquisition.evidence.flatMap((pack) => pack.sources.map((source) => source.sourceId)));
         const taskEvidence = acquisition.results.flatMap((result) => result.candidates.flatMap((source) =>
           acquiredEvidenceIds.has(source.sourceId) ? [{ sourceId: source.sourceId, rank: source.rank }] : [],
@@ -312,8 +323,8 @@ export class ResearchResolver {
         };
         const childResult = await this.resolveProblem(turnId, child, combined, state, directive.operator);
         if (childResult.kind === "checkpoint") return childResult;
-        combined = joinKnowledge(problem.id, [combined, childResult.knowledge]);
-        state.knowledge = joinKnowledge(problem.id, [state.knowledge, combined]);
+        combined = joinBoundedKnowledge(problem.id, [combined, childResult.knowledge]);
+        state.knowledge = joinBoundedKnowledge(problem.id, [state.knowledge, combined]);
         const childResolved = childResult.stopReason === "sufficient";
         completedChild ||= childResolved;
         // `any` means one child satisfied its own obligation. The parent is
