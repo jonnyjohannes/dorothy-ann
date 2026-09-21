@@ -110,7 +110,7 @@ export function ThreadRoute() {
     const activeController = new TurnController(gateway, store, timestamp, setView);
     controller.current = activeController;
     setMessage("");
-    const result = await activeController.run({ threadId, turnId, executionId, kind, resultKind, request, userMessage, createdAt, expectedRevision: record.ok ? record.value?.revision ?? null : null, create: current ? undefined : { id: threadId, title: request.slice(0, 60), createdAt }, context, answerPosition: kind === "research" ? answerPosition : undefined, gatewayOptions: { maxResults: 5, researchLimits: {} } });
+    const result = await activeController.run({ threadId, turnId, executionId, kind, resultKind, request, userMessage, createdAt, expectedRevision: record.ok ? record.value?.revision ?? null : null, create: current ? undefined : { id: threadId, title: [...request].slice(0, 120).join(""), createdAt }, context, answerPosition: kind === "research" ? answerPosition : undefined, gatewayOptions: { maxResults: 5, researchLimits: {} } });
     setActiveRequest("");
     if (result.ok) { threadRef.current = result.record.thread; setThread(result.record.thread); if (routeThreadId === "new" || !routeThreadId) navigate(`/threads/${encodeURIComponent(String(threadId))}`, { replace: true }); }
     else setMessage(result.error === "commit_retryable" ? "The result was not saved. Retry save." : result.message ?? "That turn could not be completed.");
