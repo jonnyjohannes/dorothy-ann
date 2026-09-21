@@ -606,6 +606,24 @@
 .scrollback a { color: inherit; }
 .scrollback blockquote { margin-left: 0; margin-right: 1rem; border-left: 3px solid var(--accent); padding-left: 0.5rem; color: var(--muted); }
 .userTurn { margin-block: 1.5rem; }
+.researchActivity {
+  margin: 1.5rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+.researchActivity h3 {
+  margin: 0 0 0.45rem;
+  color: var(--muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.researchActivity ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+.researchActivity li { margin: 0.2rem 0; }
 .promptBox {
   position: fixed;
   z-index: 3;

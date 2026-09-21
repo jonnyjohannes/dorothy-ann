@@ -16,8 +16,12 @@ function turnStatus(turn: Turn): string | undefined {
   if (turn.status === "failed") return `${label} failed — ${turn.failure.message}`;
   return `${label} interrupted — ${turn.interruption.message}`;
 }
+function researchQueries(turn: Turn): string[] | undefined {
+  if (turn.kind !== "research" || turn.status !== "completed") return undefined;
+  return turn.result.resolution.tasks.map((task) => task.query);
+}
 export function transcriptItems(thread: Thread): TranscriptItem[] {
-  const turns = thread.turns.map((turn) => ({ kind: "turn" as const, id: String(turn.id), createdAt: String(turn.createdAt), request: turn.userMessage.content, markdown: turnMarkdown(turn), status: turnStatus(turn), turn }));
+  const turns = thread.turns.map((turn) => ({ kind: "turn" as const, id: String(turn.id), createdAt: String(turn.createdAt), request: turn.userMessage.content, markdown: turnMarkdown(turn), status: turnStatus(turn), researchQueries: researchQueries(turn), turn }));
   const archive = thread.legacyArchive.map((entry) => ({ kind: "legacy" as const, id: String(entry.id), createdAt: String(entry.createdAt), request: entry.request, markdown: entry.answerMarkdown, status: entry.statusMessage, legacy: entry }));
   return [...turns, ...archive].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 }
