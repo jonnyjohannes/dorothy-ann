@@ -206,7 +206,7 @@ const taskSchema: z.ZodType<ResearchTaskRecord> = z.strictObject({
   purpose: bounded(1, 500),
   priority,
   status: z.enum(["completed", "partial", "failed"]),
-  evidence: z.array(z.strictObject({ sourceId: sourceIdSchema, rank: positiveInt.max(5) })).max(3),
+  evidence: z.array(z.strictObject({ sourceId: sourceIdSchema, rank: positiveInt.max(10) })).max(3),
 });
 const resolutionBase = {
   knowledge: knowledgeUnitV3Schema,

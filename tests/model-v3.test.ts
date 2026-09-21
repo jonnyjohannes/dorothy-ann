@@ -36,6 +36,12 @@ describe("v3 domain schemas", () => {
     expect(threadV3Schema.safeParse({ ...mediaThread, sources: [{ ...image, canonicalUrl: "https://cdn.example/other.jpg" }] }).success).toBe(false);
   });
 
+  it("accepts research task evidence through the ten-result search ceiling", () => {
+    const resolution = { ...sufficientResolution, tasks: [{ problemId, query: "follow-up", purpose: "support", priority: 1, status: "completed", evidence: [{ sourceId, rank: 6 }] }] };
+    const research = { ...researchBase, status: "completed", result: { completion: "sufficient", answer: { parts: [{ type: "text", markdown: "answer" }] }, resolution } };
+    expect(turnV3Schema.safeParse(research).success).toBe(true);
+  });
+
   it("represents pending work outside the durable Turn union", () => {
     expect(turnV3Schema.safeParse({ ...searchTurn, status: "running" }).success).toBe(false);
   });
