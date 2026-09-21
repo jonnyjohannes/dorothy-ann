@@ -117,6 +117,21 @@ select,
 textarea {
   font: inherit;
 }
+:where(a:any-link) {
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  padding: 0.16em 0.55em;
+  background-color: color-mix(in srgb, var(--link-marker-color, currentColor) 9%, transparent);
+  text-decoration: none;
+}
+:where(a:any-link:hover, a:any-link:focus-visible) {
+  background-color: color-mix(in srgb, var(--link-marker-color, currentColor) 18%, transparent);
+  text-decoration: none;
+}
+:where(a:any-link:active) {
+  background-color: color-mix(in srgb, var(--link-marker-color, currentColor) 24%, transparent);
+  text-decoration: none;
+}
 :focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 3px;
@@ -127,5 +142,12 @@ textarea {
   *::after {
     scroll-behavior: auto !important;
     transition: none !important;
+  }
+}
+@media print {
+  :where(a:any-link, a:any-link:hover, a:any-link:active, a:any-link:focus-visible) {
+    padding: 0;
+    background-color: transparent;
+    text-decoration: none;
   }
 }

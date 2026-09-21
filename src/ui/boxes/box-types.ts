@@ -26,6 +26,7 @@ export interface TranscriptItem {
   request: string;
   markdown?: string;
   status?: string;
+  researchQueries?: string[];
   legacy?: LegacyArchiveEntry;
   turn?: Turn;
 }

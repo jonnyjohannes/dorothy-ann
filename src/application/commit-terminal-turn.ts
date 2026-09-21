@@ -1,8 +1,7 @@
-import type { CanonicalSource, KnowledgeUnit, ResearchCheckpoint, ResearchResolution, ResearchTurn, SourceId, Thread, Turn } from "../domain/types.js";
-import { canonicalSourceV3Schema, threadV3Schema, turnV3Schema } from "../domain/schemas.js";
+import type { CanonicalSource, KnowledgeUnit, ResearchCheckpoint, ResearchResolution, ResearchTurn, SourceId, Thread, ThreadSourceRecord, Turn } from "../domain/types.js";
+import { sourceRecordV3Schema, threadV3Schema, turnV3Schema } from "../domain/schemas.js";
+import { threadExpiryAt } from "../domain/retention.js";
 import type { CommitTerminalTurnInput, CommitTerminalTurnValue, StoredThreadRecord, ThreadRevision, ThreadStoreFailure, ThreadStoreResult } from "../ports/storage-v3.js";
-
-const RETENTION_MS = 7 * 24 * 60 * 60 * 1_000;
 
 export interface TerminalCommitIdentity {
   sourceId(canonicalUrl: string): Promise<SourceId>;
@@ -64,15 +63,9 @@ export function collectTurnSourceIds(turn: Turn): Set<string> {
 }
 
 async function validateSourceIdentity(source: CanonicalSource, identities: TerminalCommitIdentity): Promise<"valid" | "invalid" | "collision"> {
-  const parsed = canonicalSourceV3Schema.safeParse({
-    sourceId: source.sourceId,
-    title: source.title,
-    url: source.url,
-    canonicalUrl: source.canonicalUrl,
-    displayUrl: source.displayUrl,
-    snippet: source.snippet,
-    publishedAt: source.publishedAt,
-  });
+  const candidate = { ...source } as CanonicalSource & { ordinal?: number };
+  delete candidate.ordinal;
+  const parsed = sourceRecordV3Schema.safeParse(candidate);
   if (!parsed.success) return "invalid";
   try {
     return await identities.sourceId(source.canonicalUrl) === source.sourceId ? "valid" : "collision";
@@ -126,7 +119,7 @@ export async function commitTerminalTurn(
   for (const sourceId of referencedSourceIds) if (!existingById.has(sourceId) && !suppliedById.has(sourceId)) return failure("invalid_record");
 
   const newSources = input.sourceRecords.filter((source) => !existingById.has(source.sourceId));
-  const sources = [...existingSources, ...newSources.map((source, index) => ({ ...source, ordinal: existingSources.length + index + 1 }))];
+  const sources: ThreadSourceRecord[] = [...existingSources, ...newSources.map((source, index) => ({ ...source, ...( "kind" in source ? {} : { kind: "link" as const }), ordinal: existingSources.length + index + 1 } as ThreadSourceRecord))];
   const turns = [...(current?.thread.turns ?? []), turn].sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
   const updatedAt = current && current.thread.updatedAt > turn.finishedAt ? current.thread.updatedAt : turn.finishedAt;
   const thread: Thread = current ? { ...current.thread, updatedAt, sources, turns } : {
@@ -146,7 +139,7 @@ export async function commitTerminalTurn(
   const record: StoredThreadRecord = {
     recordVersion: 1,
     revision,
-    expiresAt: new Date(Date.parse(updatedAt) + RETENTION_MS).toISOString() as StoredThreadRecord["expiresAt"],
+    expiresAt: threadExpiryAt(updatedAt),
     thread: parsedThread.data,
   };
   return { ok: true, value: { disposition: "committed", record } };

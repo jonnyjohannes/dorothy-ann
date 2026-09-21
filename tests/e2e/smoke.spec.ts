@@ -5,7 +5,7 @@ test("explicit fixture search is keyboard reachable on desktop and mobile", asyn
   await page.goto("/");
   const query = page.getByLabel("Search query");
   await expect(query).toBeVisible();
-  await query.fill("/search weather");
+  await query.fill("/link weather");
   await query.press("Enter");
   await expect(page.getByRole("heading", { name: "Evidence" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Fixture result for weather" }).first()).toBeVisible();

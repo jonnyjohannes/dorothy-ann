@@ -165,6 +165,7 @@ export class SafeContentExtractor implements ContentExtractor {
   ) {}
 
   async extract(source: SearchResult, limits: ExtractionLimits): Promise<ExtractionOutcome> {
+    if (source.kind !== "link") return { sourceId: source.sourceId, status: "skipped", reason: "unsupported_content" };
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<ExtractionOutcome>((resolve) => {
       timer = setTimeout(() => resolve({ sourceId: source.sourceId, status: "failed", code: "timeout", retryable: true }), limits.timeoutMs);

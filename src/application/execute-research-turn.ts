@@ -91,10 +91,16 @@ function safeCode(error: unknown): string {
   return error instanceof Error ? error.message : "";
 }
 
+function canonicalSource(source: CanonicalSource): CanonicalSource {
+  const value = { ...source } as CanonicalSource & { kind?: unknown; ordinal?: unknown };
+  delete value.kind;
+  delete value.ordinal;
+  return value;
+}
 function sourceRecords(context: ThreadContext, admitted: CanonicalSource[] = []): CanonicalSource[] {
   const byId = new Map<string, CanonicalSource>();
-  for (const source of context.knownSources) byId.set(source.sourceId, source);
-  for (const source of admitted) byId.set(source.sourceId, source);
+  for (const source of context.knownSources) byId.set(source.sourceId, canonicalSource(source));
+  for (const source of admitted) byId.set(source.sourceId, canonicalSource(source));
   return [...byId.values()];
 }
 
@@ -105,9 +111,10 @@ function sourceClosure(
   const byId = new Map<string, CanonicalSource>();
   for (const source of sourceRecords(context, state.sources)) byId.set(source.sourceId, source);
   for (const source of state.sources ?? []) {
-    const previous = byId.get(source.sourceId);
-    if (previous && previous.canonicalUrl !== source.canonicalUrl) throw new Error("source_reference_conflict");
-    byId.set(source.sourceId, source);
+    const canonical = canonicalSource(source);
+    const previous = byId.get(canonical.sourceId);
+    if (previous && previous.canonicalUrl !== canonical.canonicalUrl) throw new Error("source_reference_conflict");
+    byId.set(canonical.sourceId, canonical);
   }
   const required = collectResearchStateSourceIds(state);
   for (const sourceId of required) if (!byId.has(sourceId)) throw new Error("source_reference_missing");
@@ -147,6 +154,8 @@ export async function executeResearchTurn(input: ResearchTurnExecutionInput): Pr
       signal: input.signal,
     });
     if ("checkpoint" in resolution) {
+      resolution = { ...resolution, checkpoint: { ...resolution.checkpoint, sources: resolution.checkpoint.sources?.map(canonicalSource) } };
+
       return {
         turn: {
           id: input.turnId,
@@ -162,6 +171,7 @@ export async function executeResearchTurn(input: ResearchTurnExecutionInput): Pr
         sources: sourceClosure(resolution.checkpoint, input.context),
       };
     }
+    resolution = { ...resolution, sources: resolution.sources?.map(canonicalSource) };
     if (input.signal?.aborted) {
       const state = resolution.status === "sufficient" || resolution.status === "best_effort"
         ? { kind: "resolution" as const, resolution }

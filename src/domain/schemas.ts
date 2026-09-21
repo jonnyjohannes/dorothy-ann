@@ -26,6 +26,7 @@ import type {
   Thread,
   ThreadId,
   ThreadSourceRecord,
+  SourceRecord,
   Turn,
   TurnId,
   UserMessage,
@@ -93,7 +94,33 @@ const canonicalSourceShape = {
   publishedAt: isoTimestampSchema.optional(),
 };
 export const canonicalSourceV3Schema: z.ZodType<CanonicalSource> = z.strictObject(canonicalSourceShape);
-export const threadSourceRecordV3Schema: z.ZodType<ThreadSourceRecord> = z.strictObject({ ...canonicalSourceShape, ordinal: positiveInt });
+const linkSourceRecordSchema = z.strictObject({ ...canonicalSourceShape, kind: z.literal("link").default("link"), ordinal: positiveInt });
+const imageSourceRecordBase = z.strictObject({
+  kind: z.literal("image"), sourceId: sourceIdSchema, ordinal: positiveInt, title: bounded(1, 500),
+  url: httpUrl, canonicalUrl: httpUrl, displayUrl: bounded(1, 512), imageUrl: httpUrl,
+  sourcePageUrl: httpUrl.optional(), thumbnailUrl: httpUrl.optional(), snippet: bounded(0, 1_000).optional(), creator: bounded(0, 500).optional(),
+  width: positiveInt.max(100_000).optional(), height: positiveInt.max(100_000).optional(), publishedAt: isoTimestampSchema.optional(),
+});
+const imageIdentity = (value: { url: string; canonicalUrl: string; imageUrl: string }, context: z.RefinementCtx) => {
+  if (value.url !== value.canonicalUrl || value.url !== value.imageUrl) context.addIssue({ code: "custom", message: "media identity must use imageUrl" });
+};
+const imageSourceRecordSchema = imageSourceRecordBase.superRefine(imageIdentity);
+const videoSourceRecordBase = z.strictObject({
+  kind: z.literal("video"), sourceId: sourceIdSchema, ordinal: positiveInt, title: bounded(1, 500),
+  url: httpUrl, canonicalUrl: httpUrl, displayUrl: bounded(1, 512), videoUrl: httpUrl,
+  sourcePageUrl: httpUrl.optional(), thumbnailUrl: httpUrl.optional(), snippet: bounded(0, 1_000).optional(), creator: bounded(0, 500).optional(),
+  durationSeconds: positiveInt.max(86_400).optional(), publishedAt: isoTimestampSchema.optional(),
+});
+const videoIdentity = (value: { url: string; canonicalUrl: string; videoUrl: string }, context: z.RefinementCtx) => {
+  if (value.url !== value.canonicalUrl || value.url !== value.videoUrl) context.addIssue({ code: "custom", message: "media identity must use videoUrl" });
+};
+const videoSourceRecordSchema = videoSourceRecordBase.superRefine(videoIdentity);
+export const sourceRecordV3Schema: z.ZodType<SourceRecord> = z.union([
+  linkSourceRecordSchema.omit({ ordinal: true }),
+  imageSourceRecordBase.omit({ ordinal: true }).superRefine(imageIdentity),
+  videoSourceRecordBase.omit({ ordinal: true }).superRefine(videoIdentity),
+]);
+export const threadSourceRecordV3Schema: z.ZodType<ThreadSourceRecord> = z.union([linkSourceRecordSchema, imageSourceRecordSchema, videoSourceRecordSchema]);
 const pageSnapshotSchema = z.strictObject({
   text: bounded(1, 20_000),
   extractedAt: isoTimestampSchema,
@@ -179,7 +206,7 @@ const taskSchema: z.ZodType<ResearchTaskRecord> = z.strictObject({
   purpose: bounded(1, 500),
   priority,
   status: z.enum(["completed", "partial", "failed"]),
-  evidence: z.array(z.strictObject({ sourceId: sourceIdSchema, rank: positiveInt.max(5) })).max(3),
+  evidence: z.array(z.strictObject({ sourceId: sourceIdSchema, rank: positiveInt.max(10) })).max(3),
 });
 const resolutionBase = {
   knowledge: knowledgeUnitV3Schema,
@@ -217,11 +244,11 @@ const searchFailureSchema = z.union([
 ]);
 const destinationSchema = z.strictObject({ sourceId: sourceIdSchema, rank: positiveInt.max(10) });
 const searchResultSchema = z.discriminatedUnion("completion", [
-  z.strictObject({ completion: z.literal("results"), destinations: z.tuple([destinationSchema], destinationSchema) }).superRefine((result, context) => {
+  z.strictObject({ completion: z.literal("results"), resultKind: z.enum(["link", "image", "video"]).default("link"), destinations: z.tuple([destinationSchema], destinationSchema) }).superRefine((result, context) => {
     if (new Set(result.destinations.map((item) => item.sourceId)).size !== result.destinations.length) context.addIssue({ code: "custom", message: "duplicate search destination" });
     if (new Set(result.destinations.map((item) => item.rank)).size !== result.destinations.length) context.addIssue({ code: "custom", message: "duplicate search rank" });
   }),
-  z.strictObject({ completion: z.literal("empty"), destinations: z.tuple([]) }),
+  z.strictObject({ completion: z.literal("empty"), resultKind: z.enum(["link", "image", "video"]).default("link"), destinations: z.tuple([]) }),
 ]);
 export const searchTurnV3Schema: z.ZodType<SearchTurn> = z.discriminatedUnion("status", [
   z.strictObject({ ...terminalBase, kind: z.literal("search"), execution: recordedSearchExecution, status: z.literal("completed"), result: searchResultSchema }),

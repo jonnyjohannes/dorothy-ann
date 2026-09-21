@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { stream } from "hono/streaming";
 import { z } from "zod";
 import { collectTurnSourceIds } from "../application/commit-terminal-turn.js";
-import { researchResolutionV3Schema, researchTurnV3Schema, searchTurnV3Schema, threadContextV3Schema } from "../domain/schemas.js";
+import { researchResolutionV3Schema, researchTurnV3Schema, searchTurnV3Schema, sourceRecordV3Schema, threadContextV3Schema } from "../domain/schemas.js";
 import type { ResearchLimits } from "../application/evidence-acquirer.js";
 import type {
   CanonicalSource,
@@ -15,6 +15,8 @@ import type {
   Turn,
   TurnId,
   TurnKind,
+  SearchResultKind,
+  SourceRecord,
   ExecutionId,
 } from "../domain/types.js";
 
@@ -27,7 +29,7 @@ export interface SourceDeltaOccurrence {
 }
 
 export type TurnGatewayRequest =
-  | { executionId: ExecutionId; turnId: TurnId; kind: "search"; query: string }
+  | { executionId: ExecutionId; turnId: TurnId; kind: "search"; resultKind?: SearchResultKind; query: string }
   | { executionId: ExecutionId; turnId: TurnId; kind: "research"; question: string; context: ThreadContext; answerPosition: "initial" | "follow_up" };
 
 export type TurnExecutionRequest =
@@ -39,8 +41,8 @@ type TerminalPayload<T extends Turn> = T extends { id: unknown; kind: unknown; c
   : never;
 
 export type TurnExecutionTerminal =
-  | { kind: "search"; outcome: TerminalPayload<SearchTurn>; sourceRecords: CanonicalSource[] }
-  | { kind: "research"; outcome: TerminalPayload<ResearchTurn>; sourceRecords: CanonicalSource[] };
+  | { kind: "search"; outcome: TerminalPayload<SearchTurn>; sourceRecords: SourceRecord[] }
+  | { kind: "research"; outcome: TerminalPayload<ResearchTurn>; sourceRecords: SourceRecord[] };
 
 export type TurnExecutionSignal =
   | { type: "phase"; phase: TurnPhase }
@@ -81,18 +83,10 @@ const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][
 
 const boundedText = (minimum: number, maximum: number) => z.string().refine((value) => [...value].length >= minimum && [...value].length <= maximum);
 const sourceId = z.string().regex(/^src_[A-Za-z0-9_-]{43}$/);
-const sourceSchema = z.strictObject({
-  sourceId,
-  title: boundedText(1, 500),
-  url: boundedText(1, 2_048).url(),
-  canonicalUrl: boundedText(1, 2_048).url(),
-  displayUrl: boundedText(1, 512),
-  snippet: boundedText(0, 1_000).optional(),
-  publishedAt: z.string().datetime().optional(),
-});
+const sourceSchema = sourceRecordV3Schema;
 const occurrenceSchema = z.strictObject({ sourceId, role: z.enum(["search_destination", "research_evidence"]), rank: z.number().int().positive().max(10).optional() });
 const requestSchema = z.discriminatedUnion("kind", [
-  z.strictObject({ executionId: uuid, turnId: uuid, kind: z.literal("search"), query: boundedText(1, 2_000) }),
+  z.strictObject({ executionId: uuid, turnId: uuid, kind: z.literal("search"), resultKind: z.enum(["link", "image", "video"]).optional(), query: boundedText(1, 2_000) }),
   z.strictObject({ executionId: uuid, turnId: uuid, kind: z.literal("research"), question: boundedText(1, 2_000), context: threadContextV3Schema, answerPosition: z.enum(["initial", "follow_up"]) }),
 ]);
 

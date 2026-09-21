@@ -1,4 +1,4 @@
-import type { CanonicalSource, IsoTimestamp, Thread, ThreadId, ThreadSummary, Turn } from "../domain/types.js";
+import type { IsoTimestamp, SourceRecord, Thread, ThreadId, ThreadSummary, Turn } from "../domain/types.js";
 
 export type ThreadRevision = string & { readonly __brand: "ThreadRevision" };
 
@@ -19,7 +19,7 @@ export interface CommitTerminalTurnInput {
   threadId: ThreadId;
   expectedRevision: ThreadRevision | null;
   create?: NewThreadSeed;
-  sourceRecords: CanonicalSource[];
+  sourceRecords: SourceRecord[];
   turn: Turn;
 }
 

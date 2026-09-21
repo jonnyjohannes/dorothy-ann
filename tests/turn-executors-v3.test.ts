@@ -90,8 +90,15 @@ describe("v3 answer and turn executors", () => {
     });
     expect(calls).toBe(1);
     expect(result.turn.status).toBe("completed");
-    if (result.turn.status === "completed") expect(result.turn.result).toEqual({ completion: "results", destinations: [{ sourceId: source.sourceId, rank: 1 }] });
-    expect(result.sources).toEqual([source]);
+    if (result.turn.status === "completed") expect(result.turn.result).toEqual({ completion: "results", resultKind: "link", destinations: [{ sourceId: source.sourceId, rank: 1 }] });
+    expect(result.sources).toEqual([{ ...source, kind: "link" }]);
+  });
+
+  it("preserves image result kind and media metadata without extraction", async () => {
+    const media = { kind: "image" as const, sourceId: source.sourceId, rank: 1, title: "Cat", url: "https://cdn.example/cat.jpg", canonicalUrl: "https://cdn.example/cat.jpg", imageUrl: "https://cdn.example/cat.jpg", sourcePageUrl: "https://example.com/cats", thumbnailUrl: "https://cdn.example/thumb.jpg", displayUrl: "example.com", width: 640, height: 480 };
+    const result = await executeSearchTurn({ turnId: id("turn-image"), userMessage, createdAt: userMessage.createdAt, resultKind: "image", searchRef: "brave", provider: { search: async (_query, options) => { expect(options.resultKind).toBe("image"); return [media]; } }, finishedAt: fixedClock });
+    expect(result.turn).toMatchObject({ kind: "search", status: "completed", result: { resultKind: "image" } });
+    expect(result.sources[0]).toMatchObject({ kind: "image", imageUrl: media.imageUrl, sourcePageUrl: media.sourcePageUrl });
   });
 
   it("synthesizes one root answer and preserves recorded provenance", async () => {

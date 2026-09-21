@@ -88,6 +88,7 @@ const DEFAULT_LIMITS = {
 };
 
 const fixtureSource = (request: EvidenceRequest): SearchResult => ({
+  kind: "link",
   sourceId: `fixture-${request.problemId}` as SearchResult["sourceId"],
   rank: 1,
   title: "Fixture evidence",
@@ -147,6 +148,7 @@ function canonicalizeSearchResults(
   for (const entry of raw) {
     if (normalized.length >= maxResults || typeof entry !== "object" || entry === null) continue;
     const candidate = entry as Partial<SearchResult>;
+    if (candidate.kind !== undefined && candidate.kind !== "link") continue;
     if (typeof candidate.title !== "string" || typeof candidate.url !== "string" || typeof candidate.canonicalUrl !== "string") continue;
     const key = canonicalKey({ url: candidate.url, canonicalUrl: candidate.canonicalUrl });
     if (!key || seen.has(key)) continue;
@@ -165,13 +167,13 @@ function canonicalizeSearchResults(
     const publishedAt = typeof candidate.publishedAt === "string" && Number.isFinite(Date.parse(candidate.publishedAt))
       ? new Date(candidate.publishedAt).toISOString() as SearchResult["publishedAt"]
       : undefined;
-    normalized.push({ sourceId: sourceId as SearchResult["sourceId"], title, url: key, canonicalUrl: key, displayUrl, snippet, publishedAt, rank });
+    normalized.push({ kind: "link", sourceId: sourceId as SearchResult["sourceId"], title, url: key, canonicalUrl: key, displayUrl, snippet, publishedAt, rank });
   }
   return normalized.sort((left, right) => left.rank - right.rank || left.canonicalUrl.localeCompare(right.canonicalUrl));
 }
 
 function sourceAsSearchResult(source: CanonicalSource, rank: number): SearchResult {
-  return { ...source, rank };
+  return { ...source, kind: "link", rank };
 }
 
 function extractionLimits(limits: ResearchLimits): ExtractionLimits {

@@ -7,6 +7,7 @@ import { SettingsRoute } from "./routes/SettingsRoute";
 import { UnlockRoute } from "./routes/UnlockRoute";
 import { SystemStatusBox } from "./boxes/SystemStatusBox";
 import { primaryAccentSlot, readColorScheme, readPrimaryAccent } from "./color-scheme";
+import { threadSelectorReturnTo, threadSelectorState } from "./navigation-state";
 
 function applyTheme(theme: string) {
   const prefersDark = typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -42,16 +43,16 @@ export function GlobalShortcuts() {
       const target = event.target;
       const isEditable = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable);
       if (event.isComposing) return;
-      if (event.altKey && event.code === "KeyS") { event.preventDefault(); navigate("/threads"); return; }
+      if (event.altKey && event.code === "KeyS") { event.preventDefault(); navigate("/threads", { state: threadSelectorState(location) }); return; }
       if (event.altKey && event.code === "KeyC") { event.preventDefault(); navigate("/settings"); return; }
-      if (event.altKey && event.code === "KeyA" && !event.ctrlKey && !event.metaKey) { event.preventDefault(); window.dispatchEvent(new Event("dorothy-ann-search-shortcut")); return; }
       if (event.key === "i" && !event.ctrlKey && !event.altKey && !event.metaKey && !isEditable) {
         const prompt = document.querySelector<HTMLInputElement>('input[aria-label="Search query"]:not(:disabled)');
         if (prompt) { event.preventDefault(); prompt.focus(); return; }
       }
       if (event.key !== "Escape") return;
       if ((location.pathname === "/threads" || location.pathname === "/settings") && !isEditable) {
-        event.preventDefault(); navigate("/", { replace: true });
+        event.preventDefault();
+        navigate(location.pathname === "/threads" ? threadSelectorReturnTo(location.state) : "/", { replace: true });
         return;
       }
       if (isEditable) return;
@@ -61,7 +62,7 @@ export function GlobalShortcuts() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [location.pathname, navigate]);
+  }, [location, navigate]);
   return null;
 }
 function AuthGate({ children }: { children: ReactNode }) {
@@ -93,7 +94,6 @@ export function App() {
     <Route path="/threads" element={<ThreadsRoute />} />
     <Route path="/threads/new" element={<ThreadRoute />} />
     <Route path="/threads/:threadId" element={<ThreadRoute />} />
-    <Route path="/search" element={<ThreadRoute initialKind="search" />} />
     <Route path="/new" element={<HomeRoute />} />
     <Route path="*" element={<HomeRoute />} />
   </Routes></AuthGate></>;

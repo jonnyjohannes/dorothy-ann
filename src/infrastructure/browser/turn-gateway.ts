@@ -1,6 +1,6 @@
 import { createParser } from "eventsource-parser";
 import { z } from "zod";
-import { canonicalSourceV3Schema, researchResolutionV3Schema } from "../../domain/schemas.js";
+import { researchResolutionV3Schema, sourceRecordV3Schema } from "../../domain/schemas.js";
 import type { ExecutionId, TurnId } from "../../domain/types.js";
 import type {
   TurnGateway,
@@ -17,7 +17,7 @@ export interface FetchTurnGatewayOptions {
 
 const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu);
 const sourceId = z.string().regex(/^src_[A-Za-z0-9_-]{43}$/);
-const source = canonicalSourceV3Schema;
+const source = sourceRecordV3Schema;
 const base = z.object({ executionId: uuid, turnId: uuid, sequence: z.number().int().positive() }).strict();
 const eventSchema = z.discriminatedUnion("type", [
   base.extend({ type: z.literal("error"), code: z.enum(["invalid_event", "invalid_terminal", "execution_failed"]), message: z.string().min(1).max(500) }),

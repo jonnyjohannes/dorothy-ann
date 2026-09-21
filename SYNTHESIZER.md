@@ -8,8 +8,8 @@ The protocol input includes `answerPosition`, which is either `initial` or `foll
 
 - The application, not you, owns transcript separators.
 - do not output:
-    - do not use Markdown title or heading tags (`#` through `######`).
-    - any line made only of repeated hyphens, asterisks, or underscores
+    - Markdown title or heading tags (`#` through `######`).
+    - any line made only of repeated hyphens, asterisks, `---`, or underscores
     - HTML `<hr>` tags or any other horizontal-rule markup
     - NB: This rule overrides the general instruction to use Markdown for visual playfulness.
 

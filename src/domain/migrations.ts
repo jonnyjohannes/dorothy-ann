@@ -144,7 +144,7 @@ export async function migrateLegacyThread(input: LegacyThreadInput, identities: 
           finishedAt: canonicalTimestamp(turn.updatedAt) as SearchTurn["finishedAt"],
           userMessage: { ...turn.userMessage, id: turn.userMessage.id as SearchTurn["userMessage"]["id"], createdAt: canonicalTimestamp(turn.userMessage.createdAt) as SearchTurn["userMessage"]["createdAt"] },
           execution: { kind: "recorded", searchRef: input.searchRef },
-          result: destinations.length > 0 ? { completion: "results", destinations: destinations.map(({ sourceId, rank }) => ({ sourceId, rank })) as [LegacyArchiveDestinationRef, ...LegacyArchiveDestinationRef[]] } : { completion: "empty", destinations: [] },
+          result: destinations.length > 0 ? { completion: "results", resultKind: "link", destinations: destinations.map(({ sourceId, rank }) => ({ sourceId, rank })) as [LegacyArchiveDestinationRef, ...LegacyArchiveDestinationRef[]] } : { completion: "empty", resultKind: "link", destinations: [] },
         }),
       });
       continue;
@@ -177,7 +177,7 @@ export async function migrateLegacyThread(input: LegacyThreadInput, identities: 
   const legacyArchive: LegacyArchiveEntry[] = [];
   for (const item of pending) {
     const { refs, records } = selectDestinations(item.sourceCandidates, issues, item.originalIndex);
-    for (const record of records) if (!sourceById.has(record.sourceId)) sourceById.set(record.sourceId, { ...record, ordinal: sourceById.size + 1 });
+    for (const record of records) if (!sourceById.has(record.sourceId)) sourceById.set(record.sourceId, { ...record, kind: "link", ordinal: sourceById.size + 1 });
     const built = item.build(refs);
     if (built.id.toString().startsWith("legacy_")) legacyArchive.push(built as LegacyArchiveEntry);
     else turns.push(built as SearchTurn);

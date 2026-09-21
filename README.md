@@ -1,10 +1,10 @@
 # Dorothy Ann
 
-Dorothy Ann is a browser-based information resolver and researcher. Ordinary requests and `/threads/new?q=...` create recursively resolved `ResearchTurn`s with bounded evidence and one synthesized answer. Use `/search <query>` or `/search?q=...` when you want ranked links without research synthesis.
+Dorothy Ann is a browser-based information resolver and researcher. Ordinary requests and `/threads/new?q=...` create recursively resolved `ResearchTurn`s with bounded evidence and one synthesized answer. Use `/link`, `/image`, or `/video` in the prompt input when you want ranked raw retrieval without research synthesis.
 
 ## what it does
 
-- ⚡ **`/search <query>`** returns ranked, normalized sources without extraction or LLM synthesis
+- ⚡ **`/link`, `/image`, `/video`** return ranked, normalized link or media sources without extraction or LLM synthesis
 - 🔎 **ordinary requests** research by default, recursively resolving evidence gaps within explicit search, source, depth, branch, and assessment ceilings
 - 🧾 **thread history** keeps terminal turns, canonical source metadata, evidence projections, and read-only migrated legacy archive entries
 - 🗂️ **browser workspace** provides focused home, thread, thread-list, settings, and unlock routes backed by typed product boxes
@@ -23,15 +23,19 @@ exact-question retrieval when admissible evidence is absent
    |
    v
 extract useful results -> assess
-                         | resolved
+                         | root resolved with ≥2 materially independent sources
                          +-------------------------------> synthesize once
-                         | search
+                         | search (including unmet root corroboration)
                          +-> focused retrieval/extraction -> reassess
                          | decompose(all | any)
                          `-> bounded child resolution -> join -> reassess
 ```
 
-The root uses the exact user question for its first search when no admissible extracted evidence already exists. The assessor returns one `resolved | search | decompose(all | any)` directive. `search` acquires focused missing evidence; `decompose` resolves genuinely independent child obligations and joins their supported knowledge. Both paths reassess the parent, and children never produce separate user-facing answers. A sufficient or useful best-effort root synthesizes exactly once; no useful supported evidence produces an insufficient outcome. Search, source, assessment, and depth ceilings are shared across the complete tree and are hard limits rather than targets.
+The root uses the exact user question for its first search when no admissible extracted evidence already exists. The assessor returns one `resolved | search | decompose(all | any)` directive. `search` acquires focused missing evidence; `decompose` resolves genuinely independent child obligations and joins their supported knowledge. Both paths reassess the parent, and children never produce separate user-facing answers. A root `resolved` directive targets at least two materially independent evidence sources supporting the central conclusion, including for straightforward factual questions; when that target is unmet, the assessor requests one focused corroboration search where the existing budget permits. Independence is model-judged: different URLs or domains, syndicated copies, repeated reports, and same-publisher pages are not automatically independent, and the application does not enforce source count or publisher lineage. This target applies to the root only; child obligations retain their existing behavior. A sufficient or useful best-effort root synthesizes exactly once; no useful supported evidence produces an insufficient outcome. Search, source, assessment, and depth ceilings are shared across the complete tree and are hard limits rather than targets.
+
+## search result kinds
+
+`/threads/new?q=<prompt input>` is the sole prompt-input URL. The shared classifier is used for typed and URL input: bare text creates a `ResearchTurn`, while `/link <query>`, `/image <query>`, and `/video <query>` create link, image, and video `SearchTurn` result kinds. Media results are retained as bounded durable source records for reload and export; they never enter factual extraction. Supported video cards mount a paused inline provider player when they enter the viewport; offscreen, unsupported, or failed cards retain the linked-thumbnail fallback, and titles remain external source-page links.
 
 ## architecture
 

@@ -88,7 +88,7 @@
 .ui-markdown__heading { color: var(--relational-accent, var(--ink)); }
 .ui-markdown__inline { color: var(--relational-accent, inherit); }
 .ui-markdown__blockquote { border-inline-start: 0.25rem solid var(--accent); padding-inline-start: var(--space-md); color: var(--muted); }
-.ui-markdown a.ui-markdown__citation { color: var(--relational-accent, var(--accent)); text-decoration-color: var(--relational-accent, var(--accent)); text-decoration-thickness: 0.15em; }
+.ui-markdown a.ui-markdown__citation { color: var(--relational-accent, var(--accent)); }
 .ui-markdown pre { overflow-x: auto; padding: var(--space-md); background: color-mix(in srgb, var(--ink) 8%, var(--paper)); }
 .ui-markdown table { border-collapse: collapse; }
 .ui-markdown th, .ui-markdown td { border: 1px solid var(--line); padding: var(--space-xs) var(--space-sm); }
