@@ -23,11 +23,19 @@ const resolution: SufficientResearchResolution = {
   knowledge: {
     problemId: id("problem"),
     findings: [],
-    evidence: [{ problemId: id("problem"), requestOrder: 0, query: "What happened?", sources: [{ sourceId: source.sourceId, page: { text: "Evidence.", extractedAt: id("2026-01-01T00:00:00.000Z"), characterCount: 8 } }], createdAt: id("2026-01-01T00:00:00.000Z") }],
+    evidence: [{ problemId: id("problem"), requestOrder: 0, query: "What happened?", sources: [
+      { sourceId: source.sourceId, page: { text: "Evidence.", extractedAt: id("2026-01-01T00:00:00.000Z"), characterCount: 9 } },
+      { sourceId: extraSource.sourceId, page: { text: "A different perspective.", extractedAt: id("2026-01-01T00:00:00.000Z"), characterCount: 24 } },
+    ], createdAt: id("2026-01-01T00:00:00.000Z") }],
     unresolvedGapIds: [],
   },
-  ledger: { gaps: [], assessmentsUsed: 1, searchesUsed: 1, sourcesConsumed: 1 },
+  ledger: { gaps: [], assessmentsUsed: 1, searchesUsed: 1, sourcesConsumed: 2 },
   tasks: [],
+};
+const oneSourceResolution: SufficientResearchResolution = {
+  ...resolution,
+  knowledge: { ...resolution.knowledge, evidence: [{ ...resolution.knowledge.evidence[0], sources: [resolution.knowledge.evidence[0].sources[0]] }] },
+  ledger: { ...resolution.ledger, sourcesConsumed: 1 },
 };
 
 const executionRefs = { assessmentModelRef: "high", synthesisModelRef: "balanced", searchRef: "brave" };
@@ -101,6 +109,68 @@ describe("v3 answer and turn executors", () => {
     expect(result.sources[0]).toMatchObject({ kind: "image", imageUrl: media.imageUrl, sourcePageUrl: media.sourcePageUrl });
   });
 
+  it("never sends one-source or repeated-snapshot resolutions to a synthesis provider", async () => {
+    let calls = 0;
+    const llm: LLMProvider = {
+      assessResearch: async () => { throw new Error("not used"); },
+      synthesizeResearch: async function* () { calls += 1; yield { type: "text", markdown: "Should not answer." }; },
+    };
+    const snapshots: SufficientResearchResolution = {
+      ...oneSourceResolution,
+      knowledge: { ...oneSourceResolution.knowledge, evidence: [
+        oneSourceResolution.knowledge.evidence[0],
+        { ...oneSourceResolution.knowledge.evidence[0], requestOrder: 1, sources: [{ ...oneSourceResolution.knowledge.evidence[0].sources[0], page: { text: "New snapshot.", extractedAt: id("2026-01-01T00:00:01.000Z"), characterCount: 13 } }] },
+      ] },
+    };
+    for (const candidate of [oneSourceResolution, snapshots]) {
+      await expect(new AnswerSynthesizer(llm, "SYNTHESIZER EXACT").synthesize({ question: "What happened?", answerPosition: "initial", context, resolution: candidate })).rejects.toMatchObject({ message: "insufficient_sources" });
+    }
+    expect(calls).toBe(0);
+  });
+
+  it("turns a one-source sufficient resolution into a retryable insufficient terminal with retained evidence", async () => {
+    let calls = 0;
+    const result = await executeResearchTurn({
+      turnId: id("turn-one-source"), userMessage, createdAt: userMessage.createdAt, context, answerPosition: "initial",
+      resolver: { resolve: async () => oneSourceResolution },
+      synthesizer: { synthesize: async () => { calls += 1; throw new Error("must not synthesize"); } },
+      ...executionRefs, finishedAt: fixedClock,
+    });
+    expect(calls).toBe(0);
+    expect(result.turn).toMatchObject({ status: "failed", failure: { kind: "insufficient_evidence", retryable: true }, researchState: { kind: "resolution", resolution: { status: "insufficient", stopReason: "no_new_knowledge" } } });
+    expect(result.sources).toEqual([source]);
+  });
+
+  it("preserves a bounded best-effort stop reason without synthesizing one source", async () => {
+    const candidate = { ...oneSourceResolution, status: "best_effort" as const, stopReason: "provider_unavailable" as const };
+    const result = await executeResearchTurn({
+      turnId: id("turn-best-effort-one-source"), userMessage, createdAt: userMessage.createdAt, context, answerPosition: "follow_up",
+      resolver: { resolve: async () => candidate },
+      synthesizer: { synthesize: async () => { throw new Error("must not synthesize"); } },
+      ...executionRefs, finishedAt: fixedClock,
+    });
+    expect(result.turn).toMatchObject({ status: "failed", failure: { kind: "insufficient_evidence", retryable: true }, researchState: { kind: "resolution", resolution: { status: "insufficient", stopReason: "provider_unavailable" } } });
+    expect(result.sources).toEqual([source]);
+  });
+
+  it("counts extracted follow-up context plus fresh evidence, but not known-source metadata alone", async () => {
+    const candidate = {
+      ...oneSourceResolution,
+      knowledge: { ...oneSourceResolution.knowledge, evidence: [
+        ...oneSourceResolution.knowledge.evidence,
+        { ...resolution.knowledge.evidence[0], requestOrder: 1, sources: [resolution.knowledge.evidence[0].sources[1]] },
+      ] },
+    };
+    const result = await executeResearchTurn({
+      turnId: id("turn-follow-up-two-source"), userMessage, createdAt: userMessage.createdAt, context, answerPosition: "follow_up",
+      resolver: { resolve: async () => candidate },
+      synthesizer: { synthesize: async () => ({ parts: [{ type: "text", markdown: "Supported answer." }] }) },
+      ...executionRefs, finishedAt: fixedClock,
+    });
+    expect(result.turn).toMatchObject({ status: "completed", result: { completion: "sufficient" } });
+    expect(result.sources).toEqual([extraSource, source]);
+  });
+
   it("synthesizes one root answer and preserves recorded provenance", async () => {
     let synthesisCalls = 0;
     const resolver = { resolve: async (): Promise<ResearchResolutionResult> => resolution };
@@ -109,7 +179,7 @@ describe("v3 answer and turn executors", () => {
       turnId: id("turn-research"), userMessage, createdAt: userMessage.createdAt, context, answerPosition: "initial", resolver, synthesizer, ...executionRefs, finishedAt: fixedClock,
     });
     expect(synthesisCalls).toBe(1);
-    expect(result.sources).toEqual([source]);
+    expect(result.sources).toEqual([extraSource, source]);
     expect(result.turn.status).toBe("completed");
     if (result.turn.status === "completed") {
       expect(result.turn.result.completion).toBe("sufficient");
@@ -118,6 +188,7 @@ describe("v3 answer and turn executors", () => {
   });
 
   it("includes source metadata referenced only by ledger-gap support", async () => {
+    const ledgerOnly: CanonicalSource = { ...source, sourceId: id("src_ledger_only") };
     const gapSupported: SufficientResearchResolution = {
       ...resolution,
       ledger: {
@@ -126,7 +197,7 @@ describe("v3 answer and turn executors", () => {
           id: id("gap_supported"),
           problem: { id: resolution.knowledge.problemId, question: "What happened?", purpose: "answer", successCriterion: "supported", context: { ...context, knownSources: [] }, depth: 0 },
           status: "resolved",
-          support: [{ type: "source", sourceId: extraSource.sourceId }],
+          support: [{ type: "source", sourceId: ledgerOnly.sourceId }],
           fingerprint: "supported-gap",
           createdOrder: 0,
         }],
@@ -136,7 +207,7 @@ describe("v3 answer and turn executors", () => {
       turnId: id("turn-gap-support"),
       userMessage,
       createdAt: userMessage.createdAt,
-      context,
+      context: { ...context, knownSources: [...context.knownSources, ledgerOnly] },
       answerPosition: "initial",
       resolver: { resolve: async () => gapSupported },
       synthesizer: { synthesize: async () => ({ parts: [{ type: "text", markdown: "Answer." }] }) },
@@ -144,7 +215,7 @@ describe("v3 answer and turn executors", () => {
       finishedAt: fixedClock,
     });
     expect(result.turn.status).toBe("completed");
-    expect(result.sources).toEqual([extraSource, source]);
+    expect(result.sources).toEqual([extraSource, ledgerOnly, source]);
   });
 
   it("closes checkpoint evidence with checkpoint-admitted source metadata", async () => {
@@ -153,7 +224,7 @@ describe("v3 answer and turn executors", () => {
       knowledge: resolution.knowledge,
       ledger: resolution.ledger,
       tasks: resolution.tasks,
-      sources: [source],
+      sources: [source, extraSource],
     };
     const result = await executeResearchTurn({
       turnId: id("turn-checkpoint"),
@@ -167,7 +238,7 @@ describe("v3 answer and turn executors", () => {
       finishedAt: fixedClock,
     });
     expect(result.turn.status).toBe("failed");
-    expect(result.sources).toEqual([source]);
+    expect(result.sources).toEqual([extraSource, source]);
   });
 
   it("persists bounded synthesis failure without provider details", async () => {

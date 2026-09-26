@@ -1,4 +1,6 @@
 import type { GapLedger, ResearchResolution } from "../../src/domain/types.js";
+import { viableEvidenceSourceCount } from "../../src/domain/knowledge.js";
+import type { EvidenceYieldRequest } from "../../src/application/evidence-acquirer.js";
 import type { ContentExtractor } from "../../src/ports/extraction.js";
 import type { LLMProvider } from "../../src/ports/llm.js";
 import type { SearchProvider } from "../../src/ports/providers.js";
@@ -15,7 +17,7 @@ export interface StageTiming {
 
 export interface ResearchTimingRecord {
   event: "research_timing";
-  schema_version: 1;
+  schema_version: 2;
   terminal_status: "completed" | "failed" | "interrupted" | "executor_error";
   answer_position?: "initial" | "follow_up";
   assessment_failure_code?: "provider_bad_request" | "provider_rate_limited" | "provider_unavailable" | "provider_failed" | "provider_interrupted" | "assessment_invalid_response";
@@ -27,6 +29,10 @@ export interface ResearchTimingRecord {
     known_sources: number;
     evidence_packs: number;
     evidence_sources: number;
+  };
+  evidence_yield: {
+    requests: EvidenceYieldRequest[];
+    distinct_viable_root_ids?: number;
   };
   resolution_status?: ResearchResolution["status"];
   stop_reason?: ResearchResolution["stopReason"];
@@ -51,6 +57,17 @@ export type ResearchTimingSink = (record: ResearchTimingRecord) => void;
 type StageName = keyof ResearchTimingRecord["stages"];
 
 const emptyStage = (): StageTiming => ({ calls: 0, succeeded: 0, failed: 0, cumulative_ms: 0, max_ms: 0 });
+const boundedCount = (value: number, maximum: number): number => Number.isSafeInteger(value) ? Math.max(0, Math.min(maximum, value)) : 0;
+const boundedYield = (request: EvidenceYieldRequest): EvidenceYieldRequest => ({
+  requested: boundedCount(request.requested, 5), returned: boundedCount(request.returned, 5),
+  normalized_unique: boundedCount(request.normalized_unique, 5),
+  invalid_discarded: boundedCount(request.invalid_discarded, 5), duplicate_discarded: boundedCount(request.duplicate_discarded, 5),
+  selected: boundedCount(request.selected, 5), reused: boundedCount(request.reused, 5), unselected: boundedCount(request.unselected, 5),
+  viable: boundedCount(request.viable, 3), empty: boundedCount(request.empty, 5),
+  failed: boundedCount(request.failed, 5), fetch_failed: boundedCount(request.fetch_failed, 5),
+  timeout: boundedCount(request.timeout, 5), extract_failed: boundedCount(request.extract_failed, 5),
+  skipped_other: boundedCount(request.skipped_other, 5),
+});
 const duration = (started: number, finished: number): number => {
   const value = finished - started;
   return Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
@@ -75,6 +92,7 @@ export class ResearchTimingCollector {
   private assessmentDirective: ResearchTimingRecord["assessment_directive"];
   private readonly assessmentDirectives: NonNullable<ResearchTimingRecord["assessment_directives"]> = [];
   private assessmentInvalidReason: ResearchTimingRecord["assessment_invalid_reason"];
+  private readonly evidenceYield: EvidenceYieldRequest[] = [];
 
   constructor(
     private readonly sink: ResearchTimingSink,
@@ -147,36 +165,45 @@ export class ResearchTimingCollector {
     if (reason && reasons.includes(reason as ResearchTimingRecord["assessment_invalid_reason"])) this.assessmentInvalidReason = reason as ResearchTimingRecord["assessment_invalid_reason"];
   }
 
+  markEvidenceYield(requests: EvidenceYieldRequest[]): void {
+    for (const request of requests) if (this.evidenceYield.length < 3) this.evidenceYield.push(boundedYield(request));
+  }
+
   emit(summary: {
     terminalStatus: ResearchTimingRecord["terminal_status"];
     answerPosition?: ResearchTimingRecord["answer_position"];
     context?: ResearchTimingRecord["context"];
-    resolution?: Pick<ResearchResolution, "status" | "stopReason" | "ledger">;
+    resolution?: Pick<ResearchResolution, "status" | "stopReason" | "ledger" | "knowledge">;
     ledger?: GapLedger;
   }): void {
-    const resolution = summary.resolution;
-    const ledger = resolution?.ledger ?? summary.ledger;
-    const record: ResearchTimingRecord = {
-      event: "research_timing",
-      schema_version: 1,
-      terminal_status: summary.terminalStatus,
-      ...(summary.answerPosition ? { answer_position: summary.answerPosition } : {}),
-      ...(this.assessmentFailureCode ? { assessment_failure_code: this.assessmentFailureCode } : {}),
-      ...(this.assessmentInvalidReason ? { assessment_invalid_reason: this.assessmentInvalidReason } : {}),
-      ...(this.assessmentDirective ? { assessment_directive: this.assessmentDirective, assessment_directives: [...this.assessmentDirectives] } : {}),
-      ...(summary.context ? { context: summary.context } : {}),
-      ...(resolution ? { resolution_status: resolution.status, stop_reason: resolution.stopReason } : {}),
-      execution_ms: duration(this.startedAt, this.now()),
-      ...(this.resolutionMs === undefined ? {} : { resolution_ms: this.resolutionMs }),
-      ...(this.firstAnswerSignalMs === undefined ? {} : { first_answer_signal_ms: this.firstAnswerSignalMs }),
-      counts: {
-        searches_used: ledger?.searchesUsed ?? 0,
-        sources_consumed: ledger?.sourcesConsumed ?? 0,
-        assessments_used: ledger?.assessmentsUsed ?? 0,
-      },
-      stages: this.stages,
-    };
     try {
+      const resolution = summary.resolution;
+      const ledger = resolution?.ledger ?? summary.ledger;
+      const distinctRootIds = resolution && viableEvidenceSourceCount(resolution.knowledge);
+      const record: ResearchTimingRecord = {
+        event: "research_timing",
+        schema_version: 2,
+        terminal_status: summary.terminalStatus,
+        ...(summary.answerPosition ? { answer_position: summary.answerPosition } : {}),
+        ...(this.assessmentFailureCode ? { assessment_failure_code: this.assessmentFailureCode } : {}),
+        ...(this.assessmentInvalidReason ? { assessment_invalid_reason: this.assessmentInvalidReason } : {}),
+        ...(this.assessmentDirective ? { assessment_directive: this.assessmentDirective, assessment_directives: [...this.assessmentDirectives] } : {}),
+        ...(summary.context ? { context: summary.context } : {}),
+        evidence_yield: {
+          requests: this.evidenceYield.map(boundedYield),
+          ...(distinctRootIds === undefined ? {} : { distinct_viable_root_ids: boundedCount(distinctRootIds, 24) }),
+        },
+        ...(resolution ? { resolution_status: resolution.status, stop_reason: resolution.stopReason } : {}),
+        execution_ms: duration(this.startedAt, this.now()),
+        ...(this.resolutionMs === undefined ? {} : { resolution_ms: this.resolutionMs }),
+        ...(this.firstAnswerSignalMs === undefined ? {} : { first_answer_signal_ms: this.firstAnswerSignalMs }),
+        counts: {
+          searches_used: ledger?.searchesUsed ?? 0,
+          sources_consumed: ledger?.sourcesConsumed ?? 0,
+          assessments_used: ledger?.assessmentsUsed ?? 0,
+        },
+        stages: this.stages,
+      };
       this.sink(record);
     } catch {
       // Operational logging must never alter the research result.

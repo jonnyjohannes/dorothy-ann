@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EvidenceAcquirer, type EvidenceRequest } from "../src/application/evidence-acquirer.js";
+import { EvidenceAcquirer, type EvidenceRequest, type EvidenceYieldRequest } from "../src/application/evidence-acquirer.js";
 import type { ResearchBudget } from "../src/domain/types.js";
 import type { SearchResult } from "../src/domain/types.js";
 import { evidencePackV3Schema } from "../src/domain/schemas.js";
@@ -46,6 +46,36 @@ const extractor = async (candidate: SearchResult) => ({
 });
 
 describe("EvidenceAcquirer", () => {
+  it("reports bounded candidate, charged backfill, and actual extraction yield", async () => {
+    const reports: EvidenceYieldRequest[][] = [];
+    const candidates = [source("failed", 1), source("empty", 2), source("viable", 3), source("spare", 4), source("spare2", 5)];
+    const acquirer = new EvidenceAcquirer({
+      search: { search: async (query) => query === "zero" ? [] : query === "mixed" ? candidates : [null, candidates[0], candidates[0], { ...candidates[1], url: "javascript:bad", canonicalUrl: "javascript:bad" }] as SearchResult[] },
+      extractor: { extract: async (candidate) => candidate.sourceId === "failed"
+        ? { sourceId: candidate.sourceId, status: "failed", code: "timeout", retryable: true }
+        : candidate.sourceId === "empty"
+          ? { sourceId: candidate.sourceId, status: "skipped", reason: "empty_content" }
+          : extractor(candidate) },
+    });
+    const run = (query: string) => acquirer.acquire({
+      requests: [request(query, 1, 0)], knownSources: [], availableEvidenceSourceIds: [],
+      budget: budget(), limits: {}, onYield: (report) => { reports.push(report); },
+    });
+    await run("zero");
+    await run("invalid");
+    const mixed = await run("mixed");
+    expect(reports).toEqual([
+      [{ requested: 5, returned: 0, normalized_unique: 0, invalid_discarded: 0, duplicate_discarded: 0, selected: 0, reused: 0, unselected: 0, viable: 0, empty: 0, failed: 0, fetch_failed: 0, timeout: 0, extract_failed: 0, skipped_other: 0 }],
+      [{ requested: 5, returned: 4, normalized_unique: 1, invalid_discarded: 2, duplicate_discarded: 1, selected: 1, reused: 0, unselected: 0, viable: 0, empty: 0, failed: 1, fetch_failed: 0, timeout: 1, extract_failed: 0, skipped_other: 0 }],
+      [{ requested: 5, returned: 5, normalized_unique: 5, invalid_discarded: 0, duplicate_discarded: 0, selected: 4, reused: 0, unselected: 1, viable: 2, empty: 1, failed: 1, fetch_failed: 0, timeout: 1, extract_failed: 0, skipped_other: 0 }],
+    ]);
+    expect(mixed.evidence.flatMap((pack) => pack.sources.map((item) => item.sourceId))).toEqual(["viable", "spare"]);
+    await expect(new EvidenceAcquirer({ search: { search: async () => [source("safe", 1)] }, extractor: { extract: extractor } }).acquire({
+      requests: [request("safe", 1, 0)], knownSources: [], availableEvidenceSourceIds: [], budget: budget(), limits: {},
+      onYield: () => { throw new Error("diagnostic failure"); },
+    })).resolves.toMatchObject({ selectedSources: [source("safe", 1)] });
+  });
+
   it.each([
     { name: "selected source", searchesRemaining: 1, results: [source("selected", 1)], extractionFails: false, expected: ["searching", "extracting"] },
     { name: "empty search", searchesRemaining: 1, results: [], extractionFails: false, expected: ["searching"] },
@@ -67,6 +97,18 @@ describe("EvidenceAcquirer", () => {
       onStage: (stage) => { stages.push(stage); },
     });
     expect(stages).toEqual(expected);
+  });
+
+  it("counts known viable context as reuse, not another selected extraction", async () => {
+    const existing = source("context", 1);
+    const reports: EvidenceYieldRequest[][] = [];
+    let extractions = 0;
+    await new EvidenceAcquirer({ search: { search: async () => [existing, source("fresh", 2)] }, extractor: { extract: async (candidate) => { extractions++; return extractor(candidate); } } }).acquire({
+      requests: [request("follow-up", 1, 0)], knownSources: [existing], availableEvidenceSourceIds: [existing.sourceId],
+      budget: budget({ sourcesRemaining: 1 }), limits: {}, onYield: (report) => { reports.push(report); },
+    });
+    expect(extractions).toBe(1);
+    expect(reports[0][0]).toMatchObject({ normalized_unique: 2, selected: 1, reused: 1, unselected: 0, viable: 1 });
   });
 
   it("allocates rank layers fairly and performs one search per request", async () => {
@@ -158,7 +200,7 @@ describe("EvidenceAcquirer", () => {
     expect(result.admittedSources.map(({ sourceId }) => sourceId)).toEqual(["available"]);
   });
 
-  it("does not backfill a failed extraction and caps extraction concurrency at three", async () => {
+  it("cannot backfill a failed extraction when the turn source budget is exhausted, and caps extraction concurrency at three", async () => {
     let active = 0;
     let peak = 0;
     const result = await new EvidenceAcquirer({
@@ -183,6 +225,79 @@ describe("EvidenceAcquirer", () => {
     expect(result.selectedSources.map(({ sourceId }) => sourceId)).toEqual(["s1", "s2", "s3"]);
     expect(result.results[0].failure).toBeUndefined();
     expect(result.admittedSources.map(({ sourceId }) => sourceId)).toEqual(["s2", "s3"]);
+  });
+
+  it("tries both ranked spares when needed, charging empty attempts and stopping after a second viable page", async () => {
+    const attempted: string[] = [];
+    const yields: EvidenceYieldRequest[][] = [];
+    const sourceForRank = (rank: number) => ({ ...source(`s${rank}`, rank), sourceId: `src_${String(rank).repeat(43)}` as SearchResult["sourceId"] });
+    const result = await new EvidenceAcquirer({
+      search: { search: async () => [1, 2, 3, 4, 5].map(sourceForRank) },
+      extractor: { extract: async (candidate) => {
+        attempted.push(candidate.sourceId);
+        return candidate.rank === 1 || candidate.rank === 5
+          ? extractor(candidate)
+          : { sourceId: candidate.sourceId, status: "skipped" as const, reason: "empty_content" as const };
+      } },
+    }).acquire({
+      requests: [request(`problem_${"A".repeat(43)}`, 1, 0)], knownSources: [], availableEvidenceSourceIds: [],
+      budget: budget({ sourcesRemaining: 12 }), limits: { now: () => "2026-01-01T00:00:00.000Z" as never },
+      onYield: (report) => { yields.push(report); },
+    });
+    expect(attempted.slice(3)).toEqual([sourceForRank(4).sourceId, sourceForRank(5).sourceId]);
+    expect(result.selectedSources.map(({ sourceId }) => sourceId)).toEqual([1, 2, 3, 4, 5].map((rank) => sourceForRank(rank).sourceId));
+    expect(result.budget.sourcesRemaining).toBe(7);
+    expect(result.evidence[0].sources.map(({ sourceId }) => sourceId)).toEqual([sourceForRank(1).sourceId, sourceForRank(5).sourceId]);
+    expect(evidencePackV3Schema.safeParse(result.evidence[0]).success).toBe(true);
+    expect(yields[0][0]).toMatchObject({ selected: 5, viable: 2, empty: 3, unselected: 0 });
+  });
+
+  it("does not backfill when admitted evidence plus new extraction already meets the root floor", async () => {
+    const attempted: string[] = [];
+    const existing = source("context", 1);
+    const result = await new EvidenceAcquirer({
+      search: { search: async () => [1, 2, 3, 4, 5].map((rank) => source(`s${rank}`, rank)) },
+      extractor: { extract: async (candidate) => {
+        attempted.push(candidate.sourceId);
+        return candidate.sourceId === "s1" ? extractor(candidate) : { sourceId: candidate.sourceId, status: "skipped" as const, reason: "empty_content" as const };
+      } },
+    }).acquire({
+      requests: [request("follow-up", 1, 0)], knownSources: [existing], availableEvidenceSourceIds: [existing.sourceId],
+      budget: budget({ sourcesRemaining: 12 }), limits: {},
+    });
+    expect(attempted).toHaveLength(3);
+    expect(result.selectedSources.map(({ sourceId }) => sourceId)).toEqual(["s1", "s2", "s3"]);
+    expect(result.budget.sourcesRemaining).toBe(9);
+  });
+
+  it("keeps rank-layer fairness and the twelve-attempt global ceiling across three sparse requests", async () => {
+    const result = await new EvidenceAcquirer({
+      search: { search: async (query) => [1, 2, 3, 4, 5].map((rank) => source(`${query}-${rank}`, rank)) },
+      extractor: { extract: async (candidate) => ({ sourceId: candidate.sourceId, status: "skipped" as const, reason: "empty_content" as const }) },
+    }).acquire({
+      requests: [request("a", 1, 0), request("b", 2, 1), request("c", 3, 2)],
+      knownSources: [], availableEvidenceSourceIds: [], budget: budget({ sourcesRemaining: 12 }), limits: {},
+    });
+    expect(result.selectedSources.map(({ sourceId }) => sourceId)).toEqual([
+      "a-1", "b-1", "c-1", "a-2", "b-2", "c-2", "a-3", "b-3", "c-3", "a-4", "b-4", "c-4",
+    ]);
+    expect(result.budget.sourcesRemaining).toBe(0);
+    expect(result.evidence).toEqual([]);
+  });
+
+  it("never exceeds five charged attempts per request when all candidates are empty", async () => {
+    const result = await new EvidenceAcquirer({
+      search: { search: async (query) => [1, 2, 3, 4, 5].map((rank) => source(`${query}-${rank}`, rank)) },
+      extractor: { extract: async (candidate) => ({ sourceId: candidate.sourceId, status: "skipped" as const, reason: "empty_content" as const }) },
+    }).acquire({
+      requests: [request("a", 1, 0), request("b", 2, 1)], knownSources: [], availableEvidenceSourceIds: [],
+      budget: budget({ sourcesRemaining: 12 }), limits: {},
+    });
+    expect(result.results.map(({ ownedConsumedSources }) => ownedConsumedSources.length)).toEqual([5, 5]);
+    expect(result.selectedSources.map(({ sourceId }) => sourceId)).toEqual([
+      "a-1", "b-1", "a-2", "b-2", "a-3", "b-3", "a-4", "b-4", "a-5", "b-5",
+    ]);
+    expect(result.budget.sourcesRemaining).toBe(2);
   });
 
   it("keeps allocation and evidence order stable when extraction completes out of order", async () => {

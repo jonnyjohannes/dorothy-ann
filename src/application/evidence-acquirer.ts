@@ -42,6 +42,24 @@ export interface ResearchLimits {
 
 export type EvidenceAcquisitionStage = "searching" | "extracting";
 
+export interface EvidenceYieldRequest {
+  requested: number;
+  returned: number;
+  normalized_unique: number;
+  invalid_discarded: number;
+  duplicate_discarded: number;
+  selected: number;
+  reused: number;
+  unselected: number;
+  viable: number;
+  empty: number;
+  failed: number;
+  fetch_failed: number;
+  timeout: number;
+  extract_failed: number;
+  skipped_other: number;
+}
+
 export interface EvidenceAcquisitionInput {
   requests: EvidenceRequest[];
   knownSources: CanonicalSource[];
@@ -49,6 +67,8 @@ export interface EvidenceAcquisitionInput {
   budget: ResearchBudget;
   limits: ResearchLimits;
   onStage?: (stage: EvidenceAcquisitionStage) => void | Promise<void>;
+  /** Optional aggregate-only observer; errors cannot affect acquisition. */
+  onYield?: (requests: EvidenceYieldRequest[]) => void;
 }
 
 export type EvidenceRequestFailure =
@@ -81,20 +101,20 @@ export interface EvidenceAcquirerDependencies {
 
 const DEFAULT_LIMITS = {
   maxCandidatesPerSearch: 5,
-  maxSourcesPerRequest: 3,
+  maxSourcesPerRequest: 5,
   extractionConcurrency: 3,
   extractionMaxCharacters: 20_000,
   extractionTimeoutMs: 8_000,
 };
 
-const fixtureSource = (request: EvidenceRequest): SearchResult => ({
+const fixtureSource = (request: EvidenceRequest, rank: number): SearchResult => ({
   kind: "link",
-  sourceId: `fixture-${request.problemId}` as SearchResult["sourceId"],
-  rank: 1,
+  sourceId: `fixture-${request.problemId}-${rank}` as SearchResult["sourceId"],
+  rank,
   title: "Fixture evidence",
-  url: "https://example.com/fixture",
-  canonicalUrl: "https://example.com/fixture",
-  displayUrl: "example.com/fixture",
+  url: `https://example.com/fixture-${rank}`,
+  canonicalUrl: `https://example.com/fixture-${rank}`,
+  displayUrl: `example.com/fixture-${rank}`,
   snippet: "Fixture evidence for local development.",
 });
 
@@ -141,34 +161,38 @@ function canonicalizeSearchResults(
   raw: unknown,
   maxResults: number,
   knownByUrl: ReadonlyMap<string, CanonicalSource>,
+  yieldCounts?: EvidenceYieldRequest,
 ): SearchResult[] {
   if (!Array.isArray(raw)) throw new Error("invalid_response");
   const seen = new Set<string>();
   const normalized: SearchResult[] = [];
   for (const entry of raw) {
-    if (normalized.length >= maxResults || typeof entry !== "object" || entry === null) continue;
+    if (normalized.length >= maxResults) continue;
+    if (typeof entry !== "object" || entry === null) { if (yieldCounts) yieldCounts.invalid_discarded++; continue; }
     const candidate = entry as Partial<SearchResult>;
-    if (candidate.kind !== undefined && candidate.kind !== "link") continue;
-    if (typeof candidate.title !== "string" || typeof candidate.url !== "string" || typeof candidate.canonicalUrl !== "string") continue;
+    if (candidate.kind !== undefined && candidate.kind !== "link") { if (yieldCounts) yieldCounts.invalid_discarded++; continue; }
+    if (typeof candidate.title !== "string" || typeof candidate.url !== "string" || typeof candidate.canonicalUrl !== "string") { if (yieldCounts) yieldCounts.invalid_discarded++; continue; }
     const key = canonicalKey({ url: candidate.url, canonicalUrl: candidate.canonicalUrl });
-    if (!key || seen.has(key)) continue;
+    if (!key) { if (yieldCounts) yieldCounts.invalid_discarded++; continue; }
+    if (seen.has(key)) { if (yieldCounts) yieldCounts.duplicate_discarded++; continue; }
     seen.add(key);
     const known = knownByUrl.get(key);
     const sourceId = known?.sourceId ?? candidate.sourceId;
-    if (typeof sourceId !== "string") continue;
+    if (typeof sourceId !== "string") { if (yieldCounts) yieldCounts.invalid_discarded++; continue; }
     const rank = typeof candidate.rank === "number" && Number.isSafeInteger(candidate.rank) && candidate.rank > 0
       ? candidate.rank
       : normalized.length + 1;
-    if ([...key].length > 2_048 || typeof candidate.displayUrl !== "string") continue;
+    if ([...key].length > 2_048 || typeof candidate.displayUrl !== "string") { if (yieldCounts) yieldCounts.invalid_discarded++; continue; }
     const title = [...candidate.title].slice(0, 500).join("");
     const displayUrl = [...candidate.displayUrl].slice(0, 512).join("");
-    if (!title || !displayUrl) continue;
+    if (!title || !displayUrl) { if (yieldCounts) yieldCounts.invalid_discarded++; continue; }
     const snippet = typeof candidate.snippet === "string" ? [...candidate.snippet].slice(0, 1_000).join("") : undefined;
     const publishedAt = typeof candidate.publishedAt === "string" && Number.isFinite(Date.parse(candidate.publishedAt))
       ? new Date(candidate.publishedAt).toISOString() as SearchResult["publishedAt"]
       : undefined;
     normalized.push({ kind: "link", sourceId: sourceId as SearchResult["sourceId"], title, url: key, canonicalUrl: key, displayUrl, snippet, publishedAt, rank });
   }
+  if (yieldCounts) yieldCounts.normalized_unique = normalized.length;
   return normalized.sort((left, right) => left.rank - right.rank || left.canonicalUrl.localeCompare(right.canonicalUrl));
 }
 
@@ -202,7 +226,8 @@ export class EvidenceAcquirer {
   async acquire(input: EvidenceAcquisitionInput): Promise<EvidenceAcquisitionResult> {
     const limits = { ...DEFAULT_LIMITS, ...input.limits };
     const maxCandidates = Math.max(0, Math.min(5, input.limits.maxCandidatesPerSearch ?? input.limits.maxSearchResults ?? limits.maxCandidatesPerSearch));
-    const maxSources = Math.max(0, Math.min(3, input.limits.maxSourcesPerRequest ?? limits.maxSourcesPerRequest));
+    const maxSources = Math.max(0, Math.min(5, input.limits.maxSourcesPerRequest ?? limits.maxSourcesPerRequest));
+    const initialSourcesPerRequest = Math.min(3, maxSources);
     const extractionWorkers = Math.max(1, Math.min(3, input.limits.extractionConcurrency ?? input.limits.maxConcurrentExtractions ?? limits.extractionConcurrency));
     const requests = [...input.requests].sort(requestOrder).slice(0, 3);
     const knownByUrl = new Map<string, CanonicalSource>();
@@ -213,6 +238,11 @@ export class EvidenceAcquirer {
 
     const searchCapacity = Math.max(0, Math.min(input.budget.searchesRemaining, requests.length));
     type SearchedRequest = { request: EvidenceRequest; candidates: SearchResult[]; failure?: EvidenceRequestFailure };
+    const yields: EvidenceYieldRequest[] | undefined = input.onYield ? requests.map(() => ({
+      requested: 0, returned: 0, normalized_unique: 0, invalid_discarded: 0, duplicate_discarded: 0,
+      selected: 0, reused: 0, unselected: 0, viable: 0, empty: 0, failed: 0,
+      fetch_failed: 0, timeout: 0, extract_failed: 0, skipped_other: 0,
+    })) : undefined;
     const searched = new Array<SearchedRequest>(requests.length);
     let nextSearch = 0;
     const searchWorker = async (): Promise<void> => {
@@ -226,12 +256,14 @@ export class EvidenceAcquirer {
         }
         try {
           const options: SearchOptions = { maxResults: maxCandidates };
+          if (yields) yields[index].requested = maxCandidates;
           const raw = this.dependencies.search
             ? await this.dependencies.search.search(request.query, options)
             : this.dependencies.fixture
-              ? [fixtureSource(request)]
+              ? [fixtureSource(request, 1), fixtureSource(request, 2)]
               : (() => { throw new Error("search_unavailable"); })();
-          searched[index] = { request, candidates: canonicalizeSearchResults(raw, maxCandidates, knownByUrl) };
+          if (yields && Array.isArray(raw)) yields[index].returned = Math.min(raw.length, 5);
+          searched[index] = { request, candidates: canonicalizeSearchResults(raw, maxCandidates, knownByUrl, yields?.[index]) };
         } catch (error) {
           searched[index] = { request, candidates: [], failure: failureFor(error) };
         }
@@ -249,8 +281,8 @@ export class EvidenceAcquirer {
     const associatedForRequest = new Map<string, Set<string>>();
     const cursors = new Map<string, number>();
     const ownedCounts = new Map<string, number>();
-    const maxPerRequest = maxSources;
-    const sourceCapacity = Math.max(0, input.budget.sourcesRemaining);
+    const maxPerRequest = initialSourcesPerRequest;
+    const sourceCapacity = Math.max(0, Math.min(12, input.budget.sourcesRemaining));
 
     for (const result of searched) {
       selectedForRequest.set(result.request.problemId, []);
@@ -312,44 +344,80 @@ export class EvidenceAcquirer {
       }
     }
 
-    const selected = [...selectedByKey.values()];
     const extractionByKey = new Map<string, ExtractionOutcome>();
-    const extractionOrder = new Map<string, number>(selected.map((source, index) => [canonicalKey(source)!, index]));
-    const extractionConcurrency = Math.max(1, Math.min(extractionWorkers, 3, selected.length || 1));
-    let next = 0;
-    const worker = async (): Promise<void> => {
-      while (true) {
-        const index = next++;
-        if (index >= selected.length) return;
-        const source = selected[index];
-        let outcome: ExtractionOutcome;
-        try {
-          outcome = this.dependencies.extractor
-            ? await this.dependencies.extractor.extract(source, extractionLimits(limits))
-            : this.dependencies.fixture
-              ? fixtureExtraction(source)
-              : { sourceId: source.sourceId, status: "failed", code: "extract_failed", retryable: true };
-          if (outcome.sourceId !== source.sourceId) {
-            outcome = { sourceId: source.sourceId, status: "failed", code: "extract_failed", retryable: false };
-          }
-        } catch {
-          outcome = { sourceId: source.sourceId, status: "failed", code: "extract_failed", retryable: true };
-        }
-        extractionByKey.set(canonicalKey(source)!, outcome);
-      }
-    };
-    if (selected.length > 0) await input.onStage?.("extracting");
-    await Promise.all(Array.from({ length: extractionConcurrency }, () => worker()));
-
-    const extractions = selected
-      .sort((left, right) => (extractionOrder.get(canonicalKey(left)!) ?? 0) - (extractionOrder.get(canonicalKey(right)!) ?? 0))
-      .map((source) => extractionByKey.get(canonicalKey(source)!)!)
-      .filter((outcome): outcome is ExtractionOutcome => Boolean(outcome));
     const viableByKey = new Map<string, { source: SearchResult; page: NonNullable<ExtractedViablePage> }>();
-    for (const source of selected) {
-      const outcome = extractionByKey.get(canonicalKey(source)!);
-      if (outcome?.status === "viable") viableByKey.set(canonicalKey(source)!, { source, page: outcome.page });
+    const viableIds = new Set(input.availableEvidenceSourceIds);
+    const maxEvidenceCharacters = extractionLimits(input.limits).maxCharacters;
+    const extractBatch = async (batch: SearchResult[]): Promise<void> => {
+      let next = 0;
+      const worker = async (): Promise<void> => {
+        while (true) {
+          const source = batch[next++];
+          if (!source) return;
+          let outcome: ExtractionOutcome;
+          try {
+            outcome = this.dependencies.extractor
+              ? await this.dependencies.extractor.extract(source, extractionLimits(limits))
+              : this.dependencies.fixture
+                ? fixtureExtraction(source)
+                : { sourceId: source.sourceId, status: "failed", code: "extract_failed", retryable: true };
+            if (outcome.sourceId !== source.sourceId) {
+              outcome = { sourceId: source.sourceId, status: "failed", code: "extract_failed", retryable: false };
+            }
+          } catch {
+            outcome = { sourceId: source.sourceId, status: "failed", code: "extract_failed", retryable: true };
+          }
+          const key = canonicalKey(source)!;
+          extractionByKey.set(key, outcome);
+          if (outcome.status === "viable" && normalizedPageText(outcome.page.text, maxEvidenceCharacters).text.trim()) {
+            viableByKey.set(key, { source, page: outcome.page });
+            viableIds.add(source.sourceId);
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(extractionWorkers, batch.length) }, () => worker()));
+    };
+    if (selectedByKey.size > 0) await input.onStage?.("extracting");
+    await extractBatch([...selectedByKey.values()]);
+
+    // The first three ownership opportunities retain rank-layer fairness. Only
+    // sparse root evidence earns charged, one-at-a-time attempts on remaining
+    // ranked candidates; each extraction is observed before allocating another.
+    if (maxSources > initialSourcesPerRequest) {
+      let madeBackfillProgress = true;
+      while (madeBackfillProgress && viableIds.size < 2 && selectedByKey.size < sourceCapacity) {
+        madeBackfillProgress = false;
+        for (const result of searched) {
+          if (viableIds.size >= 2 || selectedByKey.size >= sourceCapacity) break;
+          const requestKey = result.request.problemId;
+          if ((ownedCounts.get(requestKey) ?? 0) >= maxSources) continue;
+          let cursor = cursors.get(requestKey) ?? 0;
+          while (cursor < result.candidates.length) {
+            const candidate = result.candidates[cursor++];
+            const key = canonicalKey(candidate);
+            if (!key) continue;
+            const known = knownByUrl.get(key);
+            const source = known ? sourceAsSearchResult(known, candidate.rank) : candidate;
+            const associated = associatedForRequest.get(requestKey)!;
+            if (available.has(source.sourceId) || selectedByKey.has(key)) {
+              associated.add(key);
+              continue;
+            }
+            selectedByKey.set(key, source);
+            selectedForRequest.get(requestKey)!.push(source);
+            associated.add(key);
+            ownedCounts.set(requestKey, (ownedCounts.get(requestKey) ?? 0) + 1);
+            madeBackfillProgress = true;
+            await extractBatch([source]);
+            break;
+          }
+          cursors.set(requestKey, cursor);
+        }
+      }
     }
+
+    const selected = [...selectedByKey.values()];
+    const extractions = selected.map((source) => extractionByKey.get(canonicalKey(source)!)!);
 
     const results: EvidenceRequestResult[] = searched.map((searchedRequest) => {
       const requestKey = searchedRequest.request.problemId;
@@ -372,7 +440,6 @@ export class EvidenceAcquirer {
     });
 
     const now = input.limits.now ?? (() => "1970-01-01T00:00:00.000Z" as IsoTimestamp);
-    const maxEvidenceCharacters = extractionLimits(input.limits).maxCharacters;
     const evidence: EvidencePack[] = [];
     for (const result of results) {
       const sources = result.evidenceSourceIds.flatMap((sourceId) => {
@@ -381,7 +448,7 @@ export class EvidenceAcquirer {
         const viable = viableByKey.get(canonicalKey(source)!);
         if (!viable) return [];
         const normalized = normalizedPageText(viable.page.text, maxEvidenceCharacters);
-        if (!normalized.text) return [];
+        if (!normalized.text.trim()) return [];
         return [{ sourceId, page: {
           ...normalized,
           extractedAt: viable.page.extractedAt,
@@ -394,6 +461,35 @@ export class EvidenceAcquirer {
         sources,
         createdAt: now(),
       });
+    }
+
+    // Count actual admitted nonempty passages, not successful HTTP/extractor calls.
+    // Per-request selected attempts belong to one owner; shared/context matches
+    // are reuse, not additional extraction or unselected backfill candidates.
+    if (yields) {
+      try {
+        searched.forEach((searchedRequest, index) => {
+          const counts = yields[index];
+          const owned = selectedForRequest.get(searchedRequest.request.problemId) ?? [];
+          counts.selected = owned.length;
+          for (const source of owned) {
+            const outcome = extractionByKey.get(canonicalKey(source)!);
+            if (outcome?.status === "failed") {
+              counts.failed++;
+              if (outcome.code === "fetch_failed" || outcome.code === "timeout" || outcome.code === "extract_failed") counts[outcome.code]++;
+            } else if (outcome?.status === "skipped" && outcome.reason === "empty_content") counts.empty++;
+            else if (outcome?.status === "viable" && !viableByKey.has(canonicalKey(source)!)) counts.empty++;
+            else if (outcome?.status === "viable") counts.viable++;
+            else counts.skipped_other++;
+          }
+          counts.reused = searchedRequest.candidates.filter((candidate) => {
+            const key = canonicalKey(candidate)!;
+            return !owned.some((source) => canonicalKey(source) === key) && associatedForRequest.get(searchedRequest.request.problemId)?.has(key);
+          }).length;
+          counts.unselected = Math.max(0, searchedRequest.candidates.length - counts.selected - counts.reused);
+        });
+        input.onYield?.(yields);
+      } catch { /* Diagnostics never affect acquisition. */ }
     }
 
     const admittedByKey = new Map<string, CanonicalSource>();

@@ -33,12 +33,12 @@ describe("research timing", () => {
       terminalStatus: "completed",
       answerPosition: "follow_up",
       context: { turns: 1, known_sources: 2, evidence_packs: 1, evidence_sources: 1 },
-      resolution: { status: "sufficient", stopReason: "sufficient", ledger: { gaps: [], searchesUsed: 1, sourcesConsumed: 1, assessmentsUsed: 1 } },
+      resolution: { status: "sufficient", stopReason: "sufficient", ledger: { gaps: [], searchesUsed: 1, sourcesConsumed: 1, assessmentsUsed: 1 }, knowledge: { problemId: "root" as never, findings: [], evidence: [], unresolvedGapIds: [] } },
     });
 
     expect(record).toEqual({
       event: "research_timing",
-      schema_version: 1,
+      schema_version: 2,
       terminal_status: "completed",
       answer_position: "follow_up",
       assessment_failure_code: "provider_rate_limited",
@@ -46,6 +46,7 @@ describe("research timing", () => {
       assessment_directive: "search",
       assessment_directives: ["search"],
       context: { turns: 1, known_sources: 2, evidence_packs: 1, evidence_sources: 1 },
+      evidence_yield: { requests: [], distinct_viable_root_ids: 0 },
       resolution_status: "sufficient",
       stop_reason: "sufficient",
       execution_ms: 50,
@@ -58,6 +59,32 @@ describe("research timing", () => {
         synthesis: { calls: 1, succeeded: 1, failed: 0, cumulative_ms: 17, max_ms: 17, first_output_ms: 7 },
       },
     });
+  });
+
+  it("counts distinct nonempty final root IDs across reused context snapshots separately from citations and outcome", () => {
+    const records: ResearchTimingRecord[] = [];
+    const collector = new ResearchTimingCollector((record) => { records.push(record); });
+    const snapshot = (sourceId: string, text: string) => ({ sourceId: sourceId as never, page: { text, extractedAt: "2026-01-01T00:00:00.000Z" as never, characterCount: text.length } });
+    collector.markEvidenceYield([{ requested: 5, returned: 2, normalized_unique: 2, invalid_discarded: 0, duplicate_discarded: 0, selected: 1, reused: 1, unselected: 0, viable: 1, empty: 0, failed: 0, fetch_failed: 0, timeout: 0, extract_failed: 0, skipped_other: 0 }]);
+    collector.emit({ terminalStatus: "completed", resolution: {
+      status: "best_effort", stopReason: "no_new_knowledge", ledger: { gaps: [], searchesUsed: 1, sourcesConsumed: 1, assessmentsUsed: 1 },
+      knowledge: { problemId: "root" as never, findings: [], unresolvedGapIds: [], evidence: [
+        { problemId: "root" as never, query: "private query", createdAt: "2026-01-01T00:00:00.000Z" as never, requestOrder: 0, sources: [snapshot("same", "text"), snapshot("same", "text")] },
+        { problemId: "root" as never, query: "private query", createdAt: "2026-01-01T00:00:00.000Z" as never, requestOrder: 1, sources: [snapshot("same", "text"), snapshot("empty", "")] },
+      ] },
+    } });
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ schema_version: 2, resolution_status: "best_effort", evidence_yield: { distinct_viable_root_ids: 1, requests: [{ reused: 1, viable: 1 }] } });
+    expect(JSON.stringify(records)).not.toContain("private query");
+    expect(JSON.stringify(records)).not.toContain("same");
+  });
+
+  it("reports five charged attempts and the twelve-attempt turn ceiling without truncation", () => {
+    const records: ResearchTimingRecord[] = [];
+    const collector = new ResearchTimingCollector((record) => { records.push(record); });
+    collector.markEvidenceYield([{ requested: 5, returned: 5, normalized_unique: 5, invalid_discarded: 0, duplicate_discarded: 0, selected: 5, reused: 0, unselected: 0, viable: 0, empty: 5, failed: 0, fetch_failed: 0, timeout: 0, extract_failed: 0, skipped_other: 0 }]);
+    collector.emit({ terminalStatus: "failed", ledger: { gaps: [], searchesUsed: 3, sourcesConsumed: 12, assessmentsUsed: 2 } });
+    expect(records[0]).toMatchObject({ counts: { searches_used: 3, sources_consumed: 12 }, evidence_yield: { requests: [{ selected: 5, empty: 5 }] } });
   });
 
   it("records failures without retaining errors or allowing a throwing sink to alter behavior", async () => {

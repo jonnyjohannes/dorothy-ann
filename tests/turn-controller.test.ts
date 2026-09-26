@@ -48,6 +48,32 @@ describe("TurnController", () => {
     expect(await controller.run(input())).toMatchObject({ ok: false, error: "turn_error", message: "Turn execution returned an invalid result." });
   });
 
+  it("commits a one-source insufficient research terminal with its evidence and retryable failure", async () => {
+    const sourceId = `src_${"A".repeat(43)}` as never;
+    const problemId = `problem_${"B".repeat(43)}` as never;
+    const sourceRecord = { kind: "link" as const, sourceId, title: "Report", url: "https://example.com/report", canonicalUrl: "https://example.com/report", displayUrl: "example.com" };
+    const resolution = {
+      status: "insufficient" as const, stopReason: "no_new_knowledge" as const,
+      knowledge: { problemId, findings: [], unresolvedGapIds: [], evidence: [{ problemId, requestOrder: 0, query: "hello", createdAt: at, sources: [{ sourceId, page: { text: "One viable report.", extractedAt: at, characterCount: 18 } }] }] },
+      ledger: { gaps: [], assessmentsUsed: 1, searchesUsed: 1, sourcesConsumed: 3 }, tasks: [],
+    };
+    const events: TurnGatewayEvent[] = [
+      { executionId, turnId, sequence: 1, type: "accepted", kind: "research" },
+      { executionId, turnId, sequence: 2, type: "terminal", terminal: { kind: "research", outcome: {
+        status: "failed", failure: { kind: "insufficient_evidence", message: "Not enough usable evidence.", retryable: true },
+        researchState: { kind: "resolution", resolution },
+        execution: { kind: "recorded", assessmentModelRef: "assessment", synthesisModelRef: "synthesis", searchRef: "search" },
+      }, sourceRecords: [sourceRecord] } },
+    ];
+    let committed: Parameters<ThreadStore["commitTerminalTurn"]>[0] | undefined;
+    const store = storeWith(async (value) => { committed = value; return { ok: true, value: { disposition: "committed", record: record("r1") } }; });
+    const controller = new TurnController(gatewayFor(events), store);
+    const result = await controller.run({ ...input(), kind: "research", context: { threadId, turns: [], knownSources: [], availableEvidence: [] }, answerPosition: "initial" });
+    expect(result).toMatchObject({ ok: true, turn: { status: "failed", failure: { kind: "insufficient_evidence", retryable: true }, researchState: { kind: "resolution", resolution: { status: "insufficient" } } } });
+    expect(committed?.sourceRecords).toEqual([sourceRecord]);
+    expect(committed?.turn).toMatchObject({ status: "failed", kind: "research" });
+  });
+
   it("persists a controller-created cancellation and owns one active run", async () => {
     let committed: unknown;
     const store = storeWith(async (commit) => { committed = commit; return { ok: true, value: { disposition: "committed", record: record("r1") } }; });

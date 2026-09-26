@@ -44,7 +44,14 @@ class FixtureSearchProvider implements SearchProvider {
     const sourceId = await this.identities.sourceId(canonicalUrl);
     if (kind === "image") return [{ kind, sourceId, rank: 1, title: `Fixture image for ${query}`, url: canonicalUrl, canonicalUrl, imageUrl: canonicalUrl, sourcePageUrl: "https://example.com/fixture", displayUrl: "example.com", thumbnailUrl: canonicalUrl }];
     if (kind === "video") return [{ kind, sourceId, rank: 1, title: `Fixture video for ${query}`, url: canonicalUrl, canonicalUrl, videoUrl: canonicalUrl, sourcePageUrl: "https://example.com/fixture", displayUrl: "example.com", thumbnailUrl: "https://example.com/fixture.jpg", durationSeconds: 30 }];
-    return [{ kind, sourceId, rank: 1, title: `Fixture result for ${query}`, url: canonicalUrl, canonicalUrl, displayUrl: "example.com/fixture", snippet: "A safe fixture result for local development." }];
+    const secondUrl = "https://example.com/fixture-second";
+    const secondId = await this.identities.sourceId(secondUrl);
+    // Explicit /link turns keep their single-result fixture; research omits
+    // resultKind and receives two distinct extracted candidates.
+    return [
+      { kind, sourceId, rank: 1, title: `Fixture result for ${query}`, url: canonicalUrl, canonicalUrl, displayUrl: "example.com/fixture", snippet: "A safe fixture result for local development." },
+      { kind, sourceId: secondId, rank: 2, title: `Another fixture result for ${query}`, url: secondUrl, canonicalUrl: secondUrl, displayUrl: "example.com/fixture-second", snippet: "A second fixture source for local development." },
+    ].slice(0, options.resultKind === "link" ? 1 : options.maxResults);
   }
 }
 
@@ -113,7 +120,8 @@ function createExecutor(
           identities,
           assessor,
           acquirer,
-          acquisitionLimits: { maxCandidatesPerSearch: config.MAX_SEARCH_RESULTS, maxSourcesPerRequest: 3, maxConcurrentSearches: config.MAX_CONCURRENT_SEARCHES, maxConcurrentExtractions: config.MAX_CONCURRENT_EXTRACTIONS, extractionMaxCharacters: config.MAX_EXTRACTED_CHARS_PER_PAGE, extractionTimeoutMs: config.EXTRACTION_TIMEOUT_MS },
+          acquisitionLimits: { maxCandidatesPerSearch: config.MAX_SEARCH_RESULTS, maxSourcesPerRequest: 5, maxConcurrentSearches: config.MAX_CONCURRENT_SEARCHES, maxConcurrentExtractions: config.MAX_CONCURRENT_EXTRACTIONS, extractionMaxCharacters: config.MAX_EXTRACTED_CHARS_PER_PAGE, extractionTimeoutMs: config.EXTRACTION_TIMEOUT_MS },
+          ...(timing ? { onEvidenceYield: (requests: Parameters<ResearchTimingCollector["markEvidenceYield"]>[0]) => timing.markEvidenceYield(requests) } : {}),
           assess: async (assessment) => {
             try {
               const result = await timedLlm.assessResearch({ systemPrompt: prompts.assessor, problem: assessment.problem, knowledge: assessment.knowledge, ledger: assessment.ledger, budget: assessment.budget, allowedSupportRefs: assessment.allowedSupportRefs, maxOutputTokens: config.MAX_ASSESSMENT_OUTPUT_TOKENS, signal: assessment.signal });
@@ -139,7 +147,7 @@ function createExecutor(
         const context = request.context;
         const problemId = await identities.problemId({ turnId: request.turnId, question: request.question, purpose: "answer the user question", successCriterion: "provide a supported answer" });
         const problem: ResearchProblem = { id: problemId, question: request.question, purpose: "answer the user question", successCriterion: "provide a supported answer", context, depth: 0 };
-        const resolveRoot = () => resolver.resolve({ turnId: request.turnId, problem, knowledge: emptyKnowledge(problemId), ledger: { gaps: [], assessmentsUsed: 0, searchesUsed: 0, sourcesConsumed: 0 }, budget: { searchesRemaining: 3, sourcesRemaining: 9, assessmentsRemaining: 8, depthRemaining: 2 }, signal, onPhase: emitResearchPhase });
+        const resolveRoot = () => resolver.resolve({ turnId: request.turnId, problem, knowledge: emptyKnowledge(problemId), ledger: { gaps: [], assessmentsUsed: 0, searchesUsed: 0, sourcesConsumed: 0 }, budget: { searchesRemaining: 3, sourcesRemaining: 12, assessmentsRemaining: 8, depthRemaining: 2 }, signal, onPhase: emitResearchPhase });
         const root = timing ? await timing.measureResolution(resolveRoot) : await resolveRoot();
         timingLedger = root.kind === "resolution" ? root.resolution.ledger : root.checkpoint.ledger;
         if (root.kind === "resolution") timingResolution = root.resolution;
@@ -210,7 +218,10 @@ export function createApp({ config, systemPrompts, threadStoreV3: injectedStore,
         apiKey: config.ANTHROPIC_API_KEY,
         assessmentModel: config.ANTHROPIC_ASSESSMENT_MODEL,
         synthesisModel: config.ANTHROPIC_SYNTHESIS_MODEL,
-        onDiagnostic: (record) => logger.debug(record.event, { stage: record.stage, reason: record.reason }),
+        assessmentRetryMaxOutputTokens: config.MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS,
+        onDiagnostic: (record) => logger.debug(record.event, record.event === "assessment_output_rejected"
+          ? { stage: record.stage, reason: record.reason, format: record.format, stop_reason: record.stop_reason, output_tokens: record.output_tokens, text_chars: record.text_chars }
+          : { stage: record.stage, reason: record.reason }),
       })
       : new UnavailableLlmProvider();
   const timingSink = researchTimingSink ?? (config.RESEARCH_TIMING_LOGS || logger.enabled("debug") ? loggerResearchTimingSink(logger, config.RESEARCH_TIMING_LOGS && !logger.enabled("debug") ? "info" : "debug") : undefined);
@@ -236,7 +247,7 @@ export function createApp({ config, systemPrompts, threadStoreV3: injectedStore,
   });
   const statusRoutes = new Hono();
   statusRoutes.get("/", (context) => context.json({ fixtureMode: config.DOROTHY_FIXTURE_MODE, provider: searchReady && llmReady, search: searchReady, llm: llmReady, storage: Boolean(injectedStore) }));
-  const app = createPortableApp({ executor, maxRequestBytes: config.MAX_TURN_REQUEST_BYTES, maxResults: config.MAX_SEARCH_RESULTS, researchLimits: { maxCandidatesPerSearch: 5, maxSourcesPerRequest: 3, maxConcurrentSearches: config.MAX_CONCURRENT_SEARCHES, maxConcurrentExtractions: config.MAX_CONCURRENT_EXTRACTIONS, extractionMaxCharacters: config.MAX_EXTRACTED_CHARS_PER_PAGE, extractionTimeoutMs: config.EXTRACTION_TIMEOUT_MS }, authenticate, onDiagnostic: (record) => logger.debug(record.event, record), routes: { auth: authRoutes, status: statusRoutes, storage: injectedStore ? createThreadStorageRoutes(injectedStore) : undefined } });
+  const app = createPortableApp({ executor, maxRequestBytes: config.MAX_TURN_REQUEST_BYTES, maxResults: config.MAX_SEARCH_RESULTS, researchLimits: { maxCandidatesPerSearch: 5, maxSourcesPerRequest: 5, maxConcurrentSearches: config.MAX_CONCURRENT_SEARCHES, maxConcurrentExtractions: config.MAX_CONCURRENT_EXTRACTIONS, extractionMaxCharacters: config.MAX_EXTRACTED_CHARS_PER_PAGE, extractionTimeoutMs: config.EXTRACTION_TIMEOUT_MS }, authenticate, onDiagnostic: (record) => logger.debug(record.event, record), routes: { auth: authRoutes, status: statusRoutes, storage: injectedStore ? createThreadStorageRoutes(injectedStore) : undefined } });
   app.get("/api/health", (context) => context.json({ ok: true, fixtureMode: config.DOROTHY_FIXTURE_MODE }));
   return app;
 }

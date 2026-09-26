@@ -11,6 +11,7 @@ import type {
 } from "../domain/types.js";
 import type { AnswerSynthesizer } from "./answer-synthesizer.js";
 import { collectResearchStateSourceIds } from "./commit-terminal-turn.js";
+import { enforceResearchSynthesisFloor } from "./research-synthesis-policy.js";
 
 export type ResearchResolutionResult = (ResearchResolution & {
   /** Canonical metadata admitted during acquisition, used for reference closure. */
@@ -171,7 +172,7 @@ export async function executeResearchTurn(input: ResearchTurnExecutionInput): Pr
         sources: sourceClosure(resolution.checkpoint, input.context),
       };
     }
-    resolution = { ...resolution, sources: resolution.sources?.map(canonicalSource) };
+    resolution = enforceResearchSynthesisFloor({ ...resolution, sources: resolution.sources?.map(canonicalSource) });
     if (input.signal?.aborted) {
       const state = resolution.status === "sufficient" || resolution.status === "best_effort"
         ? { kind: "resolution" as const, resolution }

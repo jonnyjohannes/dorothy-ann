@@ -23,6 +23,7 @@ describe("portable v3 Hono API", () => {
     expect(body).toContain("event: turn.accepted");
     expect(body).toContain("event: turn.source_delta");
     expect(body).toContain("event: turn.terminal");
+    expect(body).not.toContain("fixture-second");
   });
   it("streams fixture research phases at real operation boundaries", async () => {
     const response = await app.request("http://localhost/api/turn/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ executionId, turnId, kind: "research", question: "what happened?", answerPosition: "initial", context: { threadId: "00000000-0000-4000-8000-000000000003", turns: [], knownSources: [], availableEvidence: [] } }) });
@@ -68,11 +69,12 @@ describe("portable v3 Hono API", () => {
     const response = await timedApp.request("http://localhost/api/turn/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ executionId, turnId, kind: "research", question: "SENTINEL_USER_QUESTION", answerPosition: "initial", context: { threadId: "00000000-0000-4000-8000-000000000003", turns: [], knownSources: [], availableEvidence: [] } }) });
     const body = await response.text();
     expect(records).toHaveLength(1);
-    expect(records[0]).toMatchObject({ event: "research_timing", schema_version: 1, terminal_status: "completed", counts: { searches_used: 1, sources_consumed: 1, assessments_used: 1 } });
+    expect(records[0]).toMatchObject({ event: "research_timing", schema_version: 2, terminal_status: "completed", counts: { searches_used: 1, sources_consumed: 2, assessments_used: 1 }, evidence_yield: { distinct_viable_root_ids: 2, requests: [{ requested: 5, returned: 2, normalized_unique: 2, selected: 2, viable: 2 }] } });
     const serialized = JSON.stringify(records[0]);
     for (const secret of ["SENTINEL_USER_QUESTION", "SENTINEL_ASSESSOR_PROMPT", "SENTINEL_SYNTHESIZER_PROMPT", executionId, turnId, "example.com"]) expect(serialized).not.toContain(secret);
     expect(body).not.toContain("research_timing");
     expect(body).not.toContain("execution_ms");
+    expect(body).not.toContain("evidence_yield");
   });
   it("keeps timing console output disabled by default", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);

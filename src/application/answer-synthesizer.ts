@@ -7,6 +7,7 @@ import type {
   ThreadContext,
 } from "../domain/types.js";
 import type { LLMProvider, ResearchSynthesisInput } from "../ports/llm.js";
+import { viableEvidenceSourceCount } from "../domain/knowledge.js";
 
 export const DEFAULT_SYNTHESIS_MAX_OUTPUT_TOKENS = 4_096;
 
@@ -66,7 +67,7 @@ function reachableSourceIds(
 ): Set<SourceId> {
   const ids = new Set<SourceId>();
   for (const pack of resolution.knowledge.evidence) {
-    for (const source of pack.sources) ids.add(source.sourceId);
+    for (const source of pack.sources) if (source.page.text.trim()) ids.add(source.sourceId);
   }
   return ids;
 }
@@ -132,6 +133,7 @@ export class AnswerSynthesizer {
 
   async synthesize(input: AnswerSynthesizerInput): Promise<AssistantContent> {
     if (input.signal?.aborted) throw new AnswerSynthesisError("unavailable", "provider_interrupted");
+    if (viableEvidenceSourceCount(input.resolution.knowledge) < 2) throw new AnswerSynthesisError("invalid_output", "insufficient_sources");
     const allowedSourceIds = [...reachableSourceIds(input.resolution)];
     const providerInput: ResearchSynthesisInput = {
       systemPrompt: this.systemPrompt,

@@ -1,4 +1,5 @@
 import { joinKnowledge } from "../domain/knowledge.js";
+import { enforceResearchSynthesisFloor } from "./research-synthesis-policy.js";
 import type {
   CanonicalSource,
   GapLedger,
@@ -17,7 +18,7 @@ import type {
   ResearchAssessor,
   ResearchAssessment,
 } from "./research-assessor.js";
-import type { EvidenceAcquirer, EvidenceAcquisitionResult, EvidenceRequest, ResearchLimits } from "./evidence-acquirer.js";
+import type { EvidenceAcquirer, EvidenceAcquisitionResult, EvidenceRequest, EvidenceYieldRequest, ResearchLimits } from "./evidence-acquirer.js";
 import type { IdentityPolicy } from "./identity-policy.js";
 import { sourceIdSchema, turnIdSchema } from "../domain/schemas.js";
 
@@ -42,6 +43,7 @@ export interface ResearchResolverDependencies {
   assess(request: ResearchAssessmentRequest): Promise<ResearchAssessmentProposal>;
   acquirer: EvidenceAcquirer;
   acquisitionLimits?: ResearchLimits;
+  onEvidenceYield?: (requests: EvidenceYieldRequest[]) => void;
 }
 
 export interface ResearchResolverInput {
@@ -378,7 +380,7 @@ export class ResearchResolver {
     return assessment;
   }
 
-  private async acquire(problem: ResearchProblem, directive: Extract<ResearchAssessment["directive"], { kind: "search" }>, state: { budget: ResearchBudget; ledger: GapLedger; signal?: AbortSignal; onPhase?: ResearchProgressObserver }): Promise<EvidenceAcquisitionResult> {
+  private async acquire(problem: ResearchProblem, directive: Extract<ResearchAssessment["directive"], { kind: "search" }>, state: { budget: ResearchBudget; ledger: GapLedger; knowledge: KnowledgeUnit; admittedSources: CanonicalSource[]; signal?: AbortSignal; onPhase?: ResearchProgressObserver }): Promise<EvidenceAcquisitionResult> {
     const request: EvidenceRequest = {
       problemId: problem.id,
       query: directive.query,
@@ -390,11 +392,12 @@ export class ResearchResolver {
     };
     const result = await this.dependencies.acquirer.acquire({
       requests: [request],
-      knownSources: problem.context.knownSources,
-      availableEvidenceSourceIds: problem.context.availableEvidence.flatMap((pack) => pack.sources.map((source) => source.sourceId)),
+      knownSources: [...problem.context.knownSources, ...state.admittedSources],
+      availableEvidenceSourceIds: state.knowledge.evidence.flatMap((pack) => pack.sources.filter((source) => source.page.text.trim()).map((source) => source.sourceId)),
       budget: state.budget,
       limits: this.dependencies.acquisitionLimits ?? {},
       onStage: (stage) => emitPhase(state.onPhase, stage),
+      onYield: this.dependencies.onEvidenceYield,
     });
     await emitPhase(state.onPhase, "resolving");
     const searches = state.budget.searchesRemaining - result.budget.searchesRemaining;
@@ -409,10 +412,10 @@ export class ResearchResolver {
     const rootOpen = state.ledger.gaps.some((gap) => gap.status === "open");
     const sources = state.admittedSources.length ? state.admittedSources : undefined;
     const usefulKnowledge = useful(knowledge);
-    if (!rootOpen && stopReason === "sufficient") return { status: "sufficient", stopReason: "sufficient", knowledge, ledger: state.ledger, tasks: state.tasks, sources };
-    return usefulKnowledge
+    if (!rootOpen && stopReason === "sufficient") return enforceResearchSynthesisFloor({ status: "sufficient", stopReason: "sufficient", knowledge, ledger: state.ledger, tasks: state.tasks, sources });
+    return enforceResearchSynthesisFloor(usefulKnowledge
       ? { status: "best_effort", stopReason: stopReason === "sufficient" ? "no_new_knowledge" : stopReason, knowledge, ledger: state.ledger, tasks: state.tasks, sources }
-      : { status: "insufficient", stopReason: stopReason === "sufficient" ? "no_new_knowledge" : stopReason, knowledge, ledger: state.ledger, tasks: state.tasks, sources };
+      : { status: "insufficient", stopReason: stopReason === "sufficient" ? "no_new_knowledge" : stopReason, knowledge, ledger: state.ledger, tasks: state.tasks, sources });
   }
 }
 

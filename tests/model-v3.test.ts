@@ -42,6 +42,14 @@ describe("v3 domain schemas", () => {
     expect(turnV3Schema.safeParse(research).success).toBe(true);
   });
 
+  it("accepts twelve charged extraction attempts but rejects a thirteenth", () => {
+    const resolution = { ...sufficientResolution, ledger: { ...emptyLedger, sourcesConsumed: 12 } };
+    const result = { completion: "sufficient", answer: { parts: [{ type: "text", markdown: "answer" }] }, resolution, usage: { extractedPages: 12 } };
+    expect(turnV3Schema.safeParse({ ...researchBase, status: "completed", result }).success).toBe(true);
+    expect(turnV3Schema.safeParse({ ...researchBase, status: "completed", result: { ...result, usage: { extractedPages: 13 } } }).success).toBe(false);
+    expect(turnV3Schema.safeParse({ ...researchBase, status: "completed", result: { ...result, resolution: { ...resolution, ledger: { ...resolution.ledger, sourcesConsumed: 13 } } } }).success).toBe(false);
+  });
+
   it("represents pending work outside the durable Turn union", () => {
     expect(turnV3Schema.safeParse({ ...searchTurn, status: "running" }).success).toBe(false);
   });
