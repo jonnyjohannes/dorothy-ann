@@ -17,7 +17,7 @@ type MessageEvent = {
   usage?: { input_tokens?: number; output_tokens?: number };
 };
 export type MessageStream = AsyncIterable<MessageEvent>;
-export type MessageResponse = { content?: Array<{ type?: string; text?: string }>; output_text?: string };
+export type MessageResponse = { content?: Array<{ type?: string; text?: string }>; output_text?: string; stop_reason?: string | null; usage?: { output_tokens?: number } };
 
 interface MessagesClient {
   create(input: {
@@ -30,7 +30,9 @@ interface MessagesClient {
   }, options?: { signal?: AbortSignal }): Promise<MessageResponse | MessageStream>;
 }
 
-const boundedString = (maxLength: number) => ({ type: "string", minLength: 1, maxLength } as const);
+// The raw Anthropic JSON-schema format rejects minLength/maxLength/maxItems.
+// Keep full length and array bounds in parseProposal and ResearchAssessor.
+const boundedString = (maxLength: number) => ({ type: "string", description: `Non-empty; at most ${maxLength} characters.` } as const);
 const supportSchema = {
   anyOf: [
     { type: "object", additionalProperties: false, properties: { type: { const: "source" }, sourceId: boundedString(64) }, required: ["type", "sourceId"] },
@@ -64,7 +66,6 @@ const assessmentOutputSchema = {
             observations: {
               type: "array",
               minItems: 1,
-              maxItems: 24,
               items: {
                 type: "object",
                 additionalProperties: false,
@@ -72,7 +73,7 @@ const assessmentOutputSchema = {
                   proposition: boundedString(240),
                   statement: boundedString(1_000),
                   stance: { type: "string", enum: ["supports", "contradicts", "qualifies"] },
-                  support: { type: "array", minItems: 1, maxItems: 24, items: supportSchema },
+                  support: { type: "array", minItems: 1, items: supportSchema },
                 },
                 required: ["proposition", "statement", "stance", "support"],
               },
@@ -89,7 +90,6 @@ const assessmentOutputSchema = {
             problems: {
               type: "array",
               minItems: 1,
-              maxItems: 3,
               items: {
                 type: "object",
                 additionalProperties: false,
@@ -133,14 +133,19 @@ export interface AnthropicProviderOptions {
   apiKey?: string;
   assessmentModel: string;
   synthesisModel: string;
+  assessmentRetryMaxOutputTokens?: number;
   client?: { messages: MessagesClient };
-  onDiagnostic?: (record: { event: "assessment_structured_output_fallback"; stage: "assessing"; reason: "provider_bad_request" }) => void;
+  onDiagnostic?: (record:
+    | { event: "assessment_structured_output_fallback"; stage: "assessing"; reason: "provider_bad_request" }
+    | { event: "assessment_output_rejected"; stage: "assessing"; reason: AssessmentInvalidReason; format: "structured" | "fallback"; stop_reason: "end_turn" | "max_tokens" | "refusal" | "other" | "unknown"; output_tokens: number; text_chars: number }
+  ) => void;
 }
 
 /** Anthropic is deliberately kept behind the provider-neutral LLMProvider port. */
 export class AnthropicProvider implements LLMProvider {
   private readonly messages: MessagesClient;
   private readonly onDiagnostic: AnthropicProviderOptions["onDiagnostic"];
+  private readonly assessmentRetryMaxOutputTokens: number;
   readonly assessmentModelRef: string;
   readonly synthesisModelRef: string;
 
@@ -158,6 +163,9 @@ export class AnthropicProvider implements LLMProvider {
     if (!options.assessmentModel || !options.synthesisModel) throw new Error("invalid_llm_model_configuration");
     this.assessmentModelRef = options.assessmentModel;
     this.synthesisModelRef = options.synthesisModel;
+    const retryMax = options.assessmentRetryMaxOutputTokens ?? 1_600;
+    if (!Number.isSafeInteger(retryMax) || retryMax < 800 || retryMax > 1_600) throw new Error("invalid_assessment_retry_token_limit");
+    this.assessmentRetryMaxOutputTokens = retryMax;
     this.messages = options.client?.messages ?? new Anthropic({ apiKey: options.apiKey }).messages as unknown as MessagesClient;
     this.onDiagnostic = options.onDiagnostic;
   }
@@ -166,11 +174,12 @@ export class AnthropicProvider implements LLMProvider {
     let correction: string | undefined;
     let structuredOutput = true;
     let invalidReason: AssessmentInvalidReason = "empty_response";
+    let requestTokens = Math.min(800, input.maxOutputTokens);
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         const request: Parameters<MessagesClient["create"]>[0] = {
           model: this.assessmentModelRef,
-          max_tokens: Math.min(800, input.maxOutputTokens),
+          max_tokens: requestTokens,
           system: input.systemPrompt,
           messages: [{ role: "user", content: assessmentEnvelope(input, correction) }],
           ...(structuredOutput ? { output_config: { format: { type: "json_schema" as const, schema: assessmentOutputSchema } } } : {}),
@@ -180,6 +189,19 @@ export class AnthropicProvider implements LLMProvider {
         const proposal = parseProposal(text, input.allowedSupportRefs, input.problem);
         if (proposal) return proposal;
         invalidReason = assessmentInvalidReason(text);
+        const metadata = isStream(response) ? undefined : response;
+        const outputTokens = metadata?.usage?.output_tokens;
+        const stopReason = metadata?.stop_reason;
+        try {
+          this.onDiagnostic?.({
+            event: "assessment_output_rejected", stage: "assessing", reason: invalidReason,
+            format: structuredOutput ? "structured" : "fallback",
+            stop_reason: stopReason === "end_turn" || stopReason === "max_tokens" || stopReason === "refusal" ? stopReason : stopReason ? "other" : "unknown",
+            output_tokens: typeof outputTokens === "number" && Number.isSafeInteger(outputTokens) ? Math.max(0, Math.min(1_600, outputTokens)) : 0,
+            text_chars: Math.min(16_000, [...text].length),
+          });
+        } catch { /* Diagnostics must never alter provider behavior. */ }
+        if (attempt === 0 && stopReason === "max_tokens") requestTokens = this.assessmentRetryMaxOutputTokens;
       } catch (error) {
         if (error instanceof AnthropicProviderError && error.code === "provider_bad_request" && structuredOutput) {
           structuredOutput = false;

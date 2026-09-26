@@ -61,6 +61,46 @@ describe("AnthropicProvider v3", () => {
     expect(fake.requests.every((request) => request.max_tokens === 800)).toBe(true);
   });
 
+  it("raises only the existing second assessment attempt after max_tokens truncation", async () => {
+    const valid = JSON.stringify({ directive: { kind: "search", query: "flamingo color", purpose: "answer", successCriterion: "supported", priority: 1 } });
+    const diagnostics: unknown[] = [];
+    const fake = client([
+      { content: [{ type: "text", text: '{"directive":' }], stop_reason: "max_tokens", usage: { output_tokens: 800 } },
+      { content: [{ type: "text", text: valid }], stop_reason: "end_turn", usage: { output_tokens: 900 } },
+    ]);
+    const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: fake, onDiagnostic: (record) => diagnostics.push(record) });
+    await expect(provider.assessResearch(baseAssessment)).resolves.toMatchObject({ directive: { kind: "search" } });
+    expect(fake.requests.map((request) => request.max_tokens)).toEqual([800, 1_600]);
+    expect(fake.requests.every((request) => request.output_config !== undefined)).toBe(true);
+    expect(fake.systems).toEqual(["ASSESSOR EXACT", "ASSESSOR EXACT"]);
+    expect(diagnostics).toEqual([{ event: "assessment_output_rejected", stage: "assessing", format: "structured", reason: "invalid_json", stop_reason: "max_tokens", output_tokens: 800, text_chars: 13 }]);
+
+    const stillInvalid = client([
+      { content: [{ type: "text", text: "not json" }], stop_reason: "max_tokens" },
+      { content: [{ type: "text", text: "not json" }], stop_reason: "max_tokens" },
+    ]);
+    await expect(new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", assessmentRetryMaxOutputTokens: 1_200, client: stillInvalid }).assessResearch(baseAssessment))
+      .rejects.toMatchObject({ code: "assessment_invalid_response", reason: "invalid_json" });
+    expect(stillInvalid.requests.map((request) => request.max_tokens)).toEqual([800, 1_200]);
+  });
+
+  it("sends an Anthropic-compatible structured schema while enforcing response bounds locally", async () => {
+    const valid = JSON.stringify({ directive: { kind: "search", query: "flamingo color", purpose: "answer", successCriterion: "supported", priority: 1 } });
+    const fake = client([{ content: [{ type: "text", text: valid }] }]);
+    const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: fake });
+    await expect(provider.assessResearch(baseAssessment)).resolves.toMatchObject({ directive: { kind: "search" } });
+    const schema = (fake.requests[0].output_config as { format: { schema: unknown } }).format.schema;
+    const encoded = JSON.stringify(schema);
+    expect(encoded).not.toMatch(/"(?:minLength|maxLength|maxItems)":/);
+    expect(encoded).toContain('"anyOf"');
+    expect(encoded).toContain('"minItems":1');
+
+    const tooLong = JSON.stringify({ directive: { kind: "search", query: "q".repeat(501), purpose: "answer", successCriterion: "supported", priority: 1 } });
+    const invalid = client([{ content: [{ type: "text", text: tooLong }] }, { content: [{ type: "text", text: tooLong }] }]);
+    await expect(new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: invalid }).assessResearch(baseAssessment))
+      .rejects.toMatchObject({ code: "assessment_invalid_response", reason: "invalid_search_query" });
+  });
+
   it("projects one compact assessment context without repeated gap contexts or storage identities", async () => {
     const evidenceText = "UNTRUSTED_EVIDENCE_VALUE ".repeat(20);
     const rich = structuredClone(baseAssessment) as ResearchAssessmentInput;
@@ -135,6 +175,7 @@ describe("AnthropicProvider v3", () => {
     expect(requests).toHaveLength(2);
     expect(requests[0].output_config).toBeDefined();
     expect(requests[1].output_config).toBeUndefined();
+    expect(requests.map((request) => request.max_tokens)).toEqual([800, 800]);
     expect(diagnostics).toEqual([{ event: "assessment_structured_output_fallback", stage: "assessing", reason: "provider_bad_request" }]);
   });
 
@@ -169,12 +210,27 @@ describe("AnthropicProvider v3", () => {
     expect(normalizeAnthropicError({ name: "APIUserAbortError" })).toMatchObject({ code: "provider_interrupted" });
   });
 
+  it("reports only bounded metadata when an assessment response is rejected", async () => {
+    const diagnostics: unknown[] = [];
+    const fake = client([
+      { content: [{ type: "text", text: "SECRET_PRIVATE_RESPONSE" }], stop_reason: "max_tokens", usage: { output_tokens: 1_900 } },
+      { content: [{ type: "text", text: "SECRET_PRIVATE_RESPONSE" }], stop_reason: "custom_provider_stop", usage: { output_tokens: 2 } },
+    ]);
+    const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: fake, onDiagnostic: (record) => diagnostics.push(record) });
+    await expect(provider.assessResearch(baseAssessment)).rejects.toMatchObject({ code: "assessment_invalid_response", reason: "invalid_json" });
+    expect(diagnostics).toEqual([
+      { event: "assessment_output_rejected", stage: "assessing", format: "structured", reason: "invalid_json", stop_reason: "max_tokens", output_tokens: 1_600, text_chars: 23 },
+      { event: "assessment_output_rejected", stage: "assessing", format: "structured", reason: "invalid_json", stop_reason: "other", output_tokens: 2, text_chars: 23 },
+    ]);
+    expect(JSON.stringify(diagnostics)).not.toContain("SECRET_PRIVATE_RESPONSE");
+  });
+
   it("uses the corrective retry for structurally invalid or unauthorized support", async () => {
     const invalid = JSON.stringify({ directive: { kind: "resolved", observations: [{ proposition: "p", statement: "s", stance: "supports", support: [{ type: "source", sourceId: "not-allowed" }] }] } });
     const fake = client([{ content: [{ type: "text", text: invalid }] }, { content: [{ type: "text", text: invalid }] }]);
     const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: fake });
     await expect(provider.assessResearch(baseAssessment)).rejects.toMatchObject({ code: "assessment_invalid_response", retryable: true, reason: "invalid_resolved" });
-    expect(fake.requests).toHaveLength(2);
+    expect(fake.requests.map((request) => request.max_tokens)).toEqual([800, 800]);
   });
 
   it("streams citations only when they are reachable through allowed source IDs", async () => {
