@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { createServer } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createLocalEmptyHtmlProbe, localProbeEnabled, renderOfflineHtml } from "../scripts/local-empty-html-probe.js";
+import { createLocalEmptyHtmlProbe, localProbeEnabled, renderOfflineHtml, type ProbeFailureStage } from "../scripts/local-empty-html-probe.js";
 
 const servers: ReturnType<typeof createServer>[] = [];
 afterEach(async () => {
@@ -22,7 +22,7 @@ describe("local-only empty HTML probe", () => {
     const emitted: unknown[] = [];
     const render = vi.fn(async (html: string) => {
       expect(typeof html).toBe("string");
-      return { render: "ok" as const, semantic_text: "none" as const, body_text: "under_120" as const, blocked_requests: 0 };
+      return { render: "ok" as const, failure_stage: "none" as const, semantic_text: "none" as const, body_text: "under_120" as const, blocked_requests: 0 };
     });
     const probe = createLocalEmptyHtmlProbe((result) => { emitted.push(result); }, render);
     probe(privateText);
@@ -31,8 +31,8 @@ describe("local-only empty HTML probe", () => {
     await vi.waitFor(() => expect(emitted).toHaveLength(2));
     expect(render).toHaveBeenCalledTimes(2);
     expect(emitted).toEqual([
-      { sample_index: 1, render: "ok", semantic_text: "none", body_text: "under_120", blocked_requests: 0 },
-      { sample_index: 2, render: "ok", semantic_text: "none", body_text: "under_120", blocked_requests: 0 },
+      { sample_index: 1, render: "ok", failure_stage: "none", semantic_text: "none", body_text: "under_120", blocked_requests: 0 },
+      { sample_index: 2, render: "ok", failure_stage: "none", semantic_text: "none", body_text: "under_120", blocked_requests: 0 },
     ]);
     expect(JSON.stringify(emitted)).not.toContain(privateText);
   });
@@ -43,8 +43,48 @@ describe("local-only empty HTML probe", () => {
     const probe = createLocalEmptyHtmlProbe((result) => { emitted.push(result); throw new Error(privateText); }, async () => { throw new Error(privateText); });
     probe(privateText);
     await vi.waitFor(() => expect(emitted).toHaveLength(1));
-    expect(emitted).toEqual([{ sample_index: 1, render: "failed", semantic_text: "none", body_text: "none", blocked_requests: 0 }]);
+    expect(emitted).toEqual([{ sample_index: 1, render: "failed", failure_stage: "probe_runner", semantic_text: null, body_text: null, blocked_requests: 0 }]);
     expect(JSON.stringify(emitted)).not.toContain(privateText);
+  });
+
+  it("reports only fixed failure stages, including deadline, with unmeasured text buckets", async () => {
+    const privateText = "PRIVATE_BROWSER_FAILURE_DO_NOT_LOG";
+    type BrowserLauncher = NonNullable<Parameters<typeof renderOfflineHtml>[1]>;
+    type Browser = Awaited<ReturnType<BrowserLauncher>>;
+    const launchFailure: BrowserLauncher = async () => { throw new Error(privateText); };
+    const makeLauncher = (where: "context_setup" | "document_load" | "dom_read" | "deadline"): BrowserLauncher => async () => {
+      let rejectLoad: ((error: Error) => void) | undefined;
+      const page = {
+        setContent: async () => {
+          if (where === "document_load") throw new Error(privateText);
+          if (where === "deadline") await new Promise<void>((_resolve, reject) => { rejectLoad = reject; });
+        },
+        waitForTimeout: async () => {},
+        evaluate: async () => {
+          if (where === "dom_read") throw new Error(privateText);
+          return { semantic_text: "none", body_text: "none" };
+        },
+      };
+      return {
+        newContext: async () => {
+          if (where === "context_setup") throw new Error(privateText);
+          return { route: async () => {}, routeWebSocket: async () => {}, newPage: async () => page, on: () => {} };
+        },
+        close: async () => { rejectLoad?.(new Error(privateText)); },
+      } as unknown as Browser;
+    };
+    const cases: { stage: ProbeFailureStage; launch: BrowserLauncher; deadline?: number }[] = [
+      { stage: "browser_launch", launch: launchFailure },
+      { stage: "context_setup", launch: makeLauncher("context_setup") },
+      { stage: "document_load", launch: makeLauncher("document_load") },
+      { stage: "dom_read", launch: makeLauncher("dom_read") },
+      { stage: "deadline", launch: makeLauncher("deadline"), deadline: 10 },
+    ];
+    for (const entry of cases) {
+      const result = await renderOfflineHtml(privateText, entry.launch, entry.deadline);
+      expect(result).toEqual({ render: "failed", failure_stage: entry.stage, semantic_text: null, body_text: null, blocked_requests: 0 });
+      expect(JSON.stringify(result)).not.toContain(privateText);
+    }
   });
 
   it("executes inline rendering while remaining offline for HTTP, image and WebSocket requests", async () => {
@@ -63,7 +103,7 @@ describe("local-only empty HTML probe", () => {
       try { new WebSocket('ws://127.0.0.1:${address.port}/socket'); } catch {}
     </script><script src="${target}/external.js"></script></body></html>`;
     const result = await renderOfflineHtml(html);
-    expect(result).toMatchObject({ render: "ok", semantic_text: "at_least_120" });
+    expect(result).toMatchObject({ render: "ok", failure_stage: "none", semantic_text: "at_least_120" });
     expect(requests).toBe(0);
   }, 15_000);
 });

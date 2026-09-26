@@ -1,28 +1,42 @@
 /* Local development probe only. Never import this from the portable app or browser. */
 export type TextBucket = "none" | "under_120" | "at_least_120";
+export type ProbeFailureStage = "none" | "browser_launch" | "context_setup" | "document_load" | "dom_read" | "deadline" | "probe_runner";
 export interface LocalHtmlProbeResult {
   sample_index: 1 | 2;
   render: "ok" | "failed";
-  semantic_text: TextBucket;
-  body_text: TextBucket;
+  failure_stage: ProbeFailureStage;
+  /** Null means rendering failed; "none" means a completed DOM had no visible text. */
+  semantic_text: TextBucket | null;
+  body_text: TextBucket | null;
   blocked_requests: number;
 }
 type RenderResult = Omit<LocalHtmlProbeResult, "sample_index">;
+type Browser = Awaited<ReturnType<(typeof import("@playwright/test"))["chromium"]["launch"]>>;
+type BrowserLauncher = () => Promise<Browser>;
 
 export function localProbeEnabled(flag: string | undefined, nodeEnv: string | undefined, fixture: boolean): boolean {
   return flag === "true" && nodeEnv === "development" && !fixture;
 }
 
 /** Offline context means external scripts cannot load; a negative result is inconclusive. */
-export async function renderOfflineHtml(html: string): Promise<RenderResult> {
-  let blocked = 0;
-  let browser: Awaited<ReturnType<(typeof import("@playwright/test"))["chromium"]["launch"]>> | undefined;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
+export async function renderOfflineHtml(
+  html: string,
+  launchBrowser: BrowserLauncher = async () => {
     const { chromium } = await import("@playwright/test");
-    browser = await chromium.launch({ headless: true, timeout: 5_000 });
+    return chromium.launch({ headless: true, timeout: 5_000 });
+  },
+  deadlineMs = 4_000,
+): Promise<RenderResult> {
+  let blocked = 0;
+  let browser: Browser | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let stage: Exclude<ProbeFailureStage, "none"> = "browser_launch";
+  let deadlineReached = false;
+  try {
+    browser = await launchBrowser();
     const running = browser;
-    timer = setTimeout(() => { void running.close().catch(() => {}); }, 4_000);
+    timer = setTimeout(() => { deadlineReached = true; void running.close().catch(() => {}); }, Math.max(1, Math.min(4_000, deadlineMs)));
+    stage = "context_setup";
     const context = await browser.newContext({ offline: true, serviceWorkers: "block" });
     await context.route("**/*", async (route) => {
       blocked = Math.min(12, blocked + 1);
@@ -34,8 +48,10 @@ export async function renderOfflineHtml(html: string): Promise<RenderResult> {
     });
     const page = await context.newPage();
     context.on("page", (opened) => { if (opened !== page) void opened.close().catch(() => {}); });
+    stage = "document_load";
     await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 2_500 });
     await page.waitForTimeout(500);
+    stage = "dom_read";
     const text = await page.evaluate(() => {
       const bucket = (value: string | undefined): "none" | "under_120" | "at_least_120" => {
         const normalized = value?.replace(/\s+/g, " ").trim() ?? "";
@@ -47,9 +63,9 @@ export async function renderOfflineHtml(html: string): Promise<RenderResult> {
       const semantic = document.querySelector("article") ?? document.querySelector("main") ?? document.querySelector("[role='main']");
       return { semantic_text: bucket((semantic as HTMLElement | null)?.innerText), body_text: bucket(document.body?.innerText) };
     });
-    return { render: "ok", ...text, blocked_requests: blocked };
+    return { render: "ok", failure_stage: "none", ...text, blocked_requests: blocked };
   } catch {
-    return { render: "failed", semantic_text: "none", body_text: "none", blocked_requests: blocked };
+    return { render: "failed", failure_stage: deadlineReached ? "deadline" : stage, semantic_text: null, body_text: null, blocked_requests: blocked };
   } finally {
     if (timer) clearTimeout(timer);
     await browser?.close().catch(() => {});
@@ -69,7 +85,7 @@ export function createLocalEmptyHtmlProbe(
     pending = pending.then(async () => {
       let result: RenderResult;
       try { result = await render(html); }
-      catch { result = { render: "failed", semantic_text: "none", body_text: "none", blocked_requests: 0 }; }
+      catch { result = { render: "failed", failure_stage: "probe_runner", semantic_text: null, body_text: null, blocked_requests: 0 }; }
       try { emit({ sample_index, ...result }); } catch { /* diagnostics cannot affect extraction */ }
     });
   };

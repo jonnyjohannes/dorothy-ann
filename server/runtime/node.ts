@@ -21,7 +21,7 @@ const threadStoreV3 = !config.DOROTHY_FIXTURE_MODE && config.UPSTASH_REDIS_REST_
 const { localProbeEnabled, createLocalEmptyHtmlProbe } = await import("../../scripts/local-empty-html-probe.js");
 const localEmptyHtmlSample = localProbeEnabled(process.env.DOROTHY_LOCAL_EMPTY_PROBE, process.env.NODE_ENV, config.DOROTHY_FIXTURE_MODE)
   ? createLocalEmptyHtmlProbe((result) => logger.info("local_empty_html_probe", {
-    stage: "diagnostic", sample_index: result.sample_index, render: result.render,
+    stage: "diagnostic", sample_index: result.sample_index, render: result.render, failure_stage: result.failure_stage,
     semantic_text: result.semantic_text, body_text: result.body_text, blocked_requests: result.blocked_requests,
   }))
   : undefined;
