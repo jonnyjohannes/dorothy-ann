@@ -57,7 +57,7 @@ The current artifact-draft workbench adds a second persistence model for editabl
 
 ## Context
 
-Existing storage contracts live in [`src/ports/storage.ts`](../../src/ports/storage.ts). The browser implementation, including envelope migration, validation, cleanup, TTL, summaries, and backup handling, lives in [`src/adapters/browser/local-stores.ts`](../../src/adapters/browser/local-stores.ts).
+Storage contracts live in [`src/ports/storage-v3.ts`](../../src/ports/storage-v3.ts). The browser implementations, including envelope migration, validation, cleanup, TTL, summaries, and backup handling, live under [`src/infrastructure/browser/`](../../src/infrastructure/browser/) as `indexeddb-thread-store.ts`, `remote-thread-store.ts`, and `thread-store.ts`. (Paths at the time of writing were `src/ports/storage.ts` and `src/adapters/browser/local-stores.ts`; the v1.1.0 refactor moved them.)
 
 The server already has owner authentication and request guards in [`server/app.ts`](../../server/app.ts). Configuration already accepts `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` in [`server/config.ts`](../../server/config.ts), and `@upstash/redis` is already a dependency. Current Upstash usage is limited to the login limiter.
 

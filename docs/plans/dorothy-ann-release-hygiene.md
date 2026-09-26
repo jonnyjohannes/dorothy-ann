@@ -49,10 +49,15 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` verified, `[!]` blocked.
   - Deliverable: the six release tags exist on `origin`
   - Verify: `git push origin v1.0.0-alpha0 v1.0.0-alpha1 v1.0.0-alpha2 v1.0.0 v1.1.0 v1.2.0` run by the owner, then `git ls-remote --tags origin`
   - Evidence: —
-- [ ] H6 — Retire stale historical statuses
-  - Deliverable: [`dorothy-ann-v1.1.0.md`](dorothy-ann-v1.1.0.md) reads `released` rather than `release candidate`, [`dorothy-ann-v1.0.0-alpha1.md`](dorothy-ann-v1.0.0-alpha1.md) reads `superseded` with its 11 dangling `[~]` items closed as historical, and [`../releases/dorothy-ann-v1.1.0-rc.md`](../releases/dorothy-ann-v1.1.0-rc.md) is labeled a historical RC log
+- [x] H6 — Retire stale historical statuses
+  - Deliverable: [`dorothy-ann-v1.1.0.md`](archive/dorothy-ann-v1.1.0.md) reads `released` rather than `release candidate`, [`dorothy-ann-v1.0.0-alpha1.md`](archive/dorothy-ann-v1.0.0-alpha1.md) reads `superseded` with its 11 dangling `[~]` items closed as historical, and [`../releases/dorothy-ann-v1.1.0-rc.md`](../releases/dorothy-ann-v1.1.0-rc.md) is labeled a historical RC log
   - Verify: read each `Current State` block; confirm no plan outside the in-flight set claims active work
-  - Evidence: —
+  - Evidence: All four archived plans carry an `archived` status naming their shipping commit and tag. `dorothy-ann-v1.1.0.md` reads `released and archived`; `dorothy-ann-v1.0.0-alpha1.md` reads `superseded and archived` and states that its `[~]` items and operator checklist are frozen historical state. The v1.1.0 RC log is labeled historical in the README documentation list.
+- [x] H10 — Archive the superseded release plans
+  - Deliverable: `docs/plans/archive/` holds the four superseded release specs so the active plan directory contains only working plans; no content is rewritten, compacted, or deleted
+  - Verify: `git mv` preserves history, every inbound Markdown link resolves, and the active directory lists only in-flight and feature-reference plans
+  - Evidence: Moved `dorothy-ann-v1.0.0-alpha1.md`, `dorothy-ann-v1.0.0-alpha2.md`, `dorothy-ann-v1.0.0.md`, and `dorothy-ann-v1.1.0.md` with `git mv`. Active directory is now nine files. A repository-wide relative-link scan reports all Markdown links resolving, including two pre-existing `dorothy-ann-remote-storage.md` paths that the v1.1.0 refactor had already broken and that are now corrected.
+  - Note: scope exceeded the two largest files. Archiving `v1.1.0` and `alpha1` while leaving `alpha2` and `v1.0.0` in the active directory would have left an incoherent rule, so the convention is "superseded release specs are archived; feature plans that still describe current behavior stay active."
 - [ ] H7 — Backfill the v1.2.0 release inventory
   - Deliverable: `docs/releases/dorothy-ann-v1.2.0.md` recording the shipped image/video search scope and its verification
   - Verify: cross-check against `bb106fb` and [`dorothy-ann-search-result-kinds.md`](dorothy-ann-search-result-kinds.md)
@@ -84,7 +89,7 @@ A reader arriving at the repository can determine the shipped version from `git 
 
 - Do not change research, provider, storage, server, or UI behavior.
 - Do not duplicate `P4`, `P5`, or `P6` of the v1.2.1 patch plan.
-- Do not rewrite or archive the large historical plans; only their status metadata is in scope.
+- Do not rewrite, compact, or delete the large historical plans. H10 relocates them verbatim and updates status metadata only.
 - Do not push tags or branches automatically; publishing is an explicit owner action.
 - Do not decide the `ASSESSOR.md`/`SYNTHESIZER.md` reformat on the owner's behalf.
 
@@ -110,6 +115,6 @@ A reader arriving at the repository can determine the shipped version from `git 
 
 ## Open Questions
 
-- Should the large historical plans move to a `docs/plans/archive/` convention, or is a `superseded` status enough? — owner — blocks nothing; affects H6 only.
+- ~~Should the large historical plans move to a `docs/plans/archive/` convention?~~ Resolved 2026-09-21: owner approved the archive move; see H10.
 
 <|°_°|>

@@ -9,7 +9,7 @@
 
 ## Handoff
 
-The v1.0.0 launch is complete in [`dorothy-ann-v1.0.0.md`](./dorothy-ann-v1.0.0.md). This plan remains feature-scoped: color schemes affect the UI theme contract, browser persistence, accessibility, and transcript/source presentation, but not domain research orchestration.
+The v1.0.0 launch is complete in [`dorothy-ann-v1.0.0.md`](./archive/dorothy-ann-v1.0.0.md). This plan remains feature-scoped: color schemes affect the UI theme contract, browser persistence, accessibility, and transcript/source presentation, but not domain research orchestration.
 
 The initial color scheme implementation is complete and committed. This follow-up adds two scoped refinements: selected Evidence items use their source identity accent, and Settings exposes a Primary accent selector for decorations outside the rotating constellation. The primary accent remains UI-only and does not alter source/citation identity. Settings also includes the fixed `#e068a5` option alongside the active scheme's default and named accents.
 

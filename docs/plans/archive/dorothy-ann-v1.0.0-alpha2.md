@@ -2,7 +2,7 @@
 
 ## Current State
 
-- Status: complete
+- Status: complete; archived — shipped as `4d55fea`, tagged `v1.0.0-alpha2`, superseded by v1.1.0
 - Last updated: 2026-09-08
 - Current focus: alpha2 complete; future work belongs in a new plan or post-alpha hardening pass
 - Handoff lives in: [`## Handoff`](#handoff)

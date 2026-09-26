@@ -2,9 +2,10 @@
 
 ## Current State
 
-- Status: release candidate; implementation and regression hardening complete
+- Status: released and archived — shipped to `main` as `cc04806`, tagged `v1.1.0`
+- Archived: 2026-09-21. This is the architectural baseline and historical record, not active work. Later plans win where they disagree; note that `/search` described here was replaced by `/link` in v1.2.0.
 - Last updated: 2026-09-18
-- Current focus: bounded deployment smoke for the settled v1.1.0 candidate
+- Current focus: none; superseded by v1.2.0 and the v1.2.1 patch plan
 - Handoff lives in: [`## Handoff`](#handoff)
 - Next action: restart/redeploy, then visually check light/dark/auto and reduced-motion behavior and live-provider initial/follow-up, focused-search continuation, decomposition, and synthesis behavior
 - Shipped state: ordinary prompt and `/threads/new?q=...` entry create a `ResearchTurn`; `/search <query>` and `/search?q=...` create the explicit raw-link `SearchTurn`; punctuation has no routing semantics. Retrieval-first resolution supports `resolved | search | decompose(all | any)`, parent reassessment, and exactly one root synthesis for sufficient or useful best-effort outcomes. Root research targets at least two materially independent sources for the central conclusion, including straightforward factual questions; this is prompt-owned and model-judged, applies only to the root, and unmet corroboration remains bounded by existing search/source/depth/assessment ceilings. Follow-up policy requires support for materially new claims and fresh retrieval for time-sensitive facts. The application owns transcript request/response and turn separation, while synthesis forbids model-authored headings and horizontal rules. Markdown export links cited sources, and allowlisted structured diagnostics expose bounded research decisions without prompt, request, source, provider, or payload content.
@@ -42,7 +43,7 @@ Verification: responsive UI regression tests, full test suite, typecheck, lint, 
 
 ## Handoff
 
-The v1.1.0 release candidate is settled through Plan Ledger item 36. Items 31–35 record the final hardening after the previous 219-test checkpoint: Markdown exports now link referenced sources and convert raw citation markers; `TranscriptBox` and `SYNTHESIZER.md` establish application-owned request/response and inter-turn separation; follow-ups retain admitted evidence through assessor failure and require retrieval for materially new or time-sensitive claims; structured logging records only allowlisted answer-position, context-count, directive-history, failure-reason, timing, and ledger fields; and sparse provider search directives normalize without widening the protocol. The current full suite passes with 231 tests. The durable release inventory is [`docs/releases/dorothy-ann-v1.1.0-rc.md`](../releases/dorothy-ann-v1.1.0-rc.md), where subsequent RC patches can be appended without rewriting this handoff.
+The v1.1.0 release candidate is settled through Plan Ledger item 36. Items 31–35 record the final hardening after the previous 219-test checkpoint: Markdown exports now link referenced sources and convert raw citation markers; `TranscriptBox` and `SYNTHESIZER.md` establish application-owned request/response and inter-turn separation; follow-ups retain admitted evidence through assessor failure and require retrieval for materially new or time-sensitive claims; structured logging records only allowlisted answer-position, context-count, directive-history, failure-reason, timing, and ledger fields; and sparse provider search directives normalize without widening the protocol. The current full suite passes with 231 tests. The durable release inventory is [`docs/releases/dorothy-ann-v1.1.0-rc.md`](../../releases/dorothy-ann-v1.1.0-rc.md), where subsequent RC patches can be appended without rewriting this handoff.
 
 Remaining release work is deployment observation rather than implementation: visually check light/dark/auto and reduced-motion behavior, then smoke live-provider initial and follow-up answers, a focused-search continuation, and a decomposed research question. Prompt changes require restart/redeploy because prompt assets load once at startup.
 
@@ -111,7 +112,7 @@ Decisions made so far:
 
 Implementability gate result: **ready**. The closure bundle is normative, model proposals are separated from trusted state, recursive evidence is collection-shaped, provider/context/identity/controller/storage/transport contracts are exact, current responsibilities map to target files, and the ordered implementation/ledger slices are independently verifiable. Unsupported v1/v2 answers migrate into a bounded read-only archive outside `Turn`; they remain visible but never masquerade as evidence-backed research or enter future context. See [`## Implementability Gate`](#implementability-gate).
 
-For release work, read Current State, Handoff, the completed Plan Ledger, and the [v1.1.0 RC changelog](../releases/dorothy-ann-v1.1.0-rc.md), then inspect the current domain, application, port, infrastructure, server, runtime, and UI boundaries cited below. Keep these surfaces synchronized, and stop to amend this plan if any future implementation would change a settled contract.
+For release work, read Current State, Handoff, the completed Plan Ledger, and the [v1.1.0 RC changelog](../../releases/dorothy-ann-v1.1.0-rc.md), then inspect the current domain, application, port, infrastructure, server, runtime, and UI boundaries cited below. Keep these surfaces synchronized, and stop to amend this plan if any future implementation would change a settled contract.
 
 ## Summary
 
