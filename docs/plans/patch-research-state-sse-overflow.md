@@ -2,14 +2,31 @@
 
 ## Current State
 
-- Status: planning
-- Verification: not run
+- Status: P5 structured-output compatibility and P5b adaptive retry verified; P4/P6 pending
+- Verification: exact-schema live 400 reproduction; patched 15-question pilot had zero 400 fallbacks; all four formerly truncated multi-obligation questions resolved sufficiently in a targeted post-retry live reassessment. Focused 40 tests, typecheck, lint, build, and `git diff --check` pass; full suite: 268 passed, 1 pre-existing prompt exact-string assertion failed
 - Owner: Jonny
-- Executor: unassigned
-- Last updated: 2026-09-21
-- Current focus: complete recovery/UI regression coverage after confirming the production-like long-context stream now completes
-- Next action: add or verify browser-controller coverage for interrupted/invalid streams, then run the applicable full repository checks
+- Executor: parent (P5 only)
+- Last updated: 2026-09-26
+- Current focus: schema and adaptive-retry fixes are validated; remaining P4 browser recovery and P6 release checks are separate
+- Next action: address P4 controller/UI recovery and P6 repository/browser acceptance when requested; keep the two-source-synthesis gate in its separate plan
 - Branch / PR / session: `release/v1.2.1` / pending
+
+## Handoff
+
+P5's exact-schema probe reproduced the 400; removing only Anthropic-unsupported bounds succeeded on the configured assessment model. The provider now sends that compatible schema and retains strict local validation, with allowlisted rejected-output metadata. A post-fix 15-question local live-provider run using the same assessment/resolver/acquisition/synthesis components as `server/app.ts` (not HTTP/SSE, browser, or persistence) yielded zero schema fallbacks. Four complex turns hit `max_tokens=800` on both assessment attempts and ended best-effort. The operator explicitly approved an adaptive retry amendment: leave first attempts at the existing ≤800-token bound, allow the *existing* second attempt up to 1,600 only after the first response's `stop_reason=max_tokens`, and preserve two attempts and strict local validation. Give that second attempt its own bounded `MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS` operational cap (default 1,600, allowed 800–1,600); the existing `MAX_ASSESSMENT_OUTPUT_TOKENS` remains the first-attempt setting. Do not raise the second cap for malformed non-truncated outputs or HTTP 400 fallback. User asked to proceed with the local environment as configured; that `.env` disables TLS verification. Do not publish `.env` or provider response bodies. P5b now uses an independent 800–1,600-token retry cap only when the first assessment hits `max_tokens`; all four formerly truncated complex prompts returned `sufficient` in a targeted real-provider resolver rerun. The targeted rerun did not run synthesis, HTTP/SSE, browser, or persistence. Do not confuse this scoped work with P4 browser recovery or the separate two-source-synthesis plan. No prompt assets were edited.
+
+### Post-fix local pilot (15 questions, fresh initial contexts)
+
+The runner reproduced the first-search → acquisition → root assessment/recursion → optional root synthesis path with the current provider adapters and root prompts. It omitted HTTP/SSE, browser/storage commits, and presentation. It emitted only numeric/enum summaries, not answer or provider text. The operator's earlier pilot is a different run; do not equate source counts or answer quality between runs.
+
+| bucket (5 each) | sufficient | best effort | structured 400 fallbacks | final usable sources ≥2 |
+| --- | ---: | ---: | ---: | ---: |
+| simple (#1–5) | 5 | 0 | 0 | 5 |
+| contested (#6–10) | 5 | 0 | 0 | 5 |
+| multi-obligation (#11–15) | 1 | 4 | 0 | 5 |
+| **total** | **11** | **4** | **0** | **15** |
+
+The four best-effort turns were #11, #12, #14, and #15: each had enough viable evidence, but both structured assessment attempts ended `max_tokens` at the adapter's hard 800-token cap; each was classified `missing_directive` and stopped `provider_unavailable`. Across 16 searches, 48 extraction selections yielded 41 viable, four short/empty, and three failed pages. The first three secure-transport trial runs are **excluded**: they had a different extraction environment and are not comparable to the 15-turn pilot. Two sufficient synthesized answers in this local pilot emitted zero citation parts despite available evidence; this is a separate citation-discipline issue, not evidence that the assessor saw no sources. Do not use this pilot as proof of factual answer quality, UI terminal validity, or production TLS behavior.
 
 ## Abstract
 
@@ -47,10 +64,14 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` verified, `[!]` blocked.
   - Deliverable: browser gateway/controller/route exits the progress UI on interruption, connection loss, timeout, or terminal error and exposes a bounded retry action
   - Verify: UI tests assert no indefinite “analyzing” state and preserve retry behavior
   - Evidence: —
-- [ ] P5 — Validate assessment structured-output compatibility
+- [x] P5 — Validate assessment structured-output compatibility
   - Deliverable: confirmed model/API configuration behavior and the smallest compatible request/fallback change, or an explicit deployment blocker
   - Verify: live-provider smoke when credentials are available; fixture coverage for fallback and malformed responses
-  - Evidence: —
+  - Evidence: Non-private live probe with the exact `assessmentOutputSchema` returned HTTP 400. A second request on the same configured model with only `minLength`, `maxLength`, and `maxItems` removed succeeded (`end_turn`, 83 output tokens). `src/infrastructure/providers/anthropic.ts` now omits only those raw-schema constraints, describes string length to the model, and still locally validates all bounds/support. Rejected assessment responses emit allowlisted server-only diagnostic metadata (`format`, bounded `stop_reason`, output-token count, text length, reason), never body/prompt/IDs. Focused 28 tests, lint, typecheck, build, and `git diff --check` pass; full Vitest: 265 passed / one pre-existing user-edited `ASSESSOR.md` exact-string failure. A local 15-question post-fix pilot had **zero** `assessment_structured_output_fallback` events and **zero** assessment invalid responses except four multi-obligation turns where both attempts reached `stop_reason=max_tokens` at 800 output tokens. See aggregate below; local TLS verification was disabled by the environment per the operator's explicit request to proceed, so repeat in a verified deployment before claiming deployment acceptance.
+- [x] P5b — Implement the operator-approved bounded adaptive assessment retry
+  - Deliverable: first call remains at `min(800, MAX_ASSESSMENT_OUTPUT_TOKENS)`; only an invalid first response with `stop_reason=max_tokens` raises the same second call to `MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS` (default/maximum 1,600, configurable down to 800). No third attempt, no raised cap for other invalid output or the 400 compatibility fallback, and no weakening of proposal/support validation. Keep this operational cap in the Anthropic adapter/runtime config rather than widening the provider-neutral LLM input.
+  - Verify: fixture tests for truncated first result, valid high-cap second result, still-invalid second result, ordinary correction and 400 fallback remaining at 800, config bounds/defaults, exact prompt pass-through, bounded diagnostics, lint/typecheck/full tests/build/diff; targeted live pilot after implementation.
+  - Evidence: `MAX_ASSESSMENT_OUTPUT_TOKENS` remains ≤800 on the first attempt; new `MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS` defaults to 1,600 (validated 800–1,600) for the existing second attempt only after a truncated first response. Direct adapter instances enforce the same retry-cap range. HTTP 400 fallback and ordinary correction retain their 800-token cap; no third attempt or relaxed local validation. `tests/anthropic-v3.test.ts` and `tests/config.test.ts` cover both paths, bounded metadata, config defaults/range and two-attempt failure. Focused 40 tests, lint, typecheck, build, and `git diff --check` pass; full Vitest: 268 passed / one pre-existing prompt exact-string failure. In a live rerun of #11, #12, #14 and #15 through Brave/extractor/resolver/assessor, each truncated assessment's first response hit `max_tokens=800`, and its higher-cap second response produced a valid directive, and all four root resolutions were `sufficient` with zero 400 fallbacks. This rerun did not synthesize or exercise SSE/browser/storage. Local TLS verification remained disabled per the operator's explicit request to use that environment; do not treat it as production security acceptance.
 - [ ] P6 — Release verification and documentation
   - Deliverable: synchronized release notes, handoff, and verification evidence for v1.2.1
   - Verify: lint, typecheck, full tests, build, isolated-port e2e, and `git diff --check`
