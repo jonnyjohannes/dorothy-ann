@@ -53,7 +53,9 @@ describe("FileSystemPromptSource", () => {
     expect(catalog.assessor).toContain("without a two-source quota");
     expect(catalog.assessor).toContain("Fresh retrieval is mandatory for time-sensitive requests.");
     expect(catalog.assessor).toContain('**news** (`"news"`)');
-    expect(catalog.assessor).toContain('Two usable web sources alone do not establish that they cover the requested period.');
+    expect(catalog.assessor).toContain('“latest news on storms,” “storm news, latest updates,”');
+    expect(catalog.assessor).toContain('at the first post-web assessment, prefer a focused `search` directive with `surface: "news"` before `resolved`');
+    expect(catalog.assessor).toContain('Two usable web sources alone do not satisfy that intent.');
     expect(catalog.assessor).not.toContain("surface.news");
     expect(catalog.assessor).not.toContain("at least four materially independent sources overall");
     expect(catalog.synthesizer).toBe(await readFile(new URL("../SYNTHESIZER.md", import.meta.url), "utf8"));
