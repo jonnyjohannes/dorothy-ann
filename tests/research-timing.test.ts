@@ -38,7 +38,7 @@ describe("research timing", () => {
 
     expect(record).toEqual({
       event: "research_timing",
-      schema_version: 3,
+      schema_version: 4,
       terminal_status: "completed",
       answer_position: "follow_up",
       assessment_failure_code: "provider_rate_limited",
@@ -46,7 +46,11 @@ describe("research timing", () => {
       assessment_directive: "search",
       assessment_directives: ["search"],
       context: { turns: 1, known_sources: 2, evidence_packs: 1, evidence_sources: 1 },
-      evidence_yield: { requests: [], extraction_text: { no_readable_text: 0, under_minimum: 0, fallback_recovered: 0 }, distinct_viable_root_ids: 0 },
+      evidence_yield: { requests: [], extraction_text: {
+        no_readable_text: 0, under_minimum: 0, fallback_recovered: 0, empty_body: 0, plain_no_text: 0,
+        html_no_text_with_script: 0, html_no_text_without_script: 0,
+        html_text_without_semantic_root: 0, html_text_outside_semantic_root: 0,
+      }, distinct_viable_root_ids: 0 },
       resolution_status: "sufficient",
       stop_reason: "sufficient",
       execution_ms: 50,
@@ -74,7 +78,7 @@ describe("research timing", () => {
       ] },
     } });
     expect(records).toHaveLength(1);
-    expect(records[0]).toMatchObject({ schema_version: 3, resolution_status: "best_effort", evidence_yield: { distinct_viable_root_ids: 1, requests: [{ reused: 1, viable: 1 }] } });
+    expect(records[0]).toMatchObject({ schema_version: 4, resolution_status: "best_effort", evidence_yield: { distinct_viable_root_ids: 1, requests: [{ reused: 1, viable: 1 }] } });
     expect(JSON.stringify(records)).not.toContain("private query");
     expect(JSON.stringify(records)).not.toContain("same");
   });
@@ -90,17 +94,24 @@ describe("research timing", () => {
   it("bounds turn-local empty-text categories and ignores non-allowlisted values", () => {
     const records: ResearchTimingRecord[] = [];
     const first = new ResearchTimingCollector((record) => { records.push(record); });
-    for (let attempt = 0; attempt < 20; attempt++) first.markExtractionText("no_readable_text");
+    for (let attempt = 0; attempt < 20; attempt++) {
+      first.markExtractionText("no_readable_text");
+      first.markExtractionText("empty_body");
+    }
     first.markExtractionText("under_minimum");
     first.markExtractionText("fallback_recovered");
     first.markExtractionText("SENTINEL_UNTRUSTED_VALUE" as never);
     first.emit({ terminalStatus: "failed" });
     const second = new ResearchTimingCollector((record) => { records.push(record); });
     second.emit({ terminalStatus: "completed" });
-    expect(records.map((record) => record.evidence_yield.extraction_text)).toEqual([
-      { no_readable_text: 12, under_minimum: 1, fallback_recovered: 1 },
-      { no_readable_text: 0, under_minimum: 0, fallback_recovered: 0 },
+    expect(records.map((record) => record.evidence_yield.extraction_text)).toMatchObject([
+      { no_readable_text: 12, under_minimum: 1, fallback_recovered: 1, empty_body: 12 },
+      { no_readable_text: 0, under_minimum: 0, fallback_recovered: 0, empty_body: 0 },
     ]);
+    expect(Object.keys(records[0].evidence_yield.extraction_text).sort()).toEqual([
+      "no_readable_text", "under_minimum", "fallback_recovered", "empty_body", "plain_no_text",
+      "html_no_text_with_script", "html_no_text_without_script", "html_text_without_semantic_root", "html_text_outside_semantic_root",
+    ].sort());
     expect(JSON.stringify(records)).not.toContain("SENTINEL_UNTRUSTED_VALUE");
   });
 

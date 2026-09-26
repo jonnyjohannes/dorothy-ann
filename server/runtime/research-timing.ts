@@ -18,7 +18,7 @@ export interface StageTiming {
 
 export interface ResearchTimingRecord {
   event: "research_timing";
-  schema_version: 3;
+  schema_version: 4;
   terminal_status: "completed" | "failed" | "interrupted" | "executor_error";
   answer_position?: "initial" | "follow_up";
   assessment_failure_code?: "provider_bad_request" | "provider_rate_limited" | "provider_unavailable" | "provider_failed" | "provider_interrupted" | "assessment_invalid_response";
@@ -97,6 +97,9 @@ export class ResearchTimingCollector {
   private readonly evidenceYield: EvidenceYieldRequest[] = [];
   private readonly extractionText: Record<ExtractionTextDiagnostic, number> = {
     no_readable_text: 0, under_minimum: 0, fallback_recovered: 0,
+    empty_body: 0, plain_no_text: 0,
+    html_no_text_with_script: 0, html_no_text_without_script: 0,
+    html_text_without_semantic_root: 0, html_text_outside_semantic_root: 0,
   };
 
   constructor(
@@ -179,6 +182,12 @@ export class ResearchTimingCollector {
       case "no_readable_text":
       case "under_minimum":
       case "fallback_recovered":
+      case "empty_body":
+      case "plain_no_text":
+      case "html_no_text_with_script":
+      case "html_no_text_without_script":
+      case "html_text_without_semantic_root":
+      case "html_text_outside_semantic_root":
         this.extractionText[category] = boundedCount(this.extractionText[category] + 1, 12);
         break;
     }
@@ -197,7 +206,7 @@ export class ResearchTimingCollector {
       const distinctRootIds = resolution && viableEvidenceSourceCount(resolution.knowledge);
       const record: ResearchTimingRecord = {
         event: "research_timing",
-        schema_version: 3,
+        schema_version: 4,
         terminal_status: summary.terminalStatus,
         ...(summary.answerPosition ? { answer_position: summary.answerPosition } : {}),
         ...(this.assessmentFailureCode ? { assessment_failure_code: this.assessmentFailureCode } : {}),

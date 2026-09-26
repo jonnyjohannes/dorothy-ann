@@ -55,7 +55,22 @@ describe("SafeContentExtractor readable text recovery", () => {
       .toMatchObject({ status: "skipped", reason: "empty_content" });
     expect(await extractor("A short text response.", "text/plain", diagnostics).extract(source, limits))
       .toMatchObject({ status: "skipped", reason: "empty_content" });
-    expect(diagnostics).toEqual(["no_readable_text", "under_minimum", "under_minimum"]);
+    expect(diagnostics).toEqual(["no_readable_text", "html_no_text_with_script", "under_minimum", "under_minimum"]);
+  });
+
+  it("classifies successful zero-byte, plain-whitespace, and script-free HTML responses without recording text", async () => {
+    const diagnostics: ExtractionTextDiagnostic[] = [];
+    const attempts = [
+      extractor("", "text/html", diagnostics),
+      extractor("  \n \t ", "text/plain", diagnostics),
+      extractor("<html><body><nav>Navigation only</nav></body></html>", "text/html", diagnostics),
+    ];
+    for (const attempt of attempts) expect(await attempt.extract(source, limits)).toMatchObject({ status: "skipped", reason: "empty_content" });
+    expect(diagnostics).toEqual([
+      "no_readable_text", "empty_body",
+      "no_readable_text", "plain_no_text",
+      "no_readable_text", "html_no_text_without_script",
+    ]);
   });
 
   it("retains code-point bounds, plain-text viability, and existing HTTP/unsafe failures", async () => {

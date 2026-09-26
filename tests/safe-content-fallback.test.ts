@@ -46,11 +46,18 @@ describe("static HTML fallback after empty Readability", () => {
     expect(diagnostics).toEqual(["fallback_recovered"]);
   });
 
+  it("counts static text outside an empty semantic root without admitting it", async () => {
+    const diagnostics: ExtractionTextDiagnostic[] = [];
+    const html = `<body><main></main><div>${"Static text outside the empty main region. ".repeat(5)}</div></body>`;
+    expect(await extract(html, diagnostics)).toMatchObject({ status: "skipped", reason: "empty_content" });
+    expect(diagnostics).toEqual(["no_readable_text", "html_text_outside_semantic_root"]);
+  });
+
   it("rejects short semantic content and never promotes body-only boilerplate", async () => {
     const diagnostics: ExtractionTextDiagnostic[] = [];
     expect(await extract("<main>Short report.</main>", diagnostics)).toMatchObject({ status: "skipped", reason: "empty_content" });
     expect(await extract(`<body><div>${"Boilerplate with no semantic content region. ".repeat(6)}</div></body>`, diagnostics))
       .toMatchObject({ status: "skipped", reason: "empty_content" });
-    expect(diagnostics).toEqual(["under_minimum", "no_readable_text"]);
+    expect(diagnostics).toEqual(["under_minimum", "no_readable_text", "html_text_without_semantic_root"]);
   });
 });

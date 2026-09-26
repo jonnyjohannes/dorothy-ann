@@ -17,7 +17,14 @@ export interface ExtractorConfig {
 }
 
 /** Aggregate-only categories. Never include page data or source identity. */
-export type ExtractionTextDiagnostic = "no_readable_text" | "under_minimum" | "fallback_recovered";
+export type EmptyResponseShape =
+  | "empty_body"
+  | "plain_no_text"
+  | "html_no_text_with_script"
+  | "html_no_text_without_script"
+  | "html_text_without_semantic_root"
+  | "html_text_outside_semantic_root";
+export type ExtractionTextDiagnostic = "no_readable_text" | "under_minimum" | "fallback_recovered" | EmptyResponseShape;
 
 type PublicAddress = { address: string; family: 4 | 6 };
 type FetchWithDispatcher = (input: string | URL, init?: RequestInit & { dispatcher?: Agent }) => Promise<Response>;
@@ -139,8 +146,7 @@ async function readBoundedBody(
   return result;
 }
 
-function sanitizedDocument(html: string): ReturnType<typeof parseHTML>["document"] {
-  const { document } = parseHTML(html);
+function sanitizeDocument(document: ReturnType<typeof parseHTML>["document"]): ReturnType<typeof parseHTML>["document"] {
   document.querySelectorAll("script, style, noscript, template, svg, nav, footer, header, form, aside, button, input, textarea, select, [hidden], [inert], [aria-hidden='true'], [role='navigation'], [role='complementary']")
     .forEach((node) => node.remove());
   document.querySelectorAll("[style]").forEach((node) => {
@@ -150,15 +156,32 @@ function sanitizedDocument(html: string): ReturnType<typeof parseHTML>["document
 }
 
 function readableText(html: string): string {
-  const article = new Readability(sanitizedDocument(html) as unknown as Document).parse();
+  const { document } = parseHTML(html);
+  const article = new Readability(sanitizeDocument(document) as unknown as Document).parse();
   return article?.textContent ?? "";
 }
 
-/** Restrict fallback to visible semantic content; never dump the whole page. */
-function semanticText(html: string): string {
-  const document = sanitizedDocument(html);
+/** Shape flags remain local; only a fixed category may leave the extractor. */
+function semanticContent(html: string): { text: string; hasRoot: boolean; hasStaticText: boolean; hasScript: boolean } {
+  const { document } = parseHTML(html);
+  const hasScript = Boolean(document.querySelector("script"));
+  sanitizeDocument(document);
   const root = document.querySelector("article") ?? document.querySelector("main") ?? document.querySelector("[role='main']");
-  return root?.innerText ?? "";
+  const body = document.querySelector("body");
+  const staticText = body?.innerText ?? (document.documentElement?.localName === "html" ? "" : document.documentElement?.innerText ?? "");
+  return {
+    text: root?.innerText ?? "",
+    hasRoot: Boolean(root),
+    hasStaticText: Boolean(staticText.trim()),
+    hasScript,
+  };
+}
+
+function emptyShape(bytes: number, contentType: "text/html" | "text/plain", content?: ReturnType<typeof semanticContent>): EmptyResponseShape {
+  if (bytes === 0) return "empty_body";
+  if (contentType === "text/plain") return "plain_no_text";
+  if (content?.hasStaticText) return content.hasRoot ? "html_text_outside_semantic_root" : "html_text_without_semantic_root";
+  return content?.hasScript ? "html_no_text_with_script" : "html_no_text_without_script";
 }
 
 function boundedText(text: string, maxCharacters: number): string {
@@ -198,15 +221,15 @@ export class SafeContentExtractor implements ContentExtractor {
     const timeout = new Promise<ExtractionOutcome>((resolve) => {
       timer = setTimeout(() => resolve({ sourceId: source.sourceId, status: "failed", code: "timeout", retryable: true }), limits.timeoutMs);
     });
-    let diagnostic: ExtractionTextDiagnostic | undefined;
+    const diagnostics: ExtractionTextDiagnostic[] = [];
     try {
-      const outcome = await Promise.race([this.extractInternal(source, limits, (category) => { diagnostic = category; }), timeout]);
+      const outcome = await Promise.race([this.extractInternal(source, limits, (category) => { diagnostics.push(category); }), timeout]);
       // A fetch may finish after the outer timeout; only count the outcome
       // actually returned to acquisition, never a late background result.
-      if (diagnostic && (
-        (outcome.status === "viable" && diagnostic === "fallback_recovered")
-        || (outcome.status === "skipped" && outcome.reason === "empty_content" && diagnostic !== "fallback_recovered")
-      )) this.report(diagnostic);
+      for (const category of diagnostics) {
+        if ((outcome.status === "viable" && category === "fallback_recovered")
+          || (outcome.status === "skipped" && outcome.reason === "empty_content" && category !== "fallback_recovered")) this.report(category);
+      }
       return outcome;
     } finally { if (timer) clearTimeout(timer); }
   }
@@ -285,10 +308,18 @@ export class SafeContentExtractor implements ContentExtractor {
           this.config.maxFetchBytes,
           controller.signal,
         );
+        // An HTTP 200 with no body is missing content, not a parser/fetch failure.
+        if (buffer.byteLength === 0) {
+          recordTextDiagnostic("no_readable_text");
+          recordTextDiagnostic("empty_body");
+          return { sourceId: source.sourceId, status: "skipped", reason: "empty_content" };
+        }
         const raw = new TextDecoder().decode(buffer);
         let bounded = boundedText(contentType === "text/html" ? readableText(raw) : raw, limits.maxCharacters);
+        let semantic: ReturnType<typeof semanticContent> | undefined;
         if (contentType === "text/html" && [...bounded].length < this.config.minCharacters) {
-          const fallback = boundedText(semanticText(raw), limits.maxCharacters);
+          semantic = semanticContent(raw);
+          const fallback = boundedText(semantic.text, limits.maxCharacters);
           if ([...fallback].length >= this.config.minCharacters) {
             bounded = fallback;
             recordTextDiagnostic("fallback_recovered");
@@ -296,7 +327,10 @@ export class SafeContentExtractor implements ContentExtractor {
         }
         const characterCount = [...bounded].length;
         if (characterCount < this.config.minCharacters) {
-          recordTextDiagnostic(characterCount === 0 ? "no_readable_text" : "under_minimum");
+          if (characterCount === 0) {
+            recordTextDiagnostic("no_readable_text");
+            recordTextDiagnostic(emptyShape(buffer.byteLength, contentType, semantic));
+          } else recordTextDiagnostic("under_minimum");
           return {
             sourceId: source.sourceId,
             status: "skipped",
