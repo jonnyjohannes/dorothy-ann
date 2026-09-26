@@ -94,14 +94,16 @@ describe("SafeContentExtractor readable text recovery", () => {
       (category) => { diagnostics.push(category); }, sample);
     const matching = "<html><body><script>document.body.append('Later')</script></body></html>";
     expect(await attempt(matching).extract(source, limits)).toMatchObject({ status: "skipped", reason: "empty_content" });
-    expect(sample).toHaveBeenCalledExactlyOnceWith(matching);
+    expect(sample).toHaveBeenCalledExactlyOnceWith({ html: matching, baseUrl: source.url });
     await attempt("<html><body><nav>No article</nav></body></html>").extract(source, limits);
     await attempt("<html><body><main>Short</main><script></script></body></html>").extract(source, limits);
     await attempt(matching, 403).extract(source, limits);
+    await attempt(matching).extract({ ...source, rank: 4 }, limits);
     expect(sample).toHaveBeenCalledTimes(1);
     expect(diagnostics).toEqual([
       "no_readable_text", "html_no_text_with_script",
       "no_readable_text", "html_no_text_without_script", "under_minimum",
+      "no_readable_text", "html_no_text_with_script",
     ]);
   });
 

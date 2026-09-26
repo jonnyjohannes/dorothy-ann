@@ -41,34 +41,40 @@ const privateIPv4 = (ip: string) => {
     (octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127) ||
     (octets[0] === 169 && octets[1] === 254) ||
     (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
-    (octets[0] === 192 && octets[1] === 168) ||
+    (octets[0] === 192 && (octets[1] === 0 || octets[1] === 168)) ||
+    (octets[0] === 198 && (octets[1] === 18 || octets[1] === 19)) ||
     octets[0] >= 224
   );
 };
 
 export function isPublicAddress(address: string): boolean {
-  if (isIP(address) === 4) return !privateIPv4(address);
+  const family = isIP(address);
+  if (family === 4) return !privateIPv4(address);
+  if (family !== 6) return false;
   const normalized = address.toLowerCase();
-  const mappedIpv4 = normalized.match(
-    /^::ffff:(\\d+\\.\\d+\\.\\d+\\.\\d+)$/,
-  )?.[1];
+  const mappedIpv4 = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)?.[1];
   if (mappedIpv4) return isPublicAddress(mappedIpv4);
+  const mappedHex = /^::ffff:([\da-f]{1,4}):([\da-f]{1,4})$/.exec(normalized);
+  if (mappedHex) {
+    const high = Number.parseInt(mappedHex[1]!, 16);
+    const low = Number.parseInt(mappedHex[2]!, 16);
+    return isPublicAddress(`${high >>> 8}.${high & 255}.${low >>> 8}.${low & 255}`);
+  }
   return (
     normalized !== "::" &&
     normalized !== "::1" &&
     !normalized.startsWith("fc") &&
     !normalized.startsWith("fd") &&
-    !normalized.startsWith("fe8") &&
-    !normalized.startsWith("fe9") &&
-    !normalized.startsWith("fea") &&
-    !normalized.startsWith("feb") &&
-    !normalized.startsWith("::ffff:127.")
+    !normalized.startsWith("fe") &&
+    !normalized.startsWith("ff") &&
+    !normalized.startsWith("::ffff:")
   );
 }
 
 async function resolvePublicAddresses(url: URL): Promise<PublicAddress[]> {
   if (
-    ["localhost", "localhost.localdomain"].includes(url.hostname.toLowerCase())
+    ["localhost", "localhost.localdomain"].includes(url.hostname.toLowerCase()) ||
+    (isIP(url.hostname.replace(/^\[|\]$/g, "")) !== 0 && !isPublicAddress(url.hostname.replace(/^\[|\]$/g, "")))
   ) {
     throw new Error("unsafe_url");
   }
@@ -252,12 +258,51 @@ function pinnedAgent(addresses: PublicAddress[]): Agent {
   });
 }
 
+/** Local diagnostic only: HTTPS JavaScript bytes, pinned to validated public DNS. Never evidence. */
+export async function fetchPublicScript(value: string, fetcher: FetchWithDispatcher = fetchWithDispatcher): Promise<string | null> {
+  let current: URL;
+  try {
+    const requested = new URL(value);
+    if (requested.protocol !== "https:") return null;
+    current = await assertSafeUrl(requested.toString());
+  } catch { return null; }
+  for (let redirects = 0; redirects <= 2; redirects++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3_000);
+    let dispatcher: Agent | undefined;
+    try {
+      const addresses = (await resolvePublicAddresses(current)).filter((entry) => entry.family === 4);
+      if (!addresses.length) return null; // The local pilot never opens an IPv6 socket.
+      dispatcher = pinnedAgent(addresses);
+      const response = await fetcher(current, {
+        redirect: "manual", signal: controller.signal, dispatcher,
+        headers: { accept: "text/javascript,application/javascript", "user-agent": "dorothy-ann-local-probe" },
+      });
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get("location");
+        if (!location || redirects === 2) return null;
+        const next = new URL(location, current);
+        if (next.protocol !== "https:") return null;
+        current = await assertSafeUrl(next.toString());
+        continue;
+      }
+      if (!response.ok) return null;
+      const mime = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+      if (mime !== "text/javascript" && mime !== "application/javascript" && mime !== "application/x-javascript") return null;
+      const body = await readBoundedBody(response, 256_000, controller.signal);
+      return body.length ? new TextDecoder("utf-8", { fatal: true }).decode(body) : null;
+    } catch { return null; }
+    finally { clearTimeout(timer); await dispatcher?.close().catch(() => undefined); }
+  }
+  return null;
+}
+
 export class SafeContentExtractor implements ContentExtractor {
   constructor(
     private readonly config: ExtractorConfig,
     private readonly fetcher: FetchWithDispatcher = fetchWithDispatcher,
     private readonly onTextDiagnostic?: (category: ExtractionTextDiagnostic) => void,
-    private readonly onEmptyHtmlSample?: (html: string) => void,
+    private readonly onEmptyHtmlSample?: (sample: { html: string; baseUrl: string }) => void,
   ) {}
 
   private report(category: ExtractionTextDiagnostic): void {
@@ -271,9 +316,9 @@ export class SafeContentExtractor implements ContentExtractor {
       timer = setTimeout(() => resolve({ sourceId: source.sourceId, status: "failed", code: "timeout", retryable: true }), limits.timeoutMs);
     });
     const diagnostics: ExtractionTextDiagnostic[] = [];
-    let sampleHtml: string | undefined;
+    let sample: { html: string; baseUrl: string } | undefined;
     try {
-      const outcome = await Promise.race([this.extractInternal(source, limits, (category) => { diagnostics.push(category); }, (html) => { sampleHtml = html; }), timeout]);
+      const outcome = await Promise.race([this.extractInternal(source, limits, (category) => { diagnostics.push(category); }, (value) => { sample = value; }), timeout]);
       // A fetch may finish after the outer timeout; only count the outcome
       // actually returned to acquisition, never a late background result.
       for (const category of diagnostics) {
@@ -281,8 +326,8 @@ export class SafeContentExtractor implements ContentExtractor {
           || (outcome.status === "skipped" && outcome.reason === "empty_content" && category !== "fallback_recovered" && category !== "json_ld_recovered")) this.report(category);
       }
       if (outcome.status === "skipped" && outcome.reason === "empty_content"
-        && diagnostics.includes("html_no_text_with_script") && sampleHtml !== undefined) {
-        try { this.onEmptyHtmlSample?.(sampleHtml); } catch { /* Local observation cannot change extraction. */ }
+        && source.rank <= 3 && diagnostics.includes("html_no_text_with_script") && sample !== undefined) {
+        try { this.onEmptyHtmlSample?.(sample); } catch { /* Local observation cannot change extraction. */ }
       }
       return outcome;
     } finally { if (timer) clearTimeout(timer); }
@@ -292,7 +337,7 @@ export class SafeContentExtractor implements ContentExtractor {
     source: SearchResult,
     limits: ExtractionLimits,
     recordTextDiagnostic: (category: ExtractionTextDiagnostic) => void,
-    recordEmptyHtml: (html: string) => void,
+    recordEmptyHtml: (sample: { html: string; baseUrl: string }) => void,
   ): Promise<ExtractionOutcome> {
     let current: URL;
     try {
@@ -393,7 +438,7 @@ export class SafeContentExtractor implements ContentExtractor {
             recordTextDiagnostic("no_readable_text");
             const shape = emptyShape(buffer.byteLength, contentType, semantic);
             recordTextDiagnostic(shape);
-            if (shape === "html_no_text_with_script" && this.onEmptyHtmlSample) recordEmptyHtml(raw);
+            if (shape === "html_no_text_with_script" && this.onEmptyHtmlSample && source.rank <= 3) recordEmptyHtml({ html: raw, baseUrl: current.toString() });
           } else recordTextDiagnostic("under_minimum");
           return {
             sourceId: source.sourceId,

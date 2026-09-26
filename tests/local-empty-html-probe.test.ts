@@ -25,9 +25,9 @@ describe("local-only empty HTML probe", () => {
       return { render: "ok" as const, failure_stage: "none" as const, read_method: "page_eval" as const, semantic_text: "none" as const, body_text: "under_120" as const, blocked_requests: 0 };
     });
     const probe = createLocalEmptyHtmlProbe((result) => { emitted.push(result); }, render);
-    probe(privateText);
-    probe("second");
-    probe("third");
+    probe({ html: privateText, baseUrl: "https://example.org/" });
+    probe({ html: "second", baseUrl: "https://example.org/" });
+    probe({ html: "third", baseUrl: "https://example.org/" });
     await vi.waitFor(() => expect(emitted).toHaveLength(2));
     expect(render).toHaveBeenCalledTimes(2);
     expect(emitted).toEqual([
@@ -41,7 +41,7 @@ describe("local-only empty HTML probe", () => {
     const privateText = "PRIVATE_HTML_DO_NOT_LOG";
     const emitted: unknown[] = [];
     const probe = createLocalEmptyHtmlProbe((result) => { emitted.push(result); throw new Error(privateText); }, async () => { throw new Error(privateText); });
-    probe(privateText);
+    probe({ html: privateText, baseUrl: "https://example.org/" });
     await vi.waitFor(() => expect(emitted).toHaveLength(1));
     expect(emitted).toEqual([{ sample_index: 1, render: "failed", failure_stage: "probe_runner", read_method: "none", semantic_text: null, body_text: null, blocked_requests: 0 }]);
     expect(JSON.stringify(emitted)).not.toContain(privateText);

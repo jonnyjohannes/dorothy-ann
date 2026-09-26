@@ -86,7 +86,7 @@ function createExecutor(
   llm: LLMProvider,
   logger: Logger,
   researchTimingSink?: ResearchTimingSink,
-  localEmptyHtmlSample?: (html: string) => void,
+  localEmptyHtmlSample?: (sample: { html: string; baseUrl: string }) => void,
 ): TurnExecutor {
   const assessor = new ResearchAssessor(identities);
   return {
@@ -201,7 +201,7 @@ export interface AppDependencies {
   threadStoreV3?: ThreadStore;
   researchTimingSink?: ResearchTimingSink;
   /** Node development-only, in-memory diagnostic; never wire from a public request. */
-  localEmptyHtmlSample?: (html: string) => void;
+  localEmptyHtmlSample?: (sample: { html: string; baseUrl: string }) => void;
   logger?: Logger;
 }
 
