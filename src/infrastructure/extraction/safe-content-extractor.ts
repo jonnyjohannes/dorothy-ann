@@ -353,6 +353,46 @@ export async function fetchPublicScript(value: string, fetcher: FetchWithDispatc
   return null;
 }
 
+export type PresentationComparison =
+  | { outcome: "html"; shape: ReturnType<typeof inspectEmptyHtmlShape> }
+  | { outcome: "empty" | "redirect" | "http_error" | "unsupported" | "too_large" | "timeout" | "failed"; shape: null };
+
+/** Local-only diagnostic refetch of the same validated URL. Never a source or extraction outcome. */
+export async function compareHtmlPresentation(url: string, fetcher: FetchWithDispatcher = fetchWithDispatcher): Promise<PresentationComparison> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8_000);
+  let dispatcher: Agent | undefined;
+  let response: Response | undefined;
+  try {
+    const current = await assertSafeUrl(url);
+    if (controller.signal.aborted) return { outcome: "timeout", shape: null };
+    const addresses = await resolvePublicAddresses(current);
+    if (controller.signal.aborted) return { outcome: "timeout", shape: null };
+    dispatcher = pinnedAgent(addresses);
+    response = await fetcher(current, {
+      redirect: "manual", signal: controller.signal, dispatcher,
+      headers: {
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        accept: "text/html,text/plain;q=0.9",
+      },
+    });
+    if (response.status >= 300 && response.status < 400) return { outcome: "redirect", shape: null };
+    if (!response.ok) return { outcome: "http_error", shape: null };
+    if (response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() !== "text/html")
+      return { outcome: "unsupported", shape: null };
+    const body = await readBoundedBody(response, 2_000_000, controller.signal);
+    if (!body.length) return { outcome: "empty", shape: null };
+    return { outcome: "html", shape: inspectEmptyHtmlShape(new TextDecoder().decode(body)) };
+  } catch (error) {
+    if (controller.signal.aborted) return { outcome: "timeout", shape: null };
+    return { outcome: error instanceof Error && error.message === "body_limit" ? "too_large" : "failed", shape: null };
+  } finally {
+    clearTimeout(timer);
+    if (response?.body && !response.bodyUsed) await response.body.cancel().catch(() => undefined);
+    await dispatcher?.close().catch(() => undefined);
+  }
+}
+
 export class SafeContentExtractor implements ContentExtractor {
   constructor(
     private readonly config: ExtractorConfig,

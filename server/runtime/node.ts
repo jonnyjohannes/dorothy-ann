@@ -23,9 +23,20 @@ const offlineEnabled = localProbeEnabled(process.env.DOROTHY_LOCAL_EMPTY_PROBE, 
 const publicScriptEnabled = localProbeEnabled(process.env.DOROTHY_LOCAL_PUBLIC_SCRIPT_PILOT, process.env.NODE_ENV, config.DOROTHY_FIXTURE_MODE);
 const originEnabled = localProbeEnabled(process.env.DOROTHY_LOCAL_ORIGIN_PROBE, process.env.NODE_ENV, config.DOROTHY_FIXTURE_MODE);
 const shapeEnabled = localProbeEnabled(process.env.DOROTHY_LOCAL_STATIC_SHAPE_PROBE, process.env.NODE_ENV, config.DOROTHY_FIXTURE_MODE);
-if (Number(offlineEnabled) + Number(publicScriptEnabled) + Number(originEnabled) + Number(shapeEnabled) > 1) throw new Error("conflicting_local_probes");
-const localEmptyHtmlSample = shapeEnabled
-  ? (await import("../../scripts/local-static-shape-probe.js")).createLocalStaticShapeProbe((result) => logger.info("local_static_shape_probe", {
+const presentationEnabled = localProbeEnabled(process.env.DOROTHY_LOCAL_FETCH_PRESENTATION_PROBE, process.env.NODE_ENV, config.DOROTHY_FIXTURE_MODE);
+if (Number(offlineEnabled) + Number(publicScriptEnabled) + Number(originEnabled) + Number(shapeEnabled) + Number(presentationEnabled) > 1) throw new Error("conflicting_local_probes");
+const localEmptyHtmlSample = presentationEnabled
+  ? (await import("../../scripts/local-fetch-presentation-probe.js")).createLocalFetchPresentationProbe((result) => logger.info("local_fetch_presentation_probe", {
+    stage: "diagnostic", sample_index: result.sample_index, refetch_outcome: result.refetch_outcome,
+    original: result.original ? { bytes: result.original.bytes, body_dom_text_before: result.original.body_dom_text_before,
+      body_before: result.original.body_before, root_dom_text_before: result.original.root_dom_text_before,
+      root_text_after: result.original.root_text_after } : null,
+    refetch: result.refetch ? { bytes: result.refetch.bytes, body_dom_text_before: result.refetch.body_dom_text_before,
+      body_before: result.refetch.body_before, root_dom_text_before: result.refetch.root_dom_text_before,
+      root_text_after: result.refetch.root_text_after } : null,
+  }))
+  : shapeEnabled
+    ? (await import("../../scripts/local-static-shape-probe.js")).createLocalStaticShapeProbe((result) => logger.info("local_static_shape_probe", {
     stage: "diagnostic", sample_index: result.sample_index, inspection: result.inspection,
     shape: result.shape ? {
       bytes: result.shape.bytes, body_present: result.shape.body_present,
@@ -61,7 +72,7 @@ const localEmptyHtmlSample = shapeEnabled
       blocked_requests: result.blocked_requests,
     }))
     : undefined;
-if (localEmptyHtmlSample) logger.info(shapeEnabled ? "local_static_shape_probe_armed" : originEnabled ? "local_origin_html_probe_armed" : publicScriptEnabled ? "local_public_script_pilot_armed" : "local_empty_html_probe_armed", {
-  stage: "diagnostic", max_samples: 2, network: "browser_offline",
+if (localEmptyHtmlSample) logger.info(presentationEnabled ? "local_fetch_presentation_probe_armed" : shapeEnabled ? "local_static_shape_probe_armed" : originEnabled ? "local_origin_html_probe_armed" : publicScriptEnabled ? "local_public_script_pilot_armed" : "local_empty_html_probe_armed", {
+  stage: "diagnostic", max_samples: 2, network: presentationEnabled ? "one_bounded_refetch_per_sample" : shapeEnabled ? "none" : "browser_offline",
 });
 serve({ fetch: createApp({ config, systemPrompts, threadStoreV3, logger, localEmptyHtmlSample }).fetch, port }, (info) => { logger.info("server_listening", { stage: "runtime", port: info.port }); });
