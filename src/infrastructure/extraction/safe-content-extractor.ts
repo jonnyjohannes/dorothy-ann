@@ -183,6 +183,62 @@ function semanticContent(html: string): { text: string; hasRoot: boolean; hasSta
   };
 }
 
+export type TextLengthBucket = "none" | "under_120" | "at_least_120";
+export type NodeCountBucket = "none" | "one" | "two_or_more";
+
+function textLengthBucket(text: string | undefined): TextLengthBucket {
+  const normalized = text?.replace(/\s+/g, " ").trim() ?? "";
+  if (!normalized) return "none";
+  const characters = normalized[Symbol.iterator]();
+  for (let length = 0; length < 120; length++) if (characters.next().done) return "under_120";
+  return "at_least_120";
+}
+
+function nodeCountBucket(count: number): NodeCountBucket {
+  return count === 0 ? "none" : count === 1 ? "one" : "two_or_more";
+}
+
+/** Local-only response-boundary view. Never return any page content, URL, or arbitrary labels. */
+export function inspectEmptyHtmlShape(html: string): {
+  bytes: "under_4k" | "4k_to_64k" | "over_64k";
+  body_present: boolean;
+  root_before: boolean;
+  root_after: boolean;
+  body_before: TextLengthBucket;
+  root_text_before: TextLengthBucket;
+  body_dom_text_before: TextLengthBucket;
+  root_dom_text_before: TextLengthBucket;
+  body_after: TextLengthBucket;
+  root_text_after: TextLengthBucket;
+  body_elements: NodeCountBucket;
+  inline_scripts: NodeCountBucket;
+  external_scripts: NodeCountBucket;
+} {
+  const bytes = new TextEncoder().encode(html).byteLength;
+  if (bytes > 2_000_000) throw new Error("inspection_limit");
+  const { document } = parseHTML(html);
+  const inline = document.querySelectorAll("script:not([src])").length;
+  const external = document.querySelectorAll("script[src]").length;
+  const body = document.querySelector("body");
+  const bodyElements = body?.querySelectorAll("*").length ?? 0;
+  document.querySelectorAll("script, style, noscript, template").forEach((node) => node.remove());
+  const rootBefore = document.querySelector("article") ?? document.querySelector("main") ?? document.querySelector("[role='main']");
+  const bodyBefore = textLengthBucket(body?.innerText);
+  const rootTextBefore = textLengthBucket(rootBefore?.innerText);
+  const bodyDomBefore = textLengthBucket(body?.textContent ?? undefined);
+  const rootDomBefore = textLengthBucket(rootBefore?.textContent ?? undefined);
+  sanitizeDocument(document);
+  const rootAfter = document.querySelector("article") ?? document.querySelector("main") ?? document.querySelector("[role='main']");
+  return {
+    bytes: bytes < 4_096 ? "under_4k" : bytes <= 65_536 ? "4k_to_64k" : "over_64k",
+    body_present: Boolean(body), root_before: Boolean(rootBefore), root_after: Boolean(rootAfter),
+    body_before: bodyBefore, root_text_before: rootTextBefore,
+    body_dom_text_before: bodyDomBefore, root_dom_text_before: rootDomBefore,
+    body_after: textLengthBucket(body?.innerText), root_text_after: textLengthBucket(rootAfter?.innerText),
+    body_elements: nodeCountBucket(bodyElements), inline_scripts: nodeCountBucket(inline), external_scripts: nodeCountBucket(external),
+  };
+}
+
 function emptyShape(bytes: number, contentType: "text/html" | "text/plain", content?: ReturnType<typeof semanticContent>): EmptyResponseShape {
   if (bytes === 0) return "empty_body";
   if (contentType === "text/plain") return "plain_no_text";

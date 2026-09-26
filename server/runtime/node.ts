@@ -22,9 +22,23 @@ const { localProbeEnabled, createLocalEmptyHtmlProbe } = await import("../../scr
 const offlineEnabled = localProbeEnabled(process.env.DOROTHY_LOCAL_EMPTY_PROBE, process.env.NODE_ENV, config.DOROTHY_FIXTURE_MODE);
 const publicScriptEnabled = localProbeEnabled(process.env.DOROTHY_LOCAL_PUBLIC_SCRIPT_PILOT, process.env.NODE_ENV, config.DOROTHY_FIXTURE_MODE);
 const originEnabled = localProbeEnabled(process.env.DOROTHY_LOCAL_ORIGIN_PROBE, process.env.NODE_ENV, config.DOROTHY_FIXTURE_MODE);
-if (Number(offlineEnabled) + Number(publicScriptEnabled) + Number(originEnabled) > 1) throw new Error("conflicting_local_probes");
-const localEmptyHtmlSample = originEnabled
-  ? (await import("../../scripts/local-origin-html-probe.js")).createLocalOriginHtmlProbe((result) => logger.info("local_origin_html_probe", {
+const shapeEnabled = localProbeEnabled(process.env.DOROTHY_LOCAL_STATIC_SHAPE_PROBE, process.env.NODE_ENV, config.DOROTHY_FIXTURE_MODE);
+if (Number(offlineEnabled) + Number(publicScriptEnabled) + Number(originEnabled) + Number(shapeEnabled) > 1) throw new Error("conflicting_local_probes");
+const localEmptyHtmlSample = shapeEnabled
+  ? (await import("../../scripts/local-static-shape-probe.js")).createLocalStaticShapeProbe((result) => logger.info("local_static_shape_probe", {
+    stage: "diagnostic", sample_index: result.sample_index, inspection: result.inspection,
+    shape: result.shape ? {
+      bytes: result.shape.bytes, body_present: result.shape.body_present,
+      root_before: result.shape.root_before, root_after: result.shape.root_after,
+      body_before: result.shape.body_before, root_text_before: result.shape.root_text_before,
+      body_dom_text_before: result.shape.body_dom_text_before, root_dom_text_before: result.shape.root_dom_text_before,
+      body_after: result.shape.body_after, root_text_after: result.shape.root_text_after,
+      body_elements: result.shape.body_elements, inline_scripts: result.shape.inline_scripts,
+      external_scripts: result.shape.external_scripts,
+    } : null,
+  }))
+  : originEnabled
+    ? (await import("../../scripts/local-origin-html-probe.js")).createLocalOriginHtmlProbe((result) => logger.info("local_origin_html_probe", {
     stage: "diagnostic", sample_index: result.sample_index,
     baseline: { render: result.baseline.render, failure_stage: result.baseline.failure_stage,
       read_method: result.baseline.read_method, semantic_text: result.baseline.semantic_text,
@@ -47,7 +61,7 @@ const localEmptyHtmlSample = originEnabled
       blocked_requests: result.blocked_requests,
     }))
     : undefined;
-if (localEmptyHtmlSample) logger.info(originEnabled ? "local_origin_html_probe_armed" : publicScriptEnabled ? "local_public_script_pilot_armed" : "local_empty_html_probe_armed", {
+if (localEmptyHtmlSample) logger.info(shapeEnabled ? "local_static_shape_probe_armed" : originEnabled ? "local_origin_html_probe_armed" : publicScriptEnabled ? "local_public_script_pilot_armed" : "local_empty_html_probe_armed", {
   stage: "diagnostic", max_samples: 2, network: "browser_offline",
 });
 serve({ fetch: createApp({ config, systemPrompts, threadStoreV3, logger, localEmptyHtmlSample }).fetch, port }, (info) => { logger.info("server_listening", { stage: "runtime", port: info.port }); });
