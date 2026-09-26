@@ -45,14 +45,21 @@ describe("FileSystemPromptSource", () => {
     const catalog = await new FileSystemPromptSource().load();
     expect(catalog.assessor).toBe(await readFile(new URL("../ASSESSOR.md", import.meta.url), "utf8"));
     expect(catalog.assessor).toContain("For a single factual, navigational, or current-state problem, prefer one focused search over decomposition.");
-    expect(catalog.assessor).toContain("For the root problem (depth 0), return `resolved` only when");
-    expect(catalog.assessor).toContain("at least two materially independent sources");
-    expect(catalog.assessor).toContain("at least four materially independent sources overall");
-    expect(catalog.assessor).toContain("do not count syndicated copies");
-    expect(catalog.assessor).toContain("source count alone is not proof");
+    expect(catalog.assessor).toContain("two distinct usable extracted source IDs");
+    expect(catalog.assessor).toContain("Bare search results, snippets, source catalog metadata, and repeated snapshots of one ID do not count.");
+    expect(catalog.assessor).toContain("not** a demand that sources agree");
+    expect(catalog.assessor).toContain("both supported and contradictory or qualifying observations");
+    expect(catalog.assessor).toContain("each explicit material obligation");
+    expect(catalog.assessor).toContain("without a two-source quota");
+    expect(catalog.assessor).toContain("Fresh retrieval is mandatory for time-sensitive requests.");
+    expect(catalog.assessor).not.toContain("at least four materially independent sources overall");
     expect(catalog.synthesizer).toBe(await readFile(new URL("../SYNTHESIZER.md", import.meta.url), "utf8"));
-    expect(catalog.synthesizer).toContain("When it is `initial`, begin exactly with `According to my research`");
-    expect(catalog.synthesizer).toContain("When it is `follow_up`, answer directly without repeating");
+    expect(catalog.synthesizer).toContain("**`initial`** — begin exactly with `According to my research`");
+    expect(catalog.synthesizer).toContain("**`follow_up`** — answer directly");
+    expect(catalog.synthesizer).toContain("when they disagree, explain the competing accounts");
+    expect(catalog.synthesizer).toContain("not** a fixed citation quota");
+    expect(catalog.synthesizer).toContain("[[cite:SourceId]]");
+    expect(catalog.synthesizer).toContain("The application, not you, owns transcript separators.");
   });
 
   it.each([

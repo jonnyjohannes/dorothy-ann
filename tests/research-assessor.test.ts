@@ -59,6 +59,27 @@ describe("ResearchAssessor", () => {
     expect(result.directive.knowledge.unresolvedGapIds).toEqual([]);
   });
 
+  it("preserves two attributed viewpoints as a contested finding instead of requiring agreement", async () => {
+    const identities = new IdentityPolicy(hasher);
+    const first = await identities.sourceId("https://example.com/first");
+    const second = await identities.sourceId("https://example.com/second");
+    const input = await makeInput({
+      allowedSupportRefs: [{ type: "source", sourceId: first }, { type: "source", sourceId: second }],
+      proposal: { directive: { kind: "resolved", observations: [
+        { proposition: "The release is well received", statement: "Reviewers praised it.", stance: "supports", support: [{ type: "source", sourceId: first }] },
+        { proposition: "The release is well received", statement: "Community members reported regressions.", stance: "contradicts", support: [{ type: "source", sourceId: second }] },
+      ] } },
+    });
+    const result = await new ResearchAssessor(identities).assess(input);
+    if (result.directive.kind !== "resolved") throw new Error("expected resolved");
+    expect(result.directive.knowledge.findings).toHaveLength(1);
+    const [finding] = result.directive.knowledge.findings;
+    expect(finding.status).toBe("contested");
+    expect(finding.observations.map((observation) => [observation.stance, observation.support[0]?.type === "source" ? observation.support[0].sourceId : ""]).sort((left, right) => String(left[0]).localeCompare(String(right[0])))).toEqual([
+      ["contradicts", second], ["supports", first],
+    ]);
+  });
+
   it("rejects unsupported and malformed support references", async () => {
     const input = await makeInput({
       proposal: { directive: { kind: "resolved", observations: [{ proposition: "Fact", statement: "Statement", stance: "supports", support: [{ type: "source", sourceId: "src_invalid" as never }] }] } },
