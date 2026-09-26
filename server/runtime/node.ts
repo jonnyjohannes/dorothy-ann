@@ -24,7 +24,10 @@ const publicScriptEnabled = localProbeEnabled(process.env.DOROTHY_LOCAL_PUBLIC_S
 const originEnabled = localProbeEnabled(process.env.DOROTHY_LOCAL_ORIGIN_PROBE, process.env.NODE_ENV, config.DOROTHY_FIXTURE_MODE);
 const shapeEnabled = localProbeEnabled(process.env.DOROTHY_LOCAL_STATIC_SHAPE_PROBE, process.env.NODE_ENV, config.DOROTHY_FIXTURE_MODE);
 const presentationEnabled = localProbeEnabled(process.env.DOROTHY_LOCAL_FETCH_PRESENTATION_PROBE, process.env.NODE_ENV, config.DOROTHY_FIXTURE_MODE);
-if (Number(offlineEnabled) + Number(publicScriptEnabled) + Number(originEnabled) + Number(shapeEnabled) + Number(presentationEnabled) > 1) throw new Error("conflicting_local_probes");
+const failedSourcesEnabled = localProbeEnabled(process.env.DOROTHY_LOCAL_FAILED_SOURCES, process.env.NODE_ENV, config.DOROTHY_FIXTURE_MODE);
+if (Number(offlineEnabled) + Number(publicScriptEnabled) + Number(originEnabled) + Number(shapeEnabled) + Number(presentationEnabled) + Number(failedSourcesEnabled) > 1) throw new Error("conflicting_local_probes");
+const failedSourceManifest = failedSourcesEnabled ? await (await import("../../scripts/local-failed-source-manifest.js")).createLocalFailedSourceManifest() : undefined;
+if (failedSourceManifest) logger.info("local_failed_sources_armed", { stage: "diagnostic", manifest_path: failedSourceManifest.path, max_entries: 12 });
 const localEmptyHtmlSample = presentationEnabled
   ? (await import("../../scripts/local-fetch-presentation-probe.js")).createLocalFetchPresentationProbe((result) => logger.info("local_fetch_presentation_probe", {
     stage: "diagnostic", sample_index: result.sample_index, refetch_outcome: result.refetch_outcome,
@@ -75,4 +78,5 @@ const localEmptyHtmlSample = presentationEnabled
 if (localEmptyHtmlSample) logger.info(presentationEnabled ? "local_fetch_presentation_probe_armed" : shapeEnabled ? "local_static_shape_probe_armed" : originEnabled ? "local_origin_html_probe_armed" : publicScriptEnabled ? "local_public_script_pilot_armed" : "local_empty_html_probe_armed", {
   stage: "diagnostic", max_samples: 2, network: presentationEnabled ? "one_bounded_refetch_per_sample" : shapeEnabled ? "none" : "browser_offline",
 });
-serve({ fetch: createApp({ config, systemPrompts, threadStoreV3, logger, localEmptyHtmlSample }).fetch, port }, (info) => { logger.info("server_listening", { stage: "runtime", port: info.port }); });
+serve({ fetch: createApp({ config, systemPrompts, threadStoreV3, logger, localEmptyHtmlSample,
+  localFailedSource: failedSourceManifest?.record }).fetch, port }, (info) => { logger.info("server_listening", { stage: "runtime", port: info.port }); });

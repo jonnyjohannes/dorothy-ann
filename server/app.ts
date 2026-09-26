@@ -13,7 +13,7 @@ import { WebCryptoIdentityHasher } from "../src/infrastructure/identity/web-cryp
 import { BraveSearchProvider } from "../src/infrastructure/providers/brave.js";
 import { SafeContentExtractor } from "../src/infrastructure/extraction/safe-content-extractor.js";
 import { AnthropicProvider } from "../src/infrastructure/providers/anthropic.js";
-import { EvidenceAcquirer } from "../src/application/evidence-acquirer.js";
+import { EvidenceAcquirer, type EvidenceAcquirerDependencies } from "../src/application/evidence-acquirer.js";
 import { ResearchAssessor } from "../src/application/research-assessor.js";
 import { ResearchResolver } from "../src/application/research-resolver.js";
 import { AnswerSynthesizer } from "../src/application/answer-synthesizer.js";
@@ -87,6 +87,7 @@ function createExecutor(
   logger: Logger,
   researchTimingSink?: ResearchTimingSink,
   localEmptyHtmlSample?: (sample: { html: string; baseUrl: string }) => void,
+  localFailedSource?: EvidenceAcquirerDependencies["onSelectedExtractionFailure"],
 ): TurnExecutor {
   const assessor = new ResearchAssessor(identities);
   return {
@@ -118,7 +119,9 @@ function createExecutor(
         }, undefined, timing ? (category) => timing.markExtractionText(category) : undefined, localEmptyHtmlSample);
         const timedExtractor = extractor && timing ? timing.decorateExtractor(extractor) : extractor;
         const timedLlm = timing?.decorateLlm(llm) ?? llm;
-        const acquirer = new EvidenceAcquirer({ search: timedSearch, extractor: timedExtractor, fixture: config.DOROTHY_FIXTURE_MODE });
+        const acquirer = new EvidenceAcquirer({ search: timedSearch, extractor: timedExtractor, fixture: config.DOROTHY_FIXTURE_MODE,
+          ...(!config.DOROTHY_FIXTURE_MODE && localFailedSource ? { onSelectedExtractionFailure: localFailedSource } : {}),
+        });
         const resolver = new ResearchResolver({
           identities,
           assessor,
@@ -202,10 +205,12 @@ export interface AppDependencies {
   researchTimingSink?: ResearchTimingSink;
   /** Node development-only, in-memory diagnostic; never wire from a public request. */
   localEmptyHtmlSample?: (sample: { html: string; baseUrl: string }) => void;
+  /** Node development-only private manifest; never expose through HTTP/SSE. */
+  localFailedSource?: EvidenceAcquirerDependencies["onSelectedExtractionFailure"];
   logger?: Logger;
 }
 
-export function createApp({ config, systemPrompts, threadStoreV3: injectedStore, researchTimingSink, localEmptyHtmlSample, logger: injectedLogger }: AppDependencies) {
+export function createApp({ config, systemPrompts, threadStoreV3: injectedStore, researchTimingSink, localEmptyHtmlSample, localFailedSource, logger: injectedLogger }: AppDependencies) {
   const logger = injectedLogger ?? createLogger({ level: config.LOG_LEVEL });
   const identities = new IdentityPolicy(new WebCryptoIdentityHasher());
   const searchReady = config.DOROTHY_FIXTURE_MODE || Boolean(config.BRAVE_SEARCH_API_KEY);
@@ -229,7 +234,7 @@ export function createApp({ config, systemPrompts, threadStoreV3: injectedStore,
       })
       : new UnavailableLlmProvider();
   const timingSink = researchTimingSink ?? (config.RESEARCH_TIMING_LOGS || logger.enabled("debug") ? loggerResearchTimingSink(logger, config.RESEARCH_TIMING_LOGS && !logger.enabled("debug") ? "info" : "debug") : undefined);
-  const executor = createExecutor(config, systemPrompts, identities, search, llm, logger, timingSink, localEmptyHtmlSample);
+  const executor = createExecutor(config, systemPrompts, identities, search, llm, logger, timingSink, localEmptyHtmlSample, localFailedSource);
   const auth = config.APP_PASSPHRASE_SCRYPT_HASH && config.SESSION_SIGNING_KEYS ? new SessionAuth(config.APP_PASSPHRASE_SCRYPT_HASH, config.SESSION_SIGNING_KEYS) : undefined;
   const limiter: LoginAttemptLimiter = config.UPSTASH_REDIS_REST_URL && config.UPSTASH_REDIS_REST_TOKEN ? new UpstashLoginLimiter(config.UPSTASH_REDIS_REST_URL, config.UPSTASH_REDIS_REST_TOKEN) : new InMemoryLoginLimiter();
   const authenticate = async (context: Context) => {

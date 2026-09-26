@@ -46,6 +46,29 @@ const extractor = async (candidate: SearchResult) => ({
 });
 
 describe("EvidenceAcquirer", () => {
+  it("observes only settled selected failures without changing acquisition when the observer throws", async () => {
+    const observed: unknown[] = [];
+    const candidates = [source("empty", 1), source("failed", 2), source("viable", 3), source("unselected", 4)];
+    const result = await new EvidenceAcquirer({
+      search: { search: async () => candidates },
+      extractor: { extract: async (candidate) => candidate.rank === 1
+        ? { sourceId: candidate.sourceId, status: "skipped", reason: "empty_content" }
+        : candidate.rank === 2
+          ? { sourceId: candidate.sourceId, status: "failed", code: "fetch_failed", retryable: true }
+          : extractor(candidate) },
+      onSelectedExtractionFailure: (entry) => { observed.push(entry); throw new Error("PRIVATE_OBSERVER_ERROR"); },
+    }).acquire({
+      requests: [request("observe", 1, 0)], knownSources: [], availableEvidenceSourceIds: [],
+      budget: budget({ sourcesRemaining: 3 }), limits: {},
+    });
+    expect(observed).toEqual([
+      { url: candidates[0]!.url, rank: 1, status: "skipped", reason: "empty_content" },
+      { url: candidates[1]!.url, rank: 2, status: "failed", reason: "fetch_failed" },
+    ]);
+    expect(result.selectedSources.map((candidate) => candidate.rank)).toEqual([1, 2, 3]);
+    expect(result.evidence.flatMap((pack) => pack.sources.map((item) => item.sourceId))).toEqual(["viable"]);
+  });
+
   it("reports bounded candidate, charged backfill, and actual extraction yield", async () => {
     const reports: EvidenceYieldRequest[][] = [];
     const candidates = [source("failed", 1), source("empty", 2), source("viable", 3), source("spare", 4), source("spare2", 5)];

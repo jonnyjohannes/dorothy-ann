@@ -97,6 +97,8 @@ export interface EvidenceAcquirerDependencies {
   search?: SearchProvider;
   extractor?: ContentExtractor;
   fixture?: boolean;
+  /** Optional host-owned, non-durable observation of a settled selected failure. */
+  onSelectedExtractionFailure?: (entry: { url: string; rank: number; status: "skipped" | "failed"; reason: string }) => void;
 }
 
 const DEFAULT_LIMITS = {
@@ -369,6 +371,11 @@ export class EvidenceAcquirer {
           }
           const key = canonicalKey(source)!;
           extractionByKey.set(key, outcome);
+          if (outcome.status === "skipped" || outcome.status === "failed") {
+            try { this.dependencies.onSelectedExtractionFailure?.({ url: source.url, rank: source.rank,
+              status: outcome.status, reason: outcome.status === "skipped" ? outcome.reason : outcome.code }); }
+            catch { /* Local observation cannot change acquisition. */ }
+          }
           if (outcome.status === "viable" && normalizedPageText(outcome.page.text, maxEvidenceCharacters).text.trim()) {
             viableByKey.set(key, { source, page: outcome.page });
             viableIds.add(source.sourceId);
