@@ -16,6 +16,9 @@ export interface ExtractorConfig {
   minCharacters: number;
 }
 
+/** Aggregate-only categories. Never include page data or source identity. */
+export type ExtractionTextDiagnostic = "no_readable_text" | "under_minimum" | "fallback_recovered";
+
 type PublicAddress = { address: string; family: 4 | 6 };
 type FetchWithDispatcher = (input: string | URL, init?: RequestInit & { dispatcher?: Agent }) => Promise<Response>;
 
@@ -136,10 +139,30 @@ async function readBoundedBody(
   return result;
 }
 
-function readableText(html: string): string {
+function sanitizedDocument(html: string): ReturnType<typeof parseHTML>["document"] {
   const { document } = parseHTML(html);
-  const article = new Readability(document as unknown as Document).parse();
+  document.querySelectorAll("script, style, noscript, template, svg, nav, footer, header, form, aside, button, input, textarea, select, [hidden], [inert], [aria-hidden='true'], [role='navigation'], [role='complementary']")
+    .forEach((node) => node.remove());
+  document.querySelectorAll("[style]").forEach((node) => {
+    if (/\bdisplay\s*:\s*none\b|\bvisibility\s*:\s*hidden\b/i.test(node.getAttribute("style") ?? "")) node.remove();
+  });
+  return document;
+}
+
+function readableText(html: string): string {
+  const article = new Readability(sanitizedDocument(html) as unknown as Document).parse();
   return article?.textContent ?? "";
+}
+
+/** Restrict fallback to visible semantic content; never dump the whole page. */
+function semanticText(html: string): string {
+  const document = sanitizedDocument(html);
+  const root = document.querySelector("article") ?? document.querySelector("main") ?? document.querySelector("[role='main']");
+  return root?.innerText ?? "";
+}
+
+function boundedText(text: string, maxCharacters: number): string {
+  return [...text.replace(/\s+/g, " ").trim()].slice(0, maxCharacters).join("");
 }
 
 function pinnedAgent(addresses: PublicAddress[]): Agent {
@@ -162,7 +185,12 @@ export class SafeContentExtractor implements ContentExtractor {
   constructor(
     private readonly config: ExtractorConfig,
     private readonly fetcher: FetchWithDispatcher = fetchWithDispatcher,
+    private readonly onTextDiagnostic?: (category: ExtractionTextDiagnostic) => void,
   ) {}
+
+  private report(category: ExtractionTextDiagnostic): void {
+    try { this.onTextDiagnostic?.(category); } catch { /* Observability must not change extraction. */ }
+  }
 
   async extract(source: SearchResult, limits: ExtractionLimits): Promise<ExtractionOutcome> {
     if (source.kind !== "link") return { sourceId: source.sourceId, status: "skipped", reason: "unsupported_content" };
@@ -170,13 +198,23 @@ export class SafeContentExtractor implements ContentExtractor {
     const timeout = new Promise<ExtractionOutcome>((resolve) => {
       timer = setTimeout(() => resolve({ sourceId: source.sourceId, status: "failed", code: "timeout", retryable: true }), limits.timeoutMs);
     });
-    try { return await Promise.race([this.extractInternal(source, limits), timeout]); }
-    finally { if (timer) clearTimeout(timer); }
+    let diagnostic: ExtractionTextDiagnostic | undefined;
+    try {
+      const outcome = await Promise.race([this.extractInternal(source, limits, (category) => { diagnostic = category; }), timeout]);
+      // A fetch may finish after the outer timeout; only count the outcome
+      // actually returned to acquisition, never a late background result.
+      if (diagnostic && (
+        (outcome.status === "viable" && diagnostic === "fallback_recovered")
+        || (outcome.status === "skipped" && outcome.reason === "empty_content" && diagnostic !== "fallback_recovered")
+      )) this.report(diagnostic);
+      return outcome;
+    } finally { if (timer) clearTimeout(timer); }
   }
 
   private async extractInternal(
     source: SearchResult,
     limits: ExtractionLimits,
+    recordTextDiagnostic: (category: ExtractionTextDiagnostic) => void,
   ): Promise<ExtractionOutcome> {
     let current: URL;
     try {
@@ -248,13 +286,17 @@ export class SafeContentExtractor implements ContentExtractor {
           controller.signal,
         );
         const raw = new TextDecoder().decode(buffer);
-        const text = contentType === "text/html" ? readableText(raw) : raw;
-        const boundedCodePoints = [...text
-          .replace(/\s+/g, " ")
-          .trim()]
-          .slice(0, limits.maxCharacters);
-        const bounded = boundedCodePoints.join("");
-        if (boundedCodePoints.length < this.config.minCharacters) {
+        let bounded = boundedText(contentType === "text/html" ? readableText(raw) : raw, limits.maxCharacters);
+        if (contentType === "text/html" && [...bounded].length < this.config.minCharacters) {
+          const fallback = boundedText(semanticText(raw), limits.maxCharacters);
+          if ([...fallback].length >= this.config.minCharacters) {
+            bounded = fallback;
+            recordTextDiagnostic("fallback_recovered");
+          } else if ([...fallback].length > [...bounded].length) bounded = fallback;
+        }
+        const characterCount = [...bounded].length;
+        if (characterCount < this.config.minCharacters) {
+          recordTextDiagnostic(characterCount === 0 ? "no_readable_text" : "under_minimum");
           return {
             sourceId: source.sourceId,
             status: "skipped",
@@ -270,7 +312,7 @@ export class SafeContentExtractor implements ContentExtractor {
             title: source.title,
             text: bounded,
             extractedAt: new Date().toISOString() as never,
-            characterCount: boundedCodePoints.length,
+            characterCount,
           },
         };
       } catch (error) {

@@ -12,7 +12,6 @@ import { IdentityPolicy } from "../src/application/identity-policy.js";
 import { WebCryptoIdentityHasher } from "../src/infrastructure/identity/web-crypto-hasher.js";
 import { BraveSearchProvider } from "../src/infrastructure/providers/brave.js";
 import { SafeContentExtractor } from "../src/infrastructure/extraction/safe-content-extractor.js";
-import type { ContentExtractor } from "../src/ports/extraction.js";
 import { AnthropicProvider } from "../src/infrastructure/providers/anthropic.js";
 import { EvidenceAcquirer } from "../src/application/evidence-acquirer.js";
 import { ResearchAssessor } from "../src/application/research-assessor.js";
@@ -85,7 +84,6 @@ function createExecutor(
   identities: IdentityPolicy,
   search: SearchProvider,
   llm: LLMProvider,
-  extractor: ContentExtractor | undefined,
   logger: Logger,
   researchTimingSink?: ResearchTimingSink,
 ): TurnExecutor {
@@ -113,6 +111,10 @@ function createExecutor(
         await emitResearchPhase("resolving");
 
         const timedSearch = timing?.decorateSearch(search) ?? search;
+        const extractor = config.DOROTHY_FIXTURE_MODE ? undefined : new SafeContentExtractor({
+          maxFetchBytes: config.MAX_FETCH_BYTES, maxRedirects: config.MAX_REDIRECTS,
+          userAgent: "dorothy-ann/1.1", minCharacters: 120,
+        }, undefined, timing ? (category) => timing.markExtractionText(category) : undefined);
         const timedExtractor = extractor && timing ? timing.decorateExtractor(extractor) : extractor;
         const timedLlm = timing?.decorateLlm(llm) ?? llm;
         const acquirer = new EvidenceAcquirer({ search: timedSearch, extractor: timedExtractor, fixture: config.DOROTHY_FIXTURE_MODE });
@@ -210,7 +212,6 @@ export function createApp({ config, systemPrompts, threadStoreV3: injectedStore,
     : config.BRAVE_SEARCH_API_KEY
       ? new BraveSearchProvider(config.BRAVE_SEARCH_API_KEY, fetch, identities)
       : new UnavailableSearchProvider();
-  const extractor = config.DOROTHY_FIXTURE_MODE ? undefined : new SafeContentExtractor({ maxFetchBytes: config.MAX_FETCH_BYTES, maxRedirects: config.MAX_REDIRECTS, userAgent: "dorothy-ann/1.1", minCharacters: 120 });
   const llm: LLMProvider = config.DOROTHY_FIXTURE_MODE
     ? new FixtureLlmProvider()
     : config.ANTHROPIC_API_KEY && config.ANTHROPIC_ASSESSMENT_MODEL && config.ANTHROPIC_SYNTHESIS_MODEL
@@ -225,7 +226,7 @@ export function createApp({ config, systemPrompts, threadStoreV3: injectedStore,
       })
       : new UnavailableLlmProvider();
   const timingSink = researchTimingSink ?? (config.RESEARCH_TIMING_LOGS || logger.enabled("debug") ? loggerResearchTimingSink(logger, config.RESEARCH_TIMING_LOGS && !logger.enabled("debug") ? "info" : "debug") : undefined);
-  const executor = createExecutor(config, systemPrompts, identities, search, llm, extractor, logger, timingSink);
+  const executor = createExecutor(config, systemPrompts, identities, search, llm, logger, timingSink);
   const auth = config.APP_PASSPHRASE_SCRYPT_HASH && config.SESSION_SIGNING_KEYS ? new SessionAuth(config.APP_PASSPHRASE_SCRYPT_HASH, config.SESSION_SIGNING_KEYS) : undefined;
   const limiter: LoginAttemptLimiter = config.UPSTASH_REDIS_REST_URL && config.UPSTASH_REDIS_REST_TOKEN ? new UpstashLoginLimiter(config.UPSTASH_REDIS_REST_URL, config.UPSTASH_REDIS_REST_TOKEN) : new InMemoryLoginLimiter();
   const authenticate = async (context: Context) => {
