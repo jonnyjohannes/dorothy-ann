@@ -22,7 +22,8 @@ const { localProbeEnabled, createLocalEmptyHtmlProbe } = await import("../../scr
 const localEmptyHtmlSample = localProbeEnabled(process.env.DOROTHY_LOCAL_EMPTY_PROBE, process.env.NODE_ENV, config.DOROTHY_FIXTURE_MODE)
   ? createLocalEmptyHtmlProbe((result) => logger.info("local_empty_html_probe", {
     stage: "diagnostic", sample_index: result.sample_index, render: result.render, failure_stage: result.failure_stage,
-    semantic_text: result.semantic_text, body_text: result.body_text, blocked_requests: result.blocked_requests,
+    read_method: result.read_method, semantic_text: result.semantic_text, body_text: result.body_text,
+    blocked_requests: result.blocked_requests,
   }))
   : undefined;
 if (localEmptyHtmlSample) logger.info("local_empty_html_probe_armed", { stage: "diagnostic", max_samples: 2, network: "offline" });

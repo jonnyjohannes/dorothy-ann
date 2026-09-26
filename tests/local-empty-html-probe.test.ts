@@ -22,7 +22,7 @@ describe("local-only empty HTML probe", () => {
     const emitted: unknown[] = [];
     const render = vi.fn(async (html: string) => {
       expect(typeof html).toBe("string");
-      return { render: "ok" as const, failure_stage: "none" as const, semantic_text: "none" as const, body_text: "under_120" as const, blocked_requests: 0 };
+      return { render: "ok" as const, failure_stage: "none" as const, read_method: "page_eval" as const, semantic_text: "none" as const, body_text: "under_120" as const, blocked_requests: 0 };
     });
     const probe = createLocalEmptyHtmlProbe((result) => { emitted.push(result); }, render);
     probe(privateText);
@@ -31,8 +31,8 @@ describe("local-only empty HTML probe", () => {
     await vi.waitFor(() => expect(emitted).toHaveLength(2));
     expect(render).toHaveBeenCalledTimes(2);
     expect(emitted).toEqual([
-      { sample_index: 1, render: "ok", failure_stage: "none", semantic_text: "none", body_text: "under_120", blocked_requests: 0 },
-      { sample_index: 2, render: "ok", failure_stage: "none", semantic_text: "none", body_text: "under_120", blocked_requests: 0 },
+      { sample_index: 1, render: "ok", failure_stage: "none", read_method: "page_eval", semantic_text: "none", body_text: "under_120", blocked_requests: 0 },
+      { sample_index: 2, render: "ok", failure_stage: "none", read_method: "page_eval", semantic_text: "none", body_text: "under_120", blocked_requests: 0 },
     ]);
     expect(JSON.stringify(emitted)).not.toContain(privateText);
   });
@@ -43,7 +43,7 @@ describe("local-only empty HTML probe", () => {
     const probe = createLocalEmptyHtmlProbe((result) => { emitted.push(result); throw new Error(privateText); }, async () => { throw new Error(privateText); });
     probe(privateText);
     await vi.waitFor(() => expect(emitted).toHaveLength(1));
-    expect(emitted).toEqual([{ sample_index: 1, render: "failed", failure_stage: "probe_runner", semantic_text: null, body_text: null, blocked_requests: 0 }]);
+    expect(emitted).toEqual([{ sample_index: 1, render: "failed", failure_stage: "probe_runner", read_method: "none", semantic_text: null, body_text: null, blocked_requests: 0 }]);
     expect(JSON.stringify(emitted)).not.toContain(privateText);
   });
 
@@ -64,6 +64,7 @@ describe("local-only empty HTML probe", () => {
           if (where === "dom_read") throw new Error(privateText);
           return { semantic_text: "none", body_text: "none" };
         },
+        locator: () => { throw new Error(privateText); },
       };
       return {
         newContext: async () => {
@@ -82,10 +83,20 @@ describe("local-only empty HTML probe", () => {
     ];
     for (const entry of cases) {
       const result = await renderOfflineHtml(privateText, entry.launch, entry.deadline);
-      expect(result).toEqual({ render: "failed", failure_stage: entry.stage, semantic_text: null, body_text: null, blocked_requests: 0 });
+      expect(result).toEqual({ render: "failed", failure_stage: entry.stage, read_method: "none", semantic_text: null, body_text: null, blocked_requests: 0 });
       expect(JSON.stringify(result)).not.toContain(privateText);
     }
   });
+
+  it("recovers a count-only DOM measurement if inline page code replaces DOM helpers", async () => {
+    const html = `<html><body><script>
+      document.body.innerHTML += '<main>' + 'Synthetic rendered content. '.repeat(7) + '</main>';
+      document.querySelector = () => { throw new Error('PRIVATE_PAGE_ERROR'); };
+    </script></body></html>`;
+    const result = await renderOfflineHtml(html);
+    expect(result).toMatchObject({ render: "ok", failure_stage: "none", read_method: "locator", semantic_text: "at_least_120", body_text: "at_least_120" });
+    expect(JSON.stringify(result)).not.toContain("PRIVATE_PAGE_ERROR");
+  }, 15_000);
 
   it("executes inline rendering while remaining offline for HTTP, image and WebSocket requests", async () => {
     let requests = 0;
@@ -103,7 +114,7 @@ describe("local-only empty HTML probe", () => {
       try { new WebSocket('ws://127.0.0.1:${address.port}/socket'); } catch {}
     </script><script src="${target}/external.js"></script></body></html>`;
     const result = await renderOfflineHtml(html);
-    expect(result).toMatchObject({ render: "ok", failure_stage: "none", semantic_text: "at_least_120" });
+    expect(result).toMatchObject({ render: "ok", failure_stage: "none", read_method: "page_eval", semantic_text: "at_least_120" });
     expect(requests).toBe(0);
   }, 15_000);
 });

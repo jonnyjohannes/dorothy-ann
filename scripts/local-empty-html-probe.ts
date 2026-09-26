@@ -5,6 +5,7 @@ export interface LocalHtmlProbeResult {
   sample_index: 1 | 2;
   render: "ok" | "failed";
   failure_stage: ProbeFailureStage;
+  read_method: "page_eval" | "locator" | "none";
   /** Null means rendering failed; "none" means a completed DOM had no visible text. */
   semantic_text: TextBucket | null;
   body_text: TextBucket | null;
@@ -16,6 +17,17 @@ type BrowserLauncher = () => Promise<Browser>;
 
 export function localProbeEnabled(flag: string | undefined, nodeEnv: string | undefined, fixture: boolean): boolean {
   return flag === "true" && nodeEnv === "development" && !fixture;
+}
+
+function textBucket(text: string): TextBucket {
+  let length = 0;
+  let pendingSpace = false;
+  for (const character of text) {
+    if (/\s/u.test(character)) { if (length) pendingSpace = true; continue; }
+    if (pendingSpace) { if (++length >= 120) return "at_least_120"; pendingSpace = false; }
+    if (++length >= 120) return "at_least_120";
+  }
+  return length ? "under_120" : "none";
 }
 
 /** Offline context means external scripts cannot load; a negative result is inconclusive. */
@@ -52,7 +64,10 @@ export async function renderOfflineHtml(
     await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 2_500 });
     await page.waitForTimeout(500);
     stage = "dom_read";
-    const text = await page.evaluate(() => {
+    let read_method: "page_eval" | "locator" = "page_eval";
+    let text: { semantic_text: TextBucket; body_text: TextBucket };
+    try {
+      text = await page.evaluate(() => {
       const bucket = (value: string | undefined): "none" | "under_120" | "at_least_120" => {
         const normalized = value?.replace(/\s+/g, " ").trim() ?? "";
         if (!normalized) return "none";
@@ -61,11 +76,24 @@ export async function renderOfflineHtml(
         return "at_least_120";
       };
       const semantic = document.querySelector("article") ?? document.querySelector("main") ?? document.querySelector("[role='main']");
-      return { semantic_text: bucket((semantic as HTMLElement | null)?.innerText), body_text: bucket(document.body?.innerText) };
-    });
-    return { render: "ok", failure_stage: "none", ...text, blocked_requests: blocked };
+        return { semantic_text: bucket((semantic as HTMLElement | null)?.innerText), body_text: bucket(document.body?.innerText) };
+      });
+    } catch {
+      // Locator text reads use Playwright's isolated selector machinery rather
+      // than page-owned DOM helpers. No page text leaves this local callback.
+      read_method = "locator";
+      let semanticText = "";
+      for (const selector of ["article", "main", "[role='main']"]) {
+        const locator = page.locator(selector).first();
+        if (await locator.count()) { semanticText = await locator.innerText({ timeout: 600 }); break; }
+      }
+      const body = page.locator("body").first();
+      const bodyText = await body.count() ? await body.innerText({ timeout: 600 }) : "";
+      text = { semantic_text: textBucket(semanticText), body_text: textBucket(bodyText) };
+    }
+    return { render: "ok", failure_stage: "none", read_method, ...text, blocked_requests: blocked };
   } catch {
-    return { render: "failed", failure_stage: deadlineReached ? "deadline" : stage, semantic_text: null, body_text: null, blocked_requests: blocked };
+    return { render: "failed", failure_stage: deadlineReached ? "deadline" : stage, read_method: "none", semantic_text: null, body_text: null, blocked_requests: blocked };
   } finally {
     if (timer) clearTimeout(timer);
     await browser?.close().catch(() => {});
@@ -85,7 +113,7 @@ export function createLocalEmptyHtmlProbe(
     pending = pending.then(async () => {
       let result: RenderResult;
       try { result = await render(html); }
-      catch { result = { render: "failed", failure_stage: "probe_runner", semantic_text: null, body_text: null, blocked_requests: 0 }; }
+      catch { result = { render: "failed", failure_stage: "probe_runner", read_method: "none", semantic_text: null, body_text: null, blocked_requests: 0 }; }
       try { emit({ sample_index, ...result }); } catch { /* diagnostics cannot affect extraction */ }
     });
   };
