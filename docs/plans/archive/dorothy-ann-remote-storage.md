@@ -57,11 +57,11 @@ The current artifact-draft workbench adds a second persistence model for editabl
 
 ## Context
 
-Storage contracts live in [`src/ports/storage-v3.ts`](../../src/ports/storage-v3.ts). The browser implementations, including envelope migration, validation, cleanup, TTL, summaries, and backup handling, live under [`src/infrastructure/browser/`](../../src/infrastructure/browser/) as `indexeddb-thread-store.ts`, `remote-thread-store.ts`, and `thread-store.ts`. (Paths at the time of writing were `src/ports/storage.ts` and `src/adapters/browser/local-stores.ts`; the v1.1.0 refactor moved them.)
+Storage contracts live in [`src/ports/storage-v3.ts`](../../../src/ports/storage-v3.ts). The browser implementations, including envelope migration, validation, cleanup, TTL, summaries, and backup handling, live under [`src/infrastructure/browser/`](../../../src/infrastructure/browser/) as `indexeddb-thread-store.ts`, `remote-thread-store.ts`, and `thread-store.ts`. (Paths at the time of writing were `src/ports/storage.ts` and `src/adapters/browser/local-stores.ts`; the v1.1.0 refactor moved them.)
 
-The server already has owner authentication and request guards in [`server/app.ts`](../../server/app.ts). Configuration already accepts `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` in [`server/config.ts`](../../server/config.ts), and `@upstash/redis` is already a dependency. Current Upstash usage is limited to the login limiter.
+The server already has owner authentication and request guards in [`server/app.ts`](../../../server/app.ts). Configuration already accepts `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` in [`server/config.ts`](../../../server/config.ts), and `@upstash/redis` is already a dependency. Current Upstash usage is limited to the login limiter.
 
-The current UI uses module-level local stores in [`src/ui/App.tsx`](../../src/ui/App.tsx). Runtime selection must replace those instances at the application boundary so `/threads`, topic routes, and backup controls all use the intended store. The export workbench becomes transient and no longer depends on a draft store. Appearance controls already use browser `localStorage` and remain outside this change.
+The current UI uses module-level local stores in [`src/ui/App.tsx`](../../../src/ui/App.tsx). Runtime selection must replace those instances at the application boundary so `/threads`, topic routes, and backup controls all use the intended store. The export workbench becomes transient and no longer depends on a draft store. Appearance controls already use browser `localStorage` and remain outside this change.
 
 There is no automatic migration of existing IndexedDB threads. After remote storage is enabled, the supported migration path is browser backup export followed by remote backup import.
 

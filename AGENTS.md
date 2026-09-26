@@ -8,7 +8,11 @@ The active plans are [`docs/plans/patch-research-state-sse-overflow.md`](docs/pl
 
 [`docs/plans/dorothy-ann-v1.1.0.md`](docs/plans/archive/dorothy-ann-v1.1.0.md) is the shipped architectural baseline, not an active work item: read it for contracts, box definitions, and provider rationale, but later amendments win where they disagree (it still describes the removed `/search` command). Keep product behavior, UX states, contracts, provider rationale, and deferred scope in the plan that owns the change.
 
-`docs/plans/` holds active and feature-reference plans. `docs/plans/archive/` holds superseded release specs, kept verbatim for architectural rationale: read them to answer "why is it shaped this way", never to determine current behavior or open work. Their unchecked ledger items are frozen history. When a release plan ships and is superseded, move it to `archive/` and record its shipping commit and tag in its `Status`.
+Plans are filed by whether they have open work, not by what kind of plan they are. `docs/plans/` holds only plans with unfinished ledger items, plus the current-state audit. `docs/plans/archive/` holds every completed plan, kept verbatim.
+
+Archived does not mean inaccurate. Many archived plans are still the best description of how a shipped feature behaves. Accuracy is a property of the file, not the folder, and each `Status` line states it: `superseded` means the described behavior has since changed and later plans win; `done` or `released` means the plan still describes live behavior and may be cited as such. Unchecked ledger items inside an archived plan are frozen history, never open work.
+
+When a plan's last item closes, move it to `archive/` and set its `Status` to `done`, `released`, or `superseded`, recording the shipping commit and tag where one exists.
 
 ## architecture and boundaries
 
@@ -29,7 +33,7 @@ Ordinary non-command input and `/threads/new?q=...` create a `ResearchTurn` rega
 
 The visible product boxes are `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, `UnlockBox`, and `SystemStatusBox`, all under `src/ui/boxes/`. Keyboard control is real and must be preserved: `GlobalShortcuts` (`src/ui/App.tsx`) owns `Alt+S` → `/threads`, `Alt+C` → `/settings`, `i` → focus prompt, `Escape` to leave `/threads` and `/settings`, and double-`Escape` → home, with `Alt+A` intentionally unassigned. Individual boxes own their own list, confirm, and activation keys. The v1.1.0 plan called this a `Hotkeys` box; no such component was built, so describe the behavior by its real locations. The application owns transcript separators. Synthesized answers may use emphasized labels, lists, tables, code, quotes, and whitespace, but must not generate headings or horizontal rules.
 
-The search-result-kind amendment is tracked in [`docs/plans/dorothy-ann-search-result-kinds.md`](docs/plans/dorothy-ann-search-result-kinds.md). Its prompt-input URL is `/threads/new?q=<prompt input>`, with a shared classifier for bare research plus `/link`, `/image`, and `/video` `SearchTurn` result kinds. Media results remain durable bounded source records but never enter extraction or factual research evidence. Supported video cards mount paused provider playback when they enter the viewport, retain linked-thumbnail fallback while offscreen or after failure, and keep titles as external source-page links. That amendment is `done` and shipped in v1.2.0; `/search` no longer exists anywhere in `src/`.
+The search-result-kind amendment is tracked in [`docs/plans/dorothy-ann-search-result-kinds.md`](docs/plans/archive/dorothy-ann-search-result-kinds.md). Its prompt-input URL is `/threads/new?q=<prompt input>`, with a shared classifier for bare research plus `/link`, `/image`, and `/video` `SearchTurn` result kinds. Media results remain durable bounded source records but never enter extraction or factual research evidence. Supported video cards mount paused provider playback when they enter the viewport, retain linked-thumbnail fallback while offscreen or after failure, and keep titles as external source-page links. That amendment is `done` and shipped in v1.2.0; `/search` no longer exists anywhere in `src/`.
 
 ## implementation workflow
 
