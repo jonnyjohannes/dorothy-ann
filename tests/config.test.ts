@@ -7,7 +7,6 @@ describe("runtime configuration", () => {
 
     expect(config).toMatchObject({
       LOG_LEVEL: "info",
-      RESEARCH_TIMING_LOGS: false,
       MAX_SEARCH_RESULTS: 10,
       MAX_CONCURRENT_SEARCHES: 3,
       MAX_CONCURRENT_EXTRACTIONS: 3,
@@ -27,12 +26,6 @@ describe("runtime configuration", () => {
   it("accepts standard log levels", () => {
     expect(loadConfig({ LOG_LEVEL: "debug" }, { onDeprecation: vi.fn() }).LOG_LEVEL).toBe("debug");
     expect(() => loadConfig({ LOG_LEVEL: "verbose" }, { onDeprecation: vi.fn() })).toThrow("invalid configuration: LOG_LEVEL");
-  });
-
-  it("accepts only explicit research timing log booleans", () => {
-    expect(loadConfig({ RESEARCH_TIMING_LOGS: "true" }, { onDeprecation: vi.fn() }).RESEARCH_TIMING_LOGS).toBe(true);
-    expect(loadConfig({ RESEARCH_TIMING_LOGS: "false" }, { onDeprecation: vi.fn() }).RESEARCH_TIMING_LOGS).toBe(false);
-    expect(() => loadConfig({ RESEARCH_TIMING_LOGS: "TRUE_PRIVATE_VALUE" }, { onDeprecation: vi.fn() })).toThrow("invalid configuration: RESEARCH_TIMING_LOGS");
   });
 
   it("accepts lowered canonical operational values", () => {

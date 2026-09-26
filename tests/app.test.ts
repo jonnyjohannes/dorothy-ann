@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ResearchTimingRecord } from "../server/runtime/research-timing";
 import { createApp } from "../server/app";
 import { loadConfig } from "../server/runtime/config";
+import { createLogger, type LogRecord } from "../server/runtime/logger";
 
 const systemPrompts = { assessor: "fixture assessor", synthesizer: "fixture synthesizer" };
-const app = createApp({ config: loadConfig({ DOROTHY_FIXTURE_MODE: "true" }), systemPrompts });
-const liveApp = createApp({ config: loadConfig({ DOROTHY_FIXTURE_MODE: "false" }), systemPrompts });
+const app = createApp({ config: loadConfig({ DOROTHY_FIXTURE_MODE: "true" }), systemPrompts, logger: createLogger({ level: "silent" }) });
+const liveApp = createApp({ config: loadConfig({ DOROTHY_FIXTURE_MODE: "false" }), systemPrompts, logger: createLogger({ level: "silent" }) });
 const executionId = "00000000-0000-4000-8000-000000000001";
 const turnId = "00000000-0000-4000-8000-000000000002";
 
@@ -59,28 +59,25 @@ describe("portable v3 Hono API", () => {
     expect(body).not.toContain('"code":"invalid_event"');
   });
 
-  it("emits one sanitized opt-in timing summary outside the SSE contract", async () => {
-    const records: ResearchTimingRecord[] = [];
-    const samples = vi.fn();
+  it("emits one sanitized info-level timing summary outside the SSE contract", async () => {
+    const logged: LogRecord[] = [];
     const timedApp = createApp({
       config: loadConfig({ DOROTHY_FIXTURE_MODE: "true" }),
       systemPrompts: { assessor: "SENTINEL_ASSESSOR_PROMPT", synthesizer: "SENTINEL_SYNTHESIZER_PROMPT" },
-      researchTimingSink: (record) => { records.push(record); },
-      localEmptyHtmlSample: samples,
+      logger: createLogger({ level: "info", sink: (record) => { logged.push(record); } }),
     });
     const response = await timedApp.request("http://localhost/api/turn/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ executionId, turnId, kind: "research", question: "SENTINEL_USER_QUESTION", answerPosition: "initial", context: { threadId: "00000000-0000-4000-8000-000000000003", turns: [], knownSources: [], availableEvidence: [] } }) });
     const body = await response.text();
-    expect(records).toHaveLength(1);
-    expect(samples).not.toHaveBeenCalled();
-    expect(records[0]).toMatchObject({ event: "research_timing", schema_version: 5, terminal_status: "completed", counts: { searches_used: 1, sources_consumed: 2, assessments_used: 1 }, evidence_yield: { distinct_viable_root_ids: 2, extraction_text: { no_readable_text: 0, under_minimum: 0, fallback_recovered: 0, json_ld_recovered: 0, empty_body: 0, plain_no_text: 0, html_no_text_with_script: 0, html_no_text_without_script: 0, html_text_without_semantic_root: 0, html_text_outside_semantic_root: 0 }, requests: [{ requested: 5, returned: 2, normalized_unique: 2, selected: 2, viable: 2 }] } });
-    const serialized = JSON.stringify(records[0]);
+    const summaries = logged.filter((record) => record.event === "research_timing");
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]).toMatchObject({ level: "info", schema_version: 6, terminal_status: "completed", counts: { searches_used: 1, sources_consumed: 2, assessments_used: 1 }, evidence_yield: { distinct_viable_root_ids: 2, requests: [{ requested: 5, returned: 2, normalized_unique: 2, selected: 2, viable: 2 }] } });
+    const serialized = JSON.stringify(summaries[0]);
     for (const secret of ["SENTINEL_USER_QUESTION", "SENTINEL_ASSESSOR_PROMPT", "SENTINEL_SYNTHESIZER_PROMPT", executionId, turnId, "example.com"]) expect(serialized).not.toContain(secret);
     expect(body).not.toContain("research_timing");
     expect(body).not.toContain("execution_ms");
     expect(body).not.toContain("evidence_yield");
-    expect(body).not.toContain("extraction_text");
   });
-  it("keeps timing console output disabled by default", async () => {
+  it("keeps timing console output disabled at silent log level", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const response = await app.request("http://localhost/api/turn/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ executionId, turnId, kind: "research", question: "timing disabled", answerPosition: "initial", context: { threadId: "00000000-0000-4000-8000-000000000003", turns: [], knownSources: [], availableEvidence: [] } }) });
     await response.text();

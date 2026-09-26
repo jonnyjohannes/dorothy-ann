@@ -77,11 +77,17 @@ npm run test:e2e
 
 Fixture mode is the default. Live provider credentials are optional for local implementation and must never be exposed through `VITE_*` variables or browser assets.
 
-### research timing logs
+### operational logs
 
-Set `RESEARCH_TIMING_LOGS=true` to emit one server-side structured summary per research execution. Logging is off by default; set `LOG_LEVEL=debug` for local research diagnostics (`info` is the example production default). The versioned allowlisted record contains only `event`, `schema_version`, bounded terminal/resolution/stop enums, answer position, bounded assessment directive history and failure/invalid-response enums, aggregate context counts, integer `execution_ms`, optional `resolution_ms` and `first_answer_signal_ms`, ledger counts, and aggregate `search`, `extraction`, `assessment`, and `synthesis` stage timings (`calls`, `succeeded`, `failed`, `cumulative_ms`, `max_ms`, and optional `first_output_ms`). Concurrent call durations overlap, so use execution/resolution wall time for critical-path latency and cumulative stage time only as workload data.
+`LOG_LEVEL=info` (the default) controls the single structured server logger. `debug` includes info and warn; `warn` suppresses info/debug; `silent` suppresses everything. There are no separate research diagnostic flags. Keep normal production log access and retention controls: selected-source paths can be identifying even after credentials, queries, fragments, and suspicious path segments are removed.
 
-These records never contain request or prompt text, extracted content, URLs/source metadata, provider/model names, execution/turn IDs, credentials, provider payloads, or error messages/stacks. Keep normal production log access and retention controls in place because even bounded timing/count metadata is operationally sensitive. Timing data is not added to SSE, `/api/status`, durable turns, or browser storage.
+| Level | Events and fields |
+| --- | --- |
+| `info` | `server_listening` (port); one `research_timing` per research execution (schema v6, bounded terminal/resolution/stop and assessment enums, aggregate context/search/extraction/assessment/synthesis counts and timings, distinct usable root IDs); `extraction_rejected` for each selected, nonviable *skipped* link (rank, allowlisted reason, sanitized URL and host when safe). |
+| `warn` | `extraction_failed` for each selected *failed* link (rank, allowlisted fetch/timeout/extraction code, sanitized URL and host when safe). |
+| `debug` | `assessment_failed` (failure code/reason); Anthropic `assessment_output_rejected` (reason, format, stop reason, output-token and text-length counts) and `assessment_structured_output_fallback` (reason); stream `turn_sse_frame` (frame type/bytes), `turn_invalid_signal` (signal type), and `turn_stream_end` (abort/protocol/terminal flags). |
+
+The `research_timing` record includes per-request selected/viable/empty/failure counts and stage workload duration (`calls`, `succeeded`, `failed`, `cumulative_ms`, `max_ms`, optional `first_output_ms`), plus wall-clock execution/resolution times. Concurrent durations overlap. It excludes URLs, source IDs, content, prompts and provider payloads. No operational logs enter SSE, `/api/status`, durable turns or browser storage. Configuration's legacy-key deprecation warning remains a separate startup `console.warn` before the logger is initialized.
 
 ## documentation
 

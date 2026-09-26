@@ -1,7 +1,6 @@
 import type { GapLedger, ResearchResolution } from "../../src/domain/types.js";
 import { viableEvidenceSourceCount } from "../../src/domain/knowledge.js";
 import type { EvidenceYieldRequest } from "../../src/application/evidence-acquirer.js";
-import type { ExtractionTextDiagnostic } from "../../src/infrastructure/extraction/safe-content-extractor.js";
 import type { ContentExtractor } from "../../src/ports/extraction.js";
 import type { LLMProvider } from "../../src/ports/llm.js";
 import type { SearchProvider } from "../../src/ports/providers.js";
@@ -18,7 +17,7 @@ export interface StageTiming {
 
 export interface ResearchTimingRecord {
   event: "research_timing";
-  schema_version: 5;
+  schema_version: 6;
   terminal_status: "completed" | "failed" | "interrupted" | "executor_error";
   answer_position?: "initial" | "follow_up";
   assessment_failure_code?: "provider_bad_request" | "provider_rate_limited" | "provider_unavailable" | "provider_failed" | "provider_interrupted" | "assessment_invalid_response";
@@ -33,7 +32,6 @@ export interface ResearchTimingRecord {
   };
   evidence_yield: {
     requests: EvidenceYieldRequest[];
-    extraction_text: Record<ExtractionTextDiagnostic, number>;
     distinct_viable_root_ids?: number;
   };
   resolution_status?: ResearchResolution["status"];
@@ -75,8 +73,8 @@ const duration = (started: number, finished: number): number => {
   return Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
 };
 
-export function loggerResearchTimingSink(logger: Logger, level: "debug" | "info" = "debug"): ResearchTimingSink {
-  return (record) => logger[level](record.event, { stage: "resolving", ...record });
+export function loggerResearchTimingSink(logger: Logger): ResearchTimingSink {
+  return (record) => logger.info(record.event, { stage: "resolving", ...record });
 }
 
 /** Per-execution, allowlisted research timing. Inputs and caught errors are never retained. */
@@ -95,12 +93,6 @@ export class ResearchTimingCollector {
   private readonly assessmentDirectives: NonNullable<ResearchTimingRecord["assessment_directives"]> = [];
   private assessmentInvalidReason: ResearchTimingRecord["assessment_invalid_reason"];
   private readonly evidenceYield: EvidenceYieldRequest[] = [];
-  private readonly extractionText: Record<ExtractionTextDiagnostic, number> = {
-    no_readable_text: 0, under_minimum: 0, fallback_recovered: 0, json_ld_recovered: 0,
-    empty_body: 0, plain_no_text: 0,
-    html_no_text_with_script: 0, html_no_text_without_script: 0,
-    html_text_without_semantic_root: 0, html_text_outside_semantic_root: 0,
-  };
 
   constructor(
     private readonly sink: ResearchTimingSink,
@@ -177,23 +169,6 @@ export class ResearchTimingCollector {
     for (const request of requests) if (this.evidenceYield.length < 3) this.evidenceYield.push(boundedYield(request));
   }
 
-  markExtractionText(category: ExtractionTextDiagnostic): void {
-    switch (category) {
-      case "no_readable_text":
-      case "under_minimum":
-      case "fallback_recovered":
-      case "json_ld_recovered":
-      case "empty_body":
-      case "plain_no_text":
-      case "html_no_text_with_script":
-      case "html_no_text_without_script":
-      case "html_text_without_semantic_root":
-      case "html_text_outside_semantic_root":
-        this.extractionText[category] = boundedCount(this.extractionText[category] + 1, 12);
-        break;
-    }
-  }
-
   emit(summary: {
     terminalStatus: ResearchTimingRecord["terminal_status"];
     answerPosition?: ResearchTimingRecord["answer_position"];
@@ -207,7 +182,7 @@ export class ResearchTimingCollector {
       const distinctRootIds = resolution && viableEvidenceSourceCount(resolution.knowledge);
       const record: ResearchTimingRecord = {
         event: "research_timing",
-        schema_version: 5,
+        schema_version: 6,
         terminal_status: summary.terminalStatus,
         ...(summary.answerPosition ? { answer_position: summary.answerPosition } : {}),
         ...(this.assessmentFailureCode ? { assessment_failure_code: this.assessmentFailureCode } : {}),
@@ -216,7 +191,6 @@ export class ResearchTimingCollector {
         ...(summary.context ? { context: summary.context } : {}),
         evidence_yield: {
           requests: this.evidenceYield.map(boundedYield),
-          extraction_text: { ...this.extractionText },
           ...(distinctRootIds === undefined ? {} : { distinct_viable_root_ids: boundedCount(distinctRootIds, 24) }),
         },
         ...(resolution ? { resolution_status: resolution.status, stop_reason: resolution.stopReason } : {}),
