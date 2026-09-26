@@ -17,10 +17,17 @@ test("news command keeps a single article card and accessible cue across reload"
   await query.fill("/news update");
   await query.press("Enter");
   const evidence = page.getByRole("complementary", { name: "Evidence" });
-  await expect(evidence.getByText("News")).toBeVisible();
+  await expect(evidence.getByRole("img", { name: "News source" })).toBeVisible();
   await expect(evidence.locator("li")).toHaveCount(1);
+  const metadata = evidence.locator("small").first();
+  await expect(metadata).toHaveText("·example.com/fixture");
+  const aligned = await metadata.evaluate((node) => {
+    const centers = Array.from(node.children, (child) => { const box = child.getBoundingClientRect(); return box.top + box.height / 2; });
+    return Math.max(...centers) - Math.min(...centers) < 3;
+  });
+  expect(aligned).toBe(true);
   await page.reload();
-  await expect(evidence.getByText("News")).toBeVisible();
+  await expect(evidence.getByRole("img", { name: "News source" })).toBeVisible();
   await expect(evidence.locator("li")).toHaveCount(1);
   await expect(evidence.getByRole("link", { name: "Link result: Fixture result for update" })).toBeVisible();
 });

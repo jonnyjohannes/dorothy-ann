@@ -460,18 +460,20 @@
   min-width: 0;
   padding: 1.5rem 1.75rem 1.75rem;
 }
-.evidenceItem small {
+.evidenceItem small,
+.evidenceItemActive small {
   display: block;
   color: var(--muted);
   margin-top: 0.3rem;
 }
-.newsCue {
-  display: inline-flex;
+.evidenceItem small.newsMetadata,
+.evidenceItemActive small.newsMetadata {
+  display: flex;
   align-items: center;
-  gap: 0.25rem;
-  white-space: nowrap;
+  gap: 0.3rem;
 }
-.newsCue svg { flex: none; }
+.newsMetadata svg { flex: none; }
+.newsMetadata > span:last-child { min-width: 0; overflow-wrap: anywhere; }
 .evidenceItem p {
   color: var(--muted);
   line-height: 1.45;

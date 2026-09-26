@@ -16,7 +16,7 @@ describe("news discovery cue", () => {
     const loaded = JSON.parse(JSON.stringify(thread([searchTurn("link"), searchTurn("news")]))) as Thread;
     for (const turns of [loaded.turns, [...loaded.turns].reverse()]) {
       const view = render(<EvidenceBox sources={loaded.sources} discoveredViaNews={newsSourceIds(thread(turns))} onIntent={onIntent} />);
-      expect(screen.getAllByText("News")).toHaveLength(1);
+      expect(screen.getAllByRole("img", { name: "News source" })).toHaveLength(1);
       expect(screen.getByRole("link", { name: "Link result: Article" })).toHaveAttribute("href", source.url);
       expect(screen.getByRole("complementary", { name: "Evidence" }).querySelectorAll("li")).toHaveLength(1);
       const card = screen.getByRole("link", { name: "Link result: Article" });
@@ -31,11 +31,13 @@ describe("news discovery cue", () => {
     const discovered = newsSourceIds(thread([searchTurn("link"), researchTurn([{ sourceId: id, rank: 1 }])]));
     expect(discovered.has(id)).toBe(true);
     const view = render(<EvidenceBox sources={[source]} discoveredViaNews={discovered} onIntent={vi.fn()} />);
-    const metadata = screen.getByText("News").closest("small");
-    expect(metadata).toHaveTextContent("News · example.com/article");
-    expect(metadata?.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    const metadata = screen.getByRole("img", { name: "News source" }).closest("small");
+    expect(metadata?.className).toContain("newsMetadata");
+    expect(metadata).toHaveTextContent("·example.com/article");
+    expect(metadata).not.toHaveTextContent("News");
+    expect(metadata?.querySelector("svg")).toHaveAttribute("aria-label", "News source");
     view.unmount();
     render(<EvidenceBox sources={[source]} discoveredViaNews={newsSourceIds(thread([searchTurn("link"), researchTurn([])]))} onIntent={vi.fn()} />);
-    expect(screen.queryByText("News")).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "News source" })).not.toBeInTheDocument();
   });
 });
