@@ -1,19 +1,25 @@
-# Dorothy Ann v1.2.1 — research recovery hardening
+# Dorothy Ann v1.2.1 — long-context research recovery
 
 ## Current State
 
-- Status: P5 structured-output compatibility and P5b adaptive retry verified; P4/P6 pending
-- Verification: exact-schema live 400 reproduction; patched 15-question pilot had zero 400 fallbacks; all four formerly truncated multi-obligation questions resolved sufficiently in a targeted post-retry live reassessment. Focused 40 tests, typecheck, lint, build, and `git diff --check` pass; full suite: 268 passed, 1 pre-existing prompt exact-string assertion failed
+- Status: released; the long-context recovery defect is fixed and the deployed product is behaving normally. P4's broader retry UX and P6 release-bookkeeping checks are explicitly deferred, not blockers or evidence that the original defect remains open.
+- Verification: the defect was reproduced as a rejected post-resolution `research_state` frame when combined knowledge exceeded the three-evidence-pack schema bound. Commit `ef93dd3` bounds resolver knowledge and adds an app regression proving a three-pack follow-up plus fresh evidence reaches synthesis and a terminal. The plan's provider changes are separately fixture- and live-probe-verified below; production deployment is owner-confirmed in this session, but no v1.2.1 release tag is recorded.
 - Owner: Jonny
 - Executor: parent (P5 only)
 - Last updated: 2026-09-26
-- Current focus: schema and adaptive-retry fixes are validated; remaining P4 browser recovery and P6 release checks are separate
-- Next action: address P4 controller/UI recovery and P6 repository/browser acceptance when requested; keep the two-source-synthesis gate in its separate plan
+- Current focus: none for this incident. Latency and extraction-yield concerns are separate work and should be scoped in their own plan.
+- Next action: none. If broader interruption retry UX or v1.2.1 release bookkeeping is pursued, track it separately; this archived plan's unchecked P4/P6 entries are frozen deferred history.
 - Branch / PR / session: `release/v1.2.1` / pending
 
 ## Handoff
 
-P5's exact-schema probe reproduced the 400; removing only Anthropic-unsupported bounds succeeded on the configured assessment model. The provider now sends that compatible schema and retains strict local validation, with allowlisted rejected-output metadata. A post-fix 15-question local live-provider run using the same assessment/resolver/acquisition/synthesis components as `server/app.ts` (not HTTP/SSE, browser, or persistence) yielded zero schema fallbacks. Four complex turns hit `max_tokens=800` on both assessment attempts and ended best-effort. The operator explicitly approved an adaptive retry amendment: leave first attempts at the existing ≤800-token bound, allow the *existing* second attempt up to 1,600 only after the first response's `stop_reason=max_tokens`, and preserve two attempts and strict local validation. Give that second attempt its own bounded `MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS` operational cap (default 1,600, allowed 800–1,600); the existing `MAX_ASSESSMENT_OUTPUT_TOKENS` remains the first-attempt setting. Do not raise the second cap for malformed non-truncated outputs or HTTP 400 fallback. User asked to proceed with the local environment as configured; that `.env` disables TLS verification. Do not publish `.env` or provider response bodies. P5b now uses an independent 800–1,600-token retry cap only when the first assessment hits `max_tokens`; all four formerly truncated complex prompts returned `sufficient` in a targeted real-provider resolver rerun. The targeted rerun did not run synthesis, HTTP/SSE, browser, or persistence. Do not confuse this scoped work with P4 browser recovery or the separate two-source-synthesis plan. No prompt assets were edited.
+### Closure note
+
+The original incident was not an SSE frame-byte overflow: a long-context follow-up could combine three context evidence packs with newly acquired evidence, exceeding `knowledgeUnitV3Schema.evidence.max(3)`. The transport rejected the `research_state` signal, aborted the executor, and sent no terminal or synthesis. `ef93dd3` bounds the resolver accumulator before stream emission and adds a regression for the three-context-pack-plus-fresh-evidence path. P1–P3 classify and fix this incident; P5 and P5b separately resolved structured-output compatibility and truncated-assessment recovery. The former filename called this an “overflow,” but the mismatch was the bounded evidence/schema count, not frame size.
+
+P4 remains unchecked because its broader browser retry UX and explicit rerun affordance were not implemented or verified; existing controller behavior does clear active progress on interruption and surfaces bounded errors. P6 remains unchecked because v1.2.1 release bookkeeping and the specified complete verification run are not recorded. These are intentionally deferred outside this incident plan; archive status does not imply either item was completed. No current evidence indicates the original rejected-state failure is recurring.
+
+P5's exact-schema probe reproduced the 400; removing only Anthropic-unsupported bounds succeeded on the configured assessment model. The provider now sends that compatible schema and retains strict local validation, with allowlisted rejected-output metadata. A post-fix 15-question local live-provider run using the same assessment/resolver/acquisition/synthesis components as `server/app.ts` (not HTTP/SSE, browser, or persistence) yielded zero schema fallbacks. Four complex turns hit `max_tokens=800` on both assessment attempts and ended best-effort. The operator explicitly approved an adaptive retry amendment: leave first attempts at the existing ≤800-token bound, allow the *existing* second attempt up to 1,600 only after the first response's `stop_reason=max_tokens`, and preserve two attempts and strict local validation. Give that second attempt its own bounded `MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS` operational cap (default 1,600, allowed 800–1,600); the existing `MAX_ASSESSMENT_OUTPUT_TOKENS` remains the first-attempt setting. Do not raise the second cap for malformed non-truncated outputs or HTTP 400 fallback. User asked to proceed with the local environment as configured; that `.env` disables TLS verification. Do not publish `.env` or provider response bodies. P5b now uses an independent 800–1,600-token retry cap only when the first assessment hits `max_tokens`; all four formerly truncated complex prompts returned `sufficient` in a targeted real-provider resolver rerun. The targeted rerun did not run synthesis, HTTP/SSE, browser, or persistence. Do not confuse this scoped work with P4 browser recovery or the separate [two-source synthesis plan](dorothy-ann-two-source-synthesis.md). No prompt assets were edited.
 
 ### Post-fix local pilot (15 questions, fresh initial contexts)
 
@@ -30,7 +36,7 @@ The four best-effort turns were #11, #12, #14, and #15: each had enough viable e
 
 ## Abstract
 
-Dorothy Ann can enter a recursive research path with a long thread context, encounter repeated Anthropic structured-output fallback and a malformed assessment response, then end as an interrupted turn before synthesis. The UI may remain on its last progress label instead of presenting a bounded interruption or retry state. v1.2.1 will make this failure path observable, recoverable, and regression-tested without weakening research limits or untrusted-output validation.
+A long-context follow-up could exceed the bounded evidence-pack count in `research_state`, causing the server to abort after resolution but before synthesis or terminal delivery. The fix bounds resolver knowledge and is covered by a regression. This archive records that resolved incident plus adjacent Anthropic structured-output and truncated-assessment fixes; broader interruption retry UX and v1.2.1 release bookkeeping were deferred.
 
 ## Flow
 
@@ -166,9 +172,9 @@ Add focused regressions before changing behavior. Run the repository verificatio
 - Anthropic model/API structured-output compatibility requires live-provider confirmation.
 - Deployment timeout or proxy behavior is not verifiable from repository logs alone.
 
-## Open Questions
+## Historical Open Questions at Closure
 
-- Which exact resolution field violates the `research_state` boundary schema? — implementation owner — blocks P1/P2
-- Should the fix bound the resolver’s knowledge evidence deterministically or project research state for transport while retaining full synthesis state? — product/architecture owner — blocks P3
-- Is the configured assessment model expected to support Anthropic `output_config.format.json_schema`? — deployment owner — blocks P5
-- Should interruption retry start a fresh research execution or retain/retry the exact candidate when synthesis was never attempted? — product owner — blocks P3/P4
+- The rejected field was the joined knowledge evidence array exceeding the `research_state` schema's three-pack limit; P1/P2 resolved this by bounding the resolver accumulator.
+- Deterministic evidence bounding was implemented in `ef93dd3`; the transport now receives schema-valid bounded research state.
+- The configured model's structured-output compatibility was verified with the provider probe and adapter change documented under P5.
+- Whether a generic interruption retry should start a fresh run or retain an exact candidate remains undecided. This belongs to the deferred P4 UX work, not the fixed long-context incident.

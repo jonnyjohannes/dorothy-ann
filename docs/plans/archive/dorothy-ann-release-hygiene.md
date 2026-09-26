@@ -13,9 +13,9 @@
 
 ## Abstract
 
-[`dorothy-ann-repo-state-audit.md`](../dorothy-ann-repo-state-audit.md) found that Dorothy Ann's feature work is ahead of its release bookkeeping: five of six shipped releases were untagged, `package.json` still claimed `1.0.0`, `AGENTS.md` pointed at a superseded specification, and several plan statuses described blockers that no longer exist. This plan closes that bookkeeping debt only. It does not touch research behavior, provider integration, or UI code.
+A repository state review found that Dorothy Ann's feature work was ahead of its release bookkeeping: five of six shipped releases were untagged, `package.json` still claimed `1.0.0`, `AGENTS.md` pointed at a superseded specification, and several plan statuses described blockers that no longer exist. This plan closes that bookkeeping debt only. It does not touch research behavior, provider integration, or UI code.
 
-Research recovery work stays in [`patch-research-state-sse-overflow.md`](../patch-research-state-sse-overflow.md). Its `P4` (progress-state recovery), `P5` (assessment structured-output compatibility), and `P6` (v1.2.1 release verification and release notes) are **not duplicated here**; only the v1.2.0 inventory backfill that `P6` does not cover appears below as H7.
+Research recovery work stays in [`dorothy-ann-v1.2.1-long-context-recovery.md`](dorothy-ann-v1.2.1-long-context-recovery.md). Its `P4` (progress-state recovery), `P5` (assessment structured-output compatibility), and `P6` (v1.2.1 release verification and release notes) are **not duplicated here**; only the v1.2.0 inventory backfill that `P6` does not cover appears below as H7.
 
 ## Flow
 
@@ -70,8 +70,8 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` verified, `[!]` blocked.
   - Evidence: Added the v1.2.0 inventory with release identity and feature/verification claims checked against `bb106fb` (commit title, tag, and changed-file inventory) and the completed search-result-kinds plan's decisions, P1–P10 evidence, and known limits. Recorded the root corroboration, research footnote, generated-title, and retention additions corroborated by the v1.2.0 commit inventory and repository audit. `git diff --check` passes. The v1.2.1 inventory remains P6 of its patch plan.
 - [x] H8 — Hand off prompt-asset behavior work
   - Deliverable: keep the in-progress `ASSESSOR.md`/`SYNTHESIZER.md` edits intact; behavior tuning and related test changes belong to the separate two-source synthesis plan, not release hygiene
-  - Verify: confirm `docs/plans/dorothy-ann-two-source-synthesis.md` owns the ongoing evidence-yield work; do not revert or alter the prompt assets here
-  - Evidence: Owner directed that the prompt assets be left as-is while the other agent works under `dorothy-ann-two-source-synthesis.md`. No prompt files or tests were changed as part of this handoff.
+  - Verify: confirm `docs/plans/archive/dorothy-ann-two-source-synthesis.md` owns the ongoing evidence-yield work; do not revert or alter the prompt assets here
+  - Evidence: Owner directed that the prompt assets be left as-is while the other agent works under `docs/plans/archive/dorothy-ann-two-source-synthesis.md`. No prompt files or tests were changed as part of this handoff.
 - [x] H9 — Delete the abandoned local branch
   - Deliverable: local `patch/research-state-sse-overflow` removed once `release/v1.2.1` is confirmed to supersede it
   - Verify: confirm it is an ancestor of `release/v1.2.1`, then `git branch -d patch/research-state-sse-overflow`
