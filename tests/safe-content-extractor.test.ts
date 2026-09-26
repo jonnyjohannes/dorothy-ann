@@ -86,6 +86,37 @@ describe("SafeContentExtractor readable text recovery", () => {
     expect(diagnostics).toEqual([]);
   });
 
+  it("samples only completed script-present empty HTML, without changing the outcome", async () => {
+    const sample = vi.fn(() => { throw new Error("probe unavailable"); });
+    const diagnostics: ExtractionTextDiagnostic[] = [];
+    const attempt = (html: string, status = 200) => new SafeContentExtractor(config,
+      async () => new Response(html, { status, headers: { "content-type": "text/html" } }),
+      (category) => { diagnostics.push(category); }, sample);
+    const matching = "<html><body><script>document.body.append('Later')</script></body></html>";
+    expect(await attempt(matching).extract(source, limits)).toMatchObject({ status: "skipped", reason: "empty_content" });
+    expect(sample).toHaveBeenCalledExactlyOnceWith(matching);
+    await attempt("<html><body><nav>No article</nav></body></html>").extract(source, limits);
+    await attempt("<html><body><main>Short</main><script></script></body></html>").extract(source, limits);
+    await attempt(matching, 403).extract(source, limits);
+    expect(sample).toHaveBeenCalledTimes(1);
+    expect(diagnostics).toEqual([
+      "no_readable_text", "html_no_text_with_script",
+      "no_readable_text", "html_no_text_without_script", "under_minimum",
+    ]);
+  });
+
+  it("never samples an extraction that finishes after its outer timeout", async () => {
+    const sample = vi.fn();
+    const html = "<html><body><script>inline</script></body></html>";
+    const slow = new SafeContentExtractor(config, async () => {
+      await new Promise((resolve) => setTimeout(resolve, 35));
+      return new Response(html, { headers: { "content-type": "text/html" } });
+    }, undefined, sample);
+    expect(await slow.extract(source, { ...limits, timeoutMs: 5 })).toMatchObject({ status: "failed", code: "timeout" });
+    await new Promise((resolve) => setTimeout(resolve, 70));
+    expect(sample).not.toHaveBeenCalled();
+  });
+
   it("ignores observer failures without changing extraction", async () => {
     const html = `<main><p>${"A useful and sufficiently long static source. ".repeat(5)}</p></main>`;
     const safe = new SafeContentExtractor(config, async () => new Response(html, { headers: { "content-type": "text/html" } }), () => { throw new Error("observer failure"); });

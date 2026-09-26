@@ -209,6 +209,7 @@ export class SafeContentExtractor implements ContentExtractor {
     private readonly config: ExtractorConfig,
     private readonly fetcher: FetchWithDispatcher = fetchWithDispatcher,
     private readonly onTextDiagnostic?: (category: ExtractionTextDiagnostic) => void,
+    private readonly onEmptyHtmlSample?: (html: string) => void,
   ) {}
 
   private report(category: ExtractionTextDiagnostic): void {
@@ -222,13 +223,18 @@ export class SafeContentExtractor implements ContentExtractor {
       timer = setTimeout(() => resolve({ sourceId: source.sourceId, status: "failed", code: "timeout", retryable: true }), limits.timeoutMs);
     });
     const diagnostics: ExtractionTextDiagnostic[] = [];
+    let sampleHtml: string | undefined;
     try {
-      const outcome = await Promise.race([this.extractInternal(source, limits, (category) => { diagnostics.push(category); }), timeout]);
+      const outcome = await Promise.race([this.extractInternal(source, limits, (category) => { diagnostics.push(category); }, (html) => { sampleHtml = html; }), timeout]);
       // A fetch may finish after the outer timeout; only count the outcome
       // actually returned to acquisition, never a late background result.
       for (const category of diagnostics) {
         if ((outcome.status === "viable" && category === "fallback_recovered")
           || (outcome.status === "skipped" && outcome.reason === "empty_content" && category !== "fallback_recovered")) this.report(category);
+      }
+      if (outcome.status === "skipped" && outcome.reason === "empty_content"
+        && diagnostics.includes("html_no_text_with_script") && sampleHtml !== undefined) {
+        try { this.onEmptyHtmlSample?.(sampleHtml); } catch { /* Local observation cannot change extraction. */ }
       }
       return outcome;
     } finally { if (timer) clearTimeout(timer); }
@@ -238,6 +244,7 @@ export class SafeContentExtractor implements ContentExtractor {
     source: SearchResult,
     limits: ExtractionLimits,
     recordTextDiagnostic: (category: ExtractionTextDiagnostic) => void,
+    recordEmptyHtml: (html: string) => void,
   ): Promise<ExtractionOutcome> {
     let current: URL;
     try {
@@ -329,7 +336,9 @@ export class SafeContentExtractor implements ContentExtractor {
         if (characterCount < this.config.minCharacters) {
           if (characterCount === 0) {
             recordTextDiagnostic("no_readable_text");
-            recordTextDiagnostic(emptyShape(buffer.byteLength, contentType, semantic));
+            const shape = emptyShape(buffer.byteLength, contentType, semantic);
+            recordTextDiagnostic(shape);
+            if (shape === "html_no_text_with_script" && this.onEmptyHtmlSample) recordEmptyHtml(raw);
           } else recordTextDiagnostic("under_minimum");
           return {
             sourceId: source.sourceId,

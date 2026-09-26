@@ -61,14 +61,17 @@ describe("portable v3 Hono API", () => {
 
   it("emits one sanitized opt-in timing summary outside the SSE contract", async () => {
     const records: ResearchTimingRecord[] = [];
+    const samples = vi.fn();
     const timedApp = createApp({
       config: loadConfig({ DOROTHY_FIXTURE_MODE: "true" }),
       systemPrompts: { assessor: "SENTINEL_ASSESSOR_PROMPT", synthesizer: "SENTINEL_SYNTHESIZER_PROMPT" },
       researchTimingSink: (record) => { records.push(record); },
+      localEmptyHtmlSample: samples,
     });
     const response = await timedApp.request("http://localhost/api/turn/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ executionId, turnId, kind: "research", question: "SENTINEL_USER_QUESTION", answerPosition: "initial", context: { threadId: "00000000-0000-4000-8000-000000000003", turns: [], knownSources: [], availableEvidence: [] } }) });
     const body = await response.text();
     expect(records).toHaveLength(1);
+    expect(samples).not.toHaveBeenCalled();
     expect(records[0]).toMatchObject({ event: "research_timing", schema_version: 4, terminal_status: "completed", counts: { searches_used: 1, sources_consumed: 2, assessments_used: 1 }, evidence_yield: { distinct_viable_root_ids: 2, extraction_text: { no_readable_text: 0, under_minimum: 0, fallback_recovered: 0, empty_body: 0, plain_no_text: 0, html_no_text_with_script: 0, html_no_text_without_script: 0, html_text_without_semantic_root: 0, html_text_outside_semantic_root: 0 }, requests: [{ requested: 5, returned: 2, normalized_unique: 2, selected: 2, viable: 2 }] } });
     const serialized = JSON.stringify(records[0]);
     for (const secret of ["SENTINEL_USER_QUESTION", "SENTINEL_ASSESSOR_PROMPT", "SENTINEL_SYNTHESIZER_PROMPT", executionId, turnId, "example.com"]) expect(serialized).not.toContain(secret);

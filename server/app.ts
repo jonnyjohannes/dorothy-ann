@@ -86,6 +86,7 @@ function createExecutor(
   llm: LLMProvider,
   logger: Logger,
   researchTimingSink?: ResearchTimingSink,
+  localEmptyHtmlSample?: (html: string) => void,
 ): TurnExecutor {
   const assessor = new ResearchAssessor(identities);
   return {
@@ -114,7 +115,7 @@ function createExecutor(
         const extractor = config.DOROTHY_FIXTURE_MODE ? undefined : new SafeContentExtractor({
           maxFetchBytes: config.MAX_FETCH_BYTES, maxRedirects: config.MAX_REDIRECTS,
           userAgent: "dorothy-ann/1.1", minCharacters: 120,
-        }, undefined, timing ? (category) => timing.markExtractionText(category) : undefined);
+        }, undefined, timing ? (category) => timing.markExtractionText(category) : undefined, localEmptyHtmlSample);
         const timedExtractor = extractor && timing ? timing.decorateExtractor(extractor) : extractor;
         const timedLlm = timing?.decorateLlm(llm) ?? llm;
         const acquirer = new EvidenceAcquirer({ search: timedSearch, extractor: timedExtractor, fixture: config.DOROTHY_FIXTURE_MODE });
@@ -199,10 +200,12 @@ export interface AppDependencies {
   systemPrompts: SystemPromptCatalog;
   threadStoreV3?: ThreadStore;
   researchTimingSink?: ResearchTimingSink;
+  /** Node development-only, in-memory diagnostic; never wire from a public request. */
+  localEmptyHtmlSample?: (html: string) => void;
   logger?: Logger;
 }
 
-export function createApp({ config, systemPrompts, threadStoreV3: injectedStore, researchTimingSink, logger: injectedLogger }: AppDependencies) {
+export function createApp({ config, systemPrompts, threadStoreV3: injectedStore, researchTimingSink, localEmptyHtmlSample, logger: injectedLogger }: AppDependencies) {
   const logger = injectedLogger ?? createLogger({ level: config.LOG_LEVEL });
   const identities = new IdentityPolicy(new WebCryptoIdentityHasher());
   const searchReady = config.DOROTHY_FIXTURE_MODE || Boolean(config.BRAVE_SEARCH_API_KEY);
@@ -226,7 +229,7 @@ export function createApp({ config, systemPrompts, threadStoreV3: injectedStore,
       })
       : new UnavailableLlmProvider();
   const timingSink = researchTimingSink ?? (config.RESEARCH_TIMING_LOGS || logger.enabled("debug") ? loggerResearchTimingSink(logger, config.RESEARCH_TIMING_LOGS && !logger.enabled("debug") ? "info" : "debug") : undefined);
-  const executor = createExecutor(config, systemPrompts, identities, search, llm, logger, timingSink);
+  const executor = createExecutor(config, systemPrompts, identities, search, llm, logger, timingSink, localEmptyHtmlSample);
   const auth = config.APP_PASSPHRASE_SCRYPT_HASH && config.SESSION_SIGNING_KEYS ? new SessionAuth(config.APP_PASSPHRASE_SCRYPT_HASH, config.SESSION_SIGNING_KEYS) : undefined;
   const limiter: LoginAttemptLimiter = config.UPSTASH_REDIS_REST_URL && config.UPSTASH_REDIS_REST_TOKEN ? new UpstashLoginLimiter(config.UPSTASH_REDIS_REST_URL, config.UPSTASH_REDIS_REST_TOKEN) : new InMemoryLoginLimiter();
   const authenticate = async (context: Context) => {
