@@ -21,9 +21,20 @@ const threadStoreV3 = !config.DOROTHY_FIXTURE_MODE && config.UPSTASH_REDIS_REST_
 const { localProbeEnabled, createLocalEmptyHtmlProbe } = await import("../../scripts/local-empty-html-probe.js");
 const offlineEnabled = localProbeEnabled(process.env.DOROTHY_LOCAL_EMPTY_PROBE, process.env.NODE_ENV, config.DOROTHY_FIXTURE_MODE);
 const publicScriptEnabled = localProbeEnabled(process.env.DOROTHY_LOCAL_PUBLIC_SCRIPT_PILOT, process.env.NODE_ENV, config.DOROTHY_FIXTURE_MODE);
-if (offlineEnabled && publicScriptEnabled) throw new Error("conflicting_local_probes");
-const localEmptyHtmlSample = publicScriptEnabled
-  ? (await import("../../scripts/local-public-script-pilot.js")).createLocalPublicScriptPilot((result) => logger.info("local_public_script_pilot", {
+const originEnabled = localProbeEnabled(process.env.DOROTHY_LOCAL_ORIGIN_PROBE, process.env.NODE_ENV, config.DOROTHY_FIXTURE_MODE);
+if (Number(offlineEnabled) + Number(publicScriptEnabled) + Number(originEnabled) > 1) throw new Error("conflicting_local_probes");
+const localEmptyHtmlSample = originEnabled
+  ? (await import("../../scripts/local-origin-html-probe.js")).createLocalOriginHtmlProbe((result) => logger.info("local_origin_html_probe", {
+    stage: "diagnostic", sample_index: result.sample_index,
+    baseline: { render: result.baseline.render, failure_stage: result.baseline.failure_stage,
+      read_method: result.baseline.read_method, semantic_text: result.baseline.semantic_text,
+      body_text: result.baseline.body_text, blocked_requests: result.baseline.blocked_requests },
+    origin: { render: result.origin.render, failure_stage: result.origin.failure_stage,
+      read_method: result.origin.read_method, semantic_text: result.origin.semantic_text,
+      body_text: result.origin.body_text, blocked_requests: result.origin.blocked_requests },
+  }))
+  : publicScriptEnabled
+    ? (await import("../../scripts/local-public-script-pilot.js")).createLocalPublicScriptPilot((result) => logger.info("local_public_script_pilot", {
     stage: "diagnostic", sample_index: result.sample_index, render: result.render, failure_stage: result.failure_stage,
     read_method: result.read_method, semantic_text: result.semantic_text, body_text: result.body_text,
     blocked_requests: result.blocked_requests, external_script_attempted: result.external_script_attempted,
@@ -36,7 +47,7 @@ const localEmptyHtmlSample = publicScriptEnabled
       blocked_requests: result.blocked_requests,
     }))
     : undefined;
-if (localEmptyHtmlSample) logger.info(publicScriptEnabled ? "local_public_script_pilot_armed" : "local_empty_html_probe_armed", {
+if (localEmptyHtmlSample) logger.info(originEnabled ? "local_origin_html_probe_armed" : publicScriptEnabled ? "local_public_script_pilot_armed" : "local_empty_html_probe_armed", {
   stage: "diagnostic", max_samples: 2, network: "browser_offline",
 });
 serve({ fetch: createApp({ config, systemPrompts, threadStoreV3, logger, localEmptyHtmlSample }).fetch, port }, (info) => { logger.info("server_listening", { stage: "runtime", port: info.port }); });

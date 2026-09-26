@@ -46,6 +46,7 @@ export async function renderOfflineHtml(
   },
   deadlineMs = 4_000,
   resources?: { baseUrl: string; scripts: ReadonlyMap<string, string> },
+  options?: { atPageOrigin: boolean },
 ): Promise<RenderResult> {
   let blocked = 0;
   let browser: Browser | undefined;
@@ -64,8 +65,21 @@ export async function renderOfflineHtml(
     timer = setTimeout(() => { deadlineReached = true; void running.close().catch(() => {}); }, Math.max(1, Math.min(4_000, deadlineMs)));
     stage = "context_setup";
     const context = await browser.newContext({ offline: true, serviceWorkers: "block" });
+    const activePage = await context.newPage();
+    context.on("page", (opened) => { if (opened !== activePage) void opened.close().catch(() => {}); });
+    let documentHtml = html;
+    let originDocument: URL | undefined;
+    let documentFulfilled = false;
     await context.route("**/*", async (route) => {
-      const script = route.request().resourceType() === "script" ? resources?.scripts.get(route.request().url()) : undefined;
+      const request = route.request();
+      if (originDocument && !documentFulfilled && request.resourceType() === "document"
+        && request.isNavigationRequest() && request.frame() === activePage.mainFrame()
+        && request.url() === originDocument.toString()) {
+        documentFulfilled = true;
+        await route.fulfill({ status: 200, contentType: "text/html", body: documentHtml });
+        return;
+      }
+      const script = request.resourceType() === "script" ? resources?.scripts.get(request.url()) : undefined;
       if (script !== undefined) {
         await route.fulfill({ status: 200, contentType: "application/javascript", body: script, headers: { "access-control-allow-origin": "*" } });
         return;
@@ -77,10 +91,7 @@ export async function renderOfflineHtml(
       blocked = Math.min(12, blocked + 1);
       socket.close();
     });
-    const page = await context.newPage();
-    context.on("page", (opened) => { if (opened !== page) void opened.close().catch(() => {}); });
     stage = "document_load";
-    let documentHtml = html;
     if (resources) {
       const { document } = parseHTML(html);
       for (const script of document.querySelectorAll("script[src]")) {
@@ -92,13 +103,22 @@ export async function renderOfflineHtml(
       }
       documentHtml = document.toString();
     }
-    await page.setContent(documentHtml, { waitUntil: "domcontentloaded", timeout: 2_500 });
-    await page.waitForTimeout(500);
+    if (options?.atPageOrigin) {
+      if (!resources || resources.scripts.size) throw new Error("origin_requires_offline_document");
+      originDocument = new URL(resources.baseUrl);
+      if (!["https:", "http:"].includes(originDocument.protocol) || originDocument.username || originDocument.password)
+        throw new Error("invalid_origin_document");
+      const navigationUrl = originDocument.toString();
+      originDocument.hash = ""; // Browser requests omit fragments; inline code still sees the original URL.
+      await activePage.goto(navigationUrl, { waitUntil: "domcontentloaded", timeout: 2_500 });
+      if (!documentFulfilled) throw new Error("document_not_fulfilled");
+    } else await activePage.setContent(documentHtml, { waitUntil: "domcontentloaded", timeout: 2_500 });
+    await activePage.waitForTimeout(500);
     stage = "dom_read";
     let read_method: "page_eval" | "locator" = "page_eval";
     let text: { semantic_text: TextBucket; body_text: TextBucket };
     try {
-      text = await page.evaluate(() => {
+      text = await activePage.evaluate(() => {
       const bucket = (value: string | undefined): "none" | "under_120" | "at_least_120" => {
         const normalized = value?.replace(/\s+/g, " ").trim() ?? "";
         if (!normalized) return "none";
@@ -115,10 +135,10 @@ export async function renderOfflineHtml(
       read_method = "locator";
       let semanticText = "";
       for (const selector of ["article", "main", "[role='main']"]) {
-        const locator = page.locator(selector).first();
+        const locator = activePage.locator(selector).first();
         if (await locator.count()) { semanticText = await locator.innerText({ timeout: 600 }); break; }
       }
-      const body = page.locator("body").first();
+      const body = activePage.locator("body").first();
       const bodyText = await body.count() ? await body.innerText({ timeout: 600 }) : "";
       text = { semantic_text: textBucket(semanticText), body_text: textBucket(bodyText) };
     }
