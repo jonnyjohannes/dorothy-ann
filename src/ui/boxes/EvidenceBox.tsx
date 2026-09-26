@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import ReactPlayer from "react-player";
-import type { SourceRecord } from "../../domain/types";
+import type { SourceId, SourceRecord } from "../../domain/types";
 import { sourceAccentSlotForIndex } from "../color-scheme";
 import styles from "../App.module.css";
 import type { BoxIntent } from "./box-types";
@@ -86,7 +86,9 @@ function VideoMedia({ href, label, thumbnailUrl, videoUrl }: VideoMediaProps) {
   </div>;
 }
 
-export function EvidenceBox({ sources, selectedSourceId, onIntent }: { sources: SourceRecord[]; selectedSourceId?: string; onIntent: (intent: BoxIntent) => void }) {
+function NewsGlyph() { return <svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.2"><rect x="2" y="2" width="12" height="12" rx="1" /><path d="M5 5h3v3H5zM10 5h2M10 7h2M5 10h7M5 12h7" /></svg>; }
+
+export function EvidenceBox({ sources, discoveredViaNews, selectedSourceId, onIntent }: { sources: SourceRecord[]; discoveredViaNews?: ReadonlySet<SourceId>; selectedSourceId?: string; onIntent: (intent: BoxIntent) => void }) {
   return <aside className={styles.evidence} aria-label="Evidence"><h2 className={styles.srOnly}>Evidence</h2><ul className={styles.evidenceList}>{sources.map((source, index) => {
     const kind = "kind" in source ? source.kind : "link";
     const media = kind === "image" || kind === "video";
@@ -97,7 +99,7 @@ export function EvidenceBox({ sources, selectedSourceId, onIntent }: { sources: 
     const label = kind === "image" ? "Image result" : kind === "video" ? "Video result" : "Link result";
     return <li id={`source-${source.sourceId}`} key={source.sourceId} className={selectedSourceId === source.sourceId ? styles.evidenceItemActive : styles.evidenceItem} style={{ "--relational-accent": `var(--accent-${sourceAccentSlotForIndex(index, 8) + 1})` } as CSSProperties} aria-current={selectedSourceId === source.sourceId ? "true" : undefined} tabIndex={-1} onFocus={() => onIntent({ type: "source_open_requested", sourceId: String(source.sourceId) })}>
       <a className={styles.sourceAccent} style={{ "--relational-accent": `var(--accent-${sourceAccentSlotForIndex(index, 8) + 1})` } as CSSProperties} href={primary} target="_blank" rel="noreferrer" aria-label={`${label}: ${source.title}`} onFocus={() => onIntent({ type: "source_open_requested", sourceId: String(source.sourceId) })}><span aria-hidden="true">{index + 1}. </span><span>{source.title}</span></a>
-      <small>{source.displayUrl}</small>
+      <small>{kind === "link" && discoveredViaNews?.has(source.sourceId) && <span className={styles.newsCue}><NewsGlyph />News<span aria-hidden="true"> · </span></span>}{source.displayUrl}</small>
       {mediaAttachment
         ? kind === "video" && "videoUrl" in source
           ? <VideoMedia href={primary} label={`${label} preview: ${source.title}`} thumbnailUrl={thumbnailUrl} videoUrl={source.videoUrl} />

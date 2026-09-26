@@ -6,6 +6,7 @@ describe("classifyPromptInput", () => {
     ["plain question", { kind: "research", value: "plain question" }],
     ["what?", { kind: "research", value: "what?" }],
     ["/link example", { kind: "search", resultKind: "link", query: "example" }],
+    ["/news latest", { kind: "search", resultKind: "news", query: "latest" }],
     [" /image  cats  ", { kind: "search", resultKind: "image", query: "cats" }],
     ["/video documentary", { kind: "search", resultKind: "video", query: "documentary" }],
   ] as const)("classifies %s", (input, expected) => {

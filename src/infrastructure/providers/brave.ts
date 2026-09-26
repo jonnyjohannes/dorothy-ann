@@ -43,7 +43,9 @@ export class BraveSearchProvider implements SearchProvider {
       ? this.endpoint.replace(/\/web\/search$/u, "/images/search")
       : kind === "video"
         ? this.endpoint.replace(/\/web\/search$/u, "/videos/search")
-        : this.endpoint;
+        : kind === "news"
+          ? this.endpoint.replace(/\/web\/search$/u, "/news/search")
+          : this.endpoint;
     const url = new URL(endpoint);
     url.searchParams.set("q", query);
     url.searchParams.set("count", String(Math.min(options.maxResults, 10)));
@@ -130,9 +132,11 @@ async function normalizeVideoEntries(entries: unknown[], maxResults: number, ide
 export async function normalizeBravePayload(payload: unknown, maxResults: number, identities: SourceIdentity, resultKind: SearchResultKind = "link"): Promise<SearchResult[]> {
   if (typeof payload !== "object" || payload === null) throw new Error("invalid_response");
   const root = payload as Record<string, unknown>;
-  if (resultKind === "link") {
+  if (resultKind === "link" || resultKind === "news") {
     const web = root.web;
-    const entries = typeof web === "object" && web !== null && Array.isArray((web as Record<string, unknown>).results) ? (web as Record<string, unknown>).results as unknown[] : null;
+    const entries = resultKind === "news" ? (Array.isArray(root.results) ? root.results as unknown[] : null)
+      : typeof web === "object" && web !== null && Array.isArray((web as Record<string, unknown>).results)
+        ? (web as Record<string, unknown>).results as unknown[] : null;
     if (!entries) throw new Error("invalid_response");
     return normalizeLinkEntries(entries, maxResults, identities);
   }

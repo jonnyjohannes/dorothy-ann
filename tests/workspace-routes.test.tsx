@@ -67,6 +67,7 @@ describe("workspace controller", () => {
     expect(controller.command({ type: "prompt_submitted", value: "what" })).toEqual({ type: "submit", value: "what", kind: "research" });
     expect(controller.command({ type: "prompt_submitted", value: "what?" })).toEqual({ type: "submit", value: "what?", kind: "research" });
     expect(controller.command({ type: "command_requested", command: "/link  apollo 11 landing  " })).toEqual({ type: "submit", value: "apollo 11 landing", kind: "search", resultKind: "link" });
+    expect(controller.command({ type: "command_requested", command: "/news latest" })).toEqual({ type: "submit", value: "latest", kind: "search", resultKind: "news" });
     expect(controller.command({ type: "command_requested", command: "/image apollo" })).toEqual({ type: "submit", value: "apollo", kind: "search", resultKind: "image" });
     expect(controller.command({ type: "command_requested", command: "/video apollo" })).toEqual({ type: "submit", value: "apollo", kind: "search", resultKind: "video" });
     expect(controller.command({ type: "command_requested", command: "/link" })).toEqual({ type: "invalid", message: "Usage: /link <query>" });
@@ -75,8 +76,8 @@ describe("workspace controller", () => {
   it("populates and focuses the prompt from the visible search command actions", () => {
     render(<MemoryRouter><HomeRoute /></MemoryRouter>);
     const commands = Array.from(screen.getByLabelText("Commands").querySelectorAll("p"), (row) => row.firstElementChild?.textContent);
-    expect(commands).toEqual(["/new", "/threads", "/link", "/image", "/video", "/settings"]);
-    expect(screen.getAllByText("{query}")).toHaveLength(3);
+    expect(commands).toEqual(["/new", "/threads", "/link", "/news", "/image", "/video", "/settings"]);
+    expect(screen.getAllByText("{query}")).toHaveLength(4);
     expect(screen.queryByText("<query>")).not.toBeInTheDocument();
     const prompt = screen.getByLabelText("Search query");
     prompt.blur();

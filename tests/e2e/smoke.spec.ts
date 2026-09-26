@@ -11,6 +11,20 @@ test("explicit fixture search is keyboard reachable on desktop and mobile", asyn
   await expect(page.getByRole("link", { name: "Fixture result for weather" }).first()).toBeVisible();
 });
 
+test("news command keeps a single article card and accessible cue across reload", async ({ page }) => {
+  await page.goto("/");
+  const query = page.getByLabel("Search query");
+  await query.fill("/news update");
+  await query.press("Enter");
+  const evidence = page.getByRole("complementary", { name: "Evidence" });
+  await expect(evidence.getByText("News")).toBeVisible();
+  await expect(evidence.locator("li")).toHaveCount(1);
+  await page.reload();
+  await expect(evidence.getByText("News")).toBeVisible();
+  await expect(evidence.locator("li")).toHaveCount(1);
+  await expect(evidence.getByRole("link", { name: "Link result: Fixture result for update" })).toBeVisible();
+});
+
 test("ordinary fixture input and its contextual follow-up complete", async ({ page }) => {
   await page.goto("/");
   const query = page.getByLabel("Search query");

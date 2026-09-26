@@ -102,6 +102,12 @@ describe("v3 answer and turn executors", () => {
     expect(result.sources).toEqual([{ ...source, kind: "link" }]);
   });
 
+  it("keeps a raw news turn distinct while preserving link-shaped article sources", async () => {
+    const result = await executeSearchTurn({ turnId: id("turn-news"), userMessage, createdAt: userMessage.createdAt, resultKind: "news", searchRef: "brave", provider: { search: async (_query, options) => { expect(options.resultKind).toBe("news"); return [{ ...source, kind: "link", rank: 1 }]; } }, finishedAt: fixedClock });
+    expect(result.turn).toMatchObject({ kind: "search", status: "completed", result: { resultKind: "news" } });
+    expect(result.sources).toEqual([{ ...source, kind: "link" }]);
+  });
+
   it("preserves image result kind and media metadata without extraction", async () => {
     const media = { kind: "image" as const, sourceId: source.sourceId, rank: 1, title: "Cat", url: "https://cdn.example/cat.jpg", canonicalUrl: "https://cdn.example/cat.jpg", imageUrl: "https://cdn.example/cat.jpg", sourcePageUrl: "https://example.com/cats", thumbnailUrl: "https://cdn.example/thumb.jpg", displayUrl: "example.com", width: 640, height: 480 };
     const result = await executeSearchTurn({ turnId: id("turn-image"), userMessage, createdAt: userMessage.createdAt, resultKind: "image", searchRef: "brave", provider: { search: async (_query, options) => { expect(options.resultKind).toBe("image"); return [media]; } }, finishedAt: fixedClock });

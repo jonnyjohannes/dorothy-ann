@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeBravePayload } from "../src/infrastructure/providers/brave.js";
+import { BraveSearchProvider, normalizeBravePayload } from "../src/infrastructure/providers/brave.js";
 import { canonicalSourceV3Schema } from "../src/domain/schemas.js";
 
 describe("Brave v3 normalization", () => {
@@ -11,6 +11,22 @@ describe("Brave v3 normalization", () => {
     const result = await normalizeBravePayload({ web: { results: [{ title: "Example", url: "https://example.com/path", description: "Snippet" }] } }, 5, { sourceId: async () => "src_test" as never });
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ title: "Example", canonicalUrl: "https://example.com/path", sourceId: "src_test", rank: 1 });
+  });
+
+  it("searches the dedicated news endpoint and normalizes article links, not news source records", async () => {
+    const urls: string[] = [];
+    const provider = new BraveSearchProvider("fixture-key", async (url) => {
+      urls.push(String(url));
+      return new Response(JSON.stringify({ type: "news", results: [
+        { title: "First", url: "https://example.com/story", description: "A report", page_age: "2026-09-20" },
+        { title: "Duplicate", url: "https://example.com/story" },
+        { title: "Unsafe", url: "javascript:alert(1)" },
+      ] }), { status: 200 });
+    }, { sourceId: async () => `src_${"N".repeat(43)}` as never });
+    const results = await provider.search("today's update", { maxResults: 5, resultKind: "news" });
+    expect(new URL(urls[0]).pathname).toBe("/res/v1/news/search");
+    expect(results).toEqual([{ kind: "link", sourceId: `src_${"N".repeat(43)}`, rank: 1, title: "First", url: "https://example.com/story", canonicalUrl: "https://example.com/story", displayUrl: "example.com", snippet: "A report" }]);
+    await expect(normalizeBravePayload({ web: { results: [] } }, 5, { sourceId: async () => "src_test" as never }, "news")).rejects.toThrow("invalid_response");
   });
 
   it("normalizes official image and video endpoint envelopes by media identity", async () => {

@@ -12,6 +12,7 @@ import { TranscriptBox } from "../boxes/TranscriptBox";
 import { MarkdownContent } from "../primitives/MarkdownContent";
 import { sourceAccentSlotForIndex } from "../color-scheme";
 import { researchAnswerPosition } from "../policies/answer-position";
+import { newsSourceIds } from "../policies/news-provenance";
 import { threadMarkdown } from "../policies/thread-markdown";
 import type { BoxIntent } from "../boxes/box-types";
 import { workspaceController } from "../controllers/workspace-controller";
@@ -145,6 +146,7 @@ export function ThreadRoute() {
     else if (command.type === "retry") void controller.current?.retryCommit();
   };
   const sources = sourceRecords(thread, view.sources);
+  const discoveredViaNews = newsSourceIds(thread);
   const sourceById = new Map(sources.map((source) => [String(source.sourceId), source]));
   const resolveCitation = (sourceId: string) => { const source = sourceById.get(sourceId); const number = sources.findIndex((candidate) => String(candidate.sourceId) === sourceId) + 1; return source ? { label: source.title, href: source.url, sourceId, number } : undefined; };
   const selectCitation = (sourceId: string) => { setSelectedSourceId(sourceId); window.setTimeout(() => document.getElementById(`source-${sourceId}`)?.focus(), 0); };
@@ -155,7 +157,7 @@ export function ThreadRoute() {
     {view.active && activeRequest && <article className={styles.scrollback}><blockquote className={styles.userTurn}>{activeRequest}</blockquote></article>}
     {view.active && <ResearchStatus answerDraft={view.answerDraft} events={view.events} />}
     {view.active && view.answerDraft && <MarkdownContent markdown={view.answerDraft} threadSeed={String(threadId)} resolveCitation={resolveCitation} citationAccentSlot={(sourceId) => { const index = sources.findIndex((source) => String(source.sourceId) === sourceId); return index >= 0 ? sourceAccentSlotForIndex(index, 8) : undefined; }} onCitationSelect={selectCitation} />}
-    {sources.length > 0 && <EvidenceBox sources={sources} selectedSourceId={selectedSourceId} onIntent={onIntent} />}
+    {sources.length > 0 && <EvidenceBox sources={sources} discoveredViaNews={discoveredViaNews} selectedSourceId={selectedSourceId} onIntent={onIntent} />}
     <PromptBox value={value} disabled={view.active} onChange={setValue} onIntent={onIntent} />
   </main>;
 }

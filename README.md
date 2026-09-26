@@ -1,10 +1,10 @@
 # Dorothy Ann
 
-Dorothy Ann is a browser-based information resolver and researcher. Ordinary requests and `/threads/new?q=...` create recursively resolved `ResearchTurn`s with bounded evidence and one synthesized answer. Use `/link`, `/image`, or `/video` in the prompt input when you want ranked raw retrieval without research synthesis.
+Dorothy Ann is a browser-based information resolver and researcher. Ordinary requests and `/threads/new?q=...` create recursively resolved `ResearchTurn`s with bounded evidence and one synthesized answer. Use `/link`, `/news`, `/image`, or `/video` in the prompt input when you want ranked raw retrieval without research synthesis.
 
 ## what it does
 
-- ⚡ **`/link`, `/image`, `/video`** return ranked, normalized link or media sources without extraction or LLM synthesis
+- ⚡ **`/link`, `/news`, `/image`, `/video`** return ranked, normalized link, news article, or media sources without extraction or LLM synthesis
 - 🔎 **ordinary requests** research by default, recursively resolving evidence gaps within explicit search, source, depth, branch, and assessment ceilings
 - 🧾 **thread history** keeps terminal turns, canonical source metadata, evidence projections, and read-only migrated legacy archive entries
 - 🗂️ **browser workspace** provides focused home, thread, thread-list, settings, and unlock routes backed by typed product boxes
@@ -35,7 +35,7 @@ The root uses the exact user question for its first search when no admissible ex
 
 ## search result kinds
 
-`/threads/new?q=<prompt input>` is the canonical prompt-input URL, and a `?q` value on the home route redirects into it. The shared classifier is used for typed and URL input: bare text creates a `ResearchTurn`, while `/link <query>`, `/image <query>`, and `/video <query>` create link, image, and video `SearchTurn` result kinds. Media results are retained as bounded durable source records for reload and export; they never enter factual extraction. Supported video cards mount a paused inline provider player when they enter the viewport; offscreen, unsupported, or failed cards retain the linked-thumbnail fallback, and titles remain external source-page links.
+`/threads/new?q=<prompt input>` is the canonical prompt-input URL, and a `?q` value on the home route redirects into it. The shared classifier is used for typed and URL input: bare text creates a `ResearchTurn`, while `/link <query>`, `/news <query>`, `/image <query>`, and `/video <query>` create link, news, image, and video `SearchTurn` result kinds. News articles use link-shaped source records; research begins with web discovery and may search news after assessing evidence, using the same extraction and citation rules. Media results are retained as bounded durable source records for reload and export; they never enter factual extraction. Supported video cards mount a paused inline provider player when they enter the viewport; offscreen, unsupported, or failed cards retain the linked-thumbnail fallback, and titles remain external source-page links.
 
 ## keyboard shortcuts
 

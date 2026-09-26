@@ -20,7 +20,7 @@ export function HomeRoute() {
     navigate(turnLocation(query), { replace: true });
   }, [navigate, params]);
 
-  const populateSearchCommand = (command: "/link" | "/image" | "/video") => {
+  const populateSearchCommand = (command: "/link" | "/news" | "/image" | "/video") => {
     setValue(`${command} `);
     document.querySelector<HTMLInputElement>('input[aria-label="Search query"]:not(:disabled)')?.focus();
   };
@@ -41,6 +41,7 @@ export function HomeRoute() {
         <p><Link to="/"><code>/new</code></Link><span><code>&lt;esc&gt;&lt;esc&gt;</code></span></p>
         <p><Link to="/threads" state={threadSelectorState(location)}><code>/threads</code></Link><span><code>&lt;alt&gt;+s</code></span></p>
         <p><button className={styles.commandListAction} type="button" onClick={() => populateSearchCommand("/link")}><code>/link</code></button><span><code>{"{query}"}</code></span></p>
+        <p><button className={styles.commandListAction} type="button" onClick={() => populateSearchCommand("/news")}><code>/news</code></button><span><code>{"{query}"}</code></span></p>
         <p><button className={styles.commandListAction} type="button" onClick={() => populateSearchCommand("/image")}><code>/image</code></button><span><code>{"{query}"}</code></span></p>
         <p><button className={styles.commandListAction} type="button" onClick={() => populateSearchCommand("/video")}><code>/video</code></button><span><code>{"{query}"}</code></span></p>
         <p><Link to="/settings"><code>/settings</code></Link><span><code>&lt;alt&gt;+c</code></span></p>

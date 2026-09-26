@@ -211,11 +211,10 @@ export class ResearchResolver {
         return { kind: "resolution", knowledge: startingKnowledge, stopReason: "assessment_budget_exhausted" };
       }
       const before = startingKnowledge;
-      // Brave already ranks the exact user question well enough for the first
-      // retrieval. Do not spend an assessment call inventing that query when
-      // the root has no admissible extracted evidence yet.
+      // Always begin at the root with the exact question on the web, even
+      // when prior context supplies evidence. News is assessor-selected later.
       let directive: ResearchAssessment["directive"];
-      if (problem.depth === 0 && state.tasks.length === 0 && !useful(before) && problem.context.availableEvidence.length === 0) {
+      if (problem.depth === 0 && state.tasks.length === 0) {
         directive = {
           kind: "search",
           query: problem.question,
@@ -255,24 +254,26 @@ export class ResearchResolver {
           gap.status = "blocked";
           return { kind: "resolution", knowledge: before, stopReason: "source_budget_exhausted" };
         }
-        if (state.tasks.some((task) => normalized(task.query) === normalized(directive.query))) {
+        if (state.tasks.some((task) => (task.surface ?? "web") === (directive.surface ?? "web") && normalized(task.query) === normalized(directive.query))) {
           gap.status = "blocked";
           return { kind: "resolution", knowledge: before, stopReason: "no_new_knowledge" };
         }
         const acquisition = await this.acquire(problem, directive, state);
         for (const source of acquisition.admittedSources) {
-          const canonical = { ...source } as CanonicalSource & { rank?: number };
+          const canonical = { ...source } as CanonicalSource & { rank?: number; kind?: string };
           delete canonical.rank;
+          delete canonical.kind;
           if (!state.admittedSources.some((existing) => existing.sourceId === source.sourceId)) state.admittedSources.push(canonical);
         }
         const afterSearch = joinBoundedKnowledge(problem.id, [before, { problemId: problem.id, findings: [], evidence: acquisition.evidence, unresolvedGapIds: [] }]);
         state.knowledge = joinBoundedKnowledge(problem.id, [state.knowledge, afterSearch]);
-        const acquiredEvidenceIds = new Set(acquisition.evidence.flatMap((pack) => pack.sources.map((source) => source.sourceId)));
+        const acquiredEvidenceIds = new Set([...before.evidence, ...problem.context.availableEvidence, ...acquisition.evidence].flatMap((pack) => pack.sources.map((source) => source.sourceId)));
         const taskEvidence = acquisition.results.flatMap((result) => result.candidates.flatMap((source) =>
           acquiredEvidenceIds.has(source.sourceId) ? [{ sourceId: source.sourceId, rank: source.rank }] : [],
-        ));
+        )).slice(0, 3); // Keep reused hits within the existing durable per-task bound.
         const task: ResearchTaskRecord = {
           problemId: problem.id,
+          ...(directive.surface ? { surface: directive.surface } : {}),
           query: directive.query,
           purpose: directive.purpose,
           priority: directive.priority,
@@ -383,6 +384,7 @@ export class ResearchResolver {
   private async acquire(problem: ResearchProblem, directive: Extract<ResearchAssessment["directive"], { kind: "search" }>, state: { budget: ResearchBudget; ledger: GapLedger; knowledge: KnowledgeUnit; admittedSources: CanonicalSource[]; signal?: AbortSignal; onPhase?: ResearchProgressObserver }): Promise<EvidenceAcquisitionResult> {
     const request: EvidenceRequest = {
       problemId: problem.id,
+      ...(directive.surface ? { surface: directive.surface } : {}),
       query: directive.query,
       purpose: directive.purpose,
       successCriterion: directive.successCriterion,

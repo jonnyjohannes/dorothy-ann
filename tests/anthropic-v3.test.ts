@@ -152,6 +152,13 @@ describe("AnthropicProvider v3", () => {
     expect(result.directive).toMatchObject({ kind: "search", query: "independent reporting", priority: 1 });
   });
 
+  it("accepts validated news selection but rejects unknown search surfaces", async () => {
+    const news = client([{ content: [{ type: "text", text: JSON.stringify({ directive: { kind: "search", surface: "news", query: "latest", purpose: "report", successCriterion: "supported", priority: 1 } }) }] }]);
+    await expect(new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: news }).assessResearch(baseAssessment)).resolves.toMatchObject({ directive: { kind: "search", surface: "news" } });
+    const invalid = client([{ content: [{ type: "text", text: JSON.stringify({ directive: { kind: "search", surface: "images", query: "latest" } }) }] }]);
+    await expect(new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: invalid }).assessResearch(baseAssessment)).rejects.toMatchObject({ code: "assessment_invalid_response", reason: "invalid_search_query" });
+  });
+
   it("fills trusted search metadata when unstructured output supplies only a query", async () => {
     const fake = client([{ content: [{ type: "text", text: JSON.stringify({ directive: { kind: "search", query: "Rio events September 19 2026" } }) }] }]);
     const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: fake });

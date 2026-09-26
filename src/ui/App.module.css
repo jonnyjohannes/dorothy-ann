@@ -465,6 +465,13 @@
   color: var(--muted);
   margin-top: 0.3rem;
 }
+.newsCue {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+.newsCue svg { flex: none; }
 .evidenceItem p {
   color: var(--muted);
   line-height: 1.45;

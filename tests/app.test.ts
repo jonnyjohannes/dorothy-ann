@@ -25,6 +25,16 @@ describe("portable v3 Hono API", () => {
     expect(body).toContain("event: turn.terminal");
     expect(body).not.toContain("fixture-second");
   });
+  it("streams raw news as a link-shaped source with a news turn kind", async () => {
+    const response = await app.request("http://localhost/api/turn/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ executionId, turnId, kind: "search", resultKind: "news", query: "latest" }) });
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).toContain('"resultKind":"news"');
+    expect(body).toContain('"kind":"link"');
+    expect(body).toContain("event: turn.terminal");
+    expect(body).not.toContain("event: turn.error");
+  });
+
   it("streams fixture research phases at real operation boundaries", async () => {
     const response = await app.request("http://localhost/api/turn/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ executionId, turnId, kind: "research", question: "what happened?", answerPosition: "initial", context: { threadId: "00000000-0000-4000-8000-000000000003", turns: [], knownSources: [], availableEvidence: [] } }) });
     expect(response.status).toBe(200);

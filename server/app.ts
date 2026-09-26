@@ -46,12 +46,11 @@ class FixtureSearchProvider implements SearchProvider {
     if (kind === "video") return [{ kind, sourceId, rank: 1, title: `Fixture video for ${query}`, url: canonicalUrl, canonicalUrl, videoUrl: canonicalUrl, sourcePageUrl: "https://example.com/fixture", displayUrl: "example.com", thumbnailUrl: "https://example.com/fixture.jpg", durationSeconds: 30 }];
     const secondUrl = "https://example.com/fixture-second";
     const secondId = await this.identities.sourceId(secondUrl);
-    // Explicit /link turns keep their single-result fixture; research omits
-    // resultKind and receives two distinct extracted candidates.
+    // Explicit article searches keep one fixture result; research receives two.
     return [
-      { kind, sourceId, rank: 1, title: `Fixture result for ${query}`, url: canonicalUrl, canonicalUrl, displayUrl: "example.com/fixture", snippet: "A safe fixture result for local development." },
-      { kind, sourceId: secondId, rank: 2, title: `Another fixture result for ${query}`, url: secondUrl, canonicalUrl: secondUrl, displayUrl: "example.com/fixture-second", snippet: "A second fixture source for local development." },
-    ].slice(0, options.resultKind === "link" ? 1 : options.maxResults);
+      { kind: "link" as const, sourceId, rank: 1, title: `Fixture result for ${query}`, url: canonicalUrl, canonicalUrl, displayUrl: "example.com/fixture", snippet: "A safe fixture result for local development." },
+      { kind: "link" as const, sourceId: secondId, rank: 2, title: `Another fixture result for ${query}`, url: secondUrl, canonicalUrl: secondUrl, displayUrl: "example.com/fixture-second", snippet: "A second fixture source for local development." },
+    ].slice(0, options.resultKind === "link" || options.resultKind === "news" ? 1 : options.maxResults);
   }
 }
 

@@ -4,7 +4,7 @@ export type PromptSubmission =
   | { kind: "research"; value: string }
   | { kind: "search"; resultKind: SearchResultKind; query: string };
 
-const commands: Record<string, SearchResultKind> = { "/link": "link", "/image": "image", "/video": "video" };
+const commands: Record<string, SearchResultKind> = { "/link": "link", "/news": "news", "/image": "image", "/video": "video" };
 
 /** Classifies raw PromptBox and prompt-URL input through one command grammar. */
 export function classifyPromptInput(value: string): PromptSubmission | { kind: "invalid"; message: string } {

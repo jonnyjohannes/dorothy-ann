@@ -92,7 +92,7 @@ const sourceId = z.string().regex(/^src_[A-Za-z0-9_-]{43}$/);
 const sourceSchema = sourceRecordV3Schema;
 const occurrenceSchema = z.strictObject({ sourceId, role: z.enum(["search_destination", "research_evidence"]), rank: z.number().int().positive().max(10).optional() });
 const requestSchema = z.discriminatedUnion("kind", [
-  z.strictObject({ executionId: uuid, turnId: uuid, kind: z.literal("search"), resultKind: z.enum(["link", "image", "video"]).optional(), query: boundedText(1, 2_000) }),
+  z.strictObject({ executionId: uuid, turnId: uuid, kind: z.literal("search"), resultKind: z.enum(["link", "news", "image", "video"]).optional(), query: boundedText(1, 2_000) }),
   z.strictObject({ executionId: uuid, turnId: uuid, kind: z.literal("research"), question: boundedText(1, 2_000), context: threadContextV3Schema, answerPosition: z.enum(["initial", "follow_up"]) }),
 ]);
 

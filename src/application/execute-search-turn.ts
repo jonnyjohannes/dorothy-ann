@@ -72,7 +72,7 @@ function normalizedResults(raw: unknown, maxResults: number, resultKind: SearchR
     if (typeof result.sourceId !== "string" || typeof result.title !== "string" || typeof result.url !== "string" || typeof result.canonicalUrl !== "string") {
       throw new Error("invalid_response");
     }
-    if (resultKind === "link" ? result.kind !== undefined && result.kind !== "link" : result.kind !== resultKind) throw new Error("invalid_response");
+    if (resultKind === "link" || resultKind === "news" ? result.kind !== undefined && result.kind !== "link" : result.kind !== resultKind) throw new Error("invalid_response");
     const candidate = result as Partial<SearchResult> & { imageUrl?: unknown; videoUrl?: unknown; sourcePageUrl?: unknown };
     if (resultKind === "image" && (typeof candidate.imageUrl !== "string" || typeof candidate.sourcePageUrl !== "undefined" && typeof candidate.sourcePageUrl !== "string")) throw new Error("invalid_response");
     if (resultKind === "video" && (typeof candidate.videoUrl !== "string" || typeof candidate.sourcePageUrl !== "undefined" && typeof candidate.sourcePageUrl !== "string")) throw new Error("invalid_response");
@@ -81,7 +81,7 @@ function normalizedResults(raw: unknown, maxResults: number, resultKind: SearchR
     if (typeof rank !== "number" || !Number.isSafeInteger(rank) || rank <= 0) throw new Error("invalid_response");
     ids.add(result.sourceId);
     urls.add(result.canonicalUrl);
-    results.push({ ...result, kind: resultKind, rank } as SearchResult);
+    results.push({ ...result, kind: resultKind === "news" ? "link" : resultKind, rank } as SearchResult);
   }
   return results.sort((left, right) => left.rank - right.rank || left.sourceId.localeCompare(right.sourceId));
 }

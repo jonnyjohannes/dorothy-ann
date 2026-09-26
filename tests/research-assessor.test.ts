@@ -104,6 +104,10 @@ describe("ResearchAssessor", () => {
     const assessor = new ResearchAssessor(new IdentityPolicy(hasher));
     const search = await makeInput({ proposal: { directive: { kind: "search", query: "  current reporting ", purpose: "  Find reports ", successCriterion: "  A supported explanation ", priority: 2 } } });
     await expect(assessor.assess(search)).resolves.toMatchObject({ directive: { kind: "search", query: "current reporting", priority: 2 } });
+    const news = await makeInput({ proposal: { directive: { kind: "search", query: "reports", purpose: "Find reports", successCriterion: "Supported", priority: 1, surface: "news" } } });
+    await expect(assessor.assess(news)).resolves.toMatchObject({ directive: { kind: "search", surface: "news" } });
+    const invalid = await makeInput({ proposal: { directive: { kind: "search", query: "reports", purpose: "Find reports", successCriterion: "Supported", priority: 1, surface: "other" as never } } });
+    await expect(assessor.assess(invalid)).rejects.toMatchObject({ code: "surface_invalid" });
 
     const decomposition = await makeInput({ proposal: { directive: { kind: "decompose", operator: "all", problems: [
       { question: "First cause", purpose: "Find cause", successCriterion: "Cause supported", priority: 1 },

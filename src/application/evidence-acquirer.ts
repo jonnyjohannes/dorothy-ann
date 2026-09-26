@@ -17,6 +17,7 @@ import type {
 import type { SearchOptions, SearchProvider } from "../ports/providers.js";
 
 export interface EvidenceRequest {
+  surface?: "web" | "news";
   problemId: ResearchProblemId;
   query: string;
   purpose: string;
@@ -257,7 +258,7 @@ export class EvidenceAcquirer {
           continue;
         }
         try {
-          const options: SearchOptions = { maxResults: maxCandidates };
+          const options: SearchOptions = { maxResults: maxCandidates, ...(request.surface === "news" ? { resultKind: "news" as const } : {}) };
           if (yields) yields[index].requested = maxCandidates;
           const raw = this.dependencies.search
             ? await this.dependencies.search.search(request.query, options)
