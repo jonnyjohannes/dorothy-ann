@@ -95,7 +95,7 @@ The `research_timing` record includes per-request selected/viable/empty/failure 
 - [v1.2.1 research recovery plan](docs/plans/patch-research-state-sse-overflow.md) — in-flight patch for interrupted long-context research
 - [Release hygiene plan](docs/plans/archive/dorothy-ann-release-hygiene.md) — completed tags, version, documentation, and release-inventory reconciliation
 - [Search result kinds amendment](docs/plans/archive/dorothy-ann-search-result-kinds.md) — `/link`, `/image`, and `/video` behavior shipped in v1.2.0
-- [News discovery plan](docs/plans/archive/dorothy-ann-news-search.md) — raw `/news`, optional research news discovery, and the shared article cue (live Brave verification pending)
+- [News discovery plan](docs/plans/archive/dorothy-ann-news-search.md) — raw `/news` and optional research news discovery (live Brave verification pending); [icon-only cue amendment](docs/plans/archive/dorothy-ann-news-cue-alignment.md) — article metadata presentation
 - [v1.1.0 architecture plan](docs/plans/archive/dorothy-ann-v1.1.0.md) — architectural baseline: boxes, contracts, migration policy, and verification
 - [v1.1.0 release-candidate changelog](docs/releases/dorothy-ann-v1.1.0-rc.md) — historical detailed inventory and RC patch log
 - [v1.0.0 plan](docs/plans/archive/dorothy-ann-v1.0.0.md) — original product baseline

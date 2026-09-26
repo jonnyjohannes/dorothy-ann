@@ -2,7 +2,7 @@
 
 ## Current State
 
-- Status: done; implemented in `c9177f1` (no release tag); live Brave News endpoint remains unverified without credentials.
+- Status: superseded only for the visible News metadata label by [the icon-only cue amendment](dorothy-ann-news-cue-alignment.md); core behavior implemented in `c9177f1` (no release tag); live Brave News endpoint remains unverified without credentials.
 - Owner: Jonny
 - The settled P17 extraction baseline remains unchanged: bounded Readability/plain-text extraction, charged backfill (five attempts/request, twelve/turn), the two-source gate, and sanitized logging. News search shares those safeguards; it does not solve extraction yield or the separate research-recovery/release gates.
 - Verified: lint, typecheck, 316 tests, build, and eight isolated fixture Playwright cases across Chromium and mobile WebKit (including `/news` reload and accessibility). The default Playwright invocation initially reused an unrelated non-fixture server on port 8787 and displayed Unlock; an isolated fixture run used separate ports and passed. Home contrast needed a small muted-text adjustment to pass axe on the real home screen. `git diff --check` passed. Live Brave acceptance remains a separate check when credentials are available.
