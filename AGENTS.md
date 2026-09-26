@@ -4,7 +4,7 @@
 
 Start from [`docs/plans/dorothy-ann-repo-state-audit.md`](docs/plans/dorothy-ann-repo-state-audit.md), the current-state snapshot of shipped versions, plan coverage, and genuinely outstanding work.
 
-The active plans are [`docs/plans/patch-research-state-sse-overflow.md`](docs/plans/patch-research-state-sse-overflow.md) (v1.2.1 research recovery hardening; P1–P3 verified, P4–P6 open) and [`docs/plans/dorothy-ann-release-hygiene.md`](docs/plans/dorothy-ann-release-hygiene.md) (tags, versions, docs, and release inventory). Read the relevant plan's `Current State`, `Plan Ledger`, and `Open Questions` before changing code.
+The active plans are [`docs/plans/patch-research-state-sse-overflow.md`](docs/plans/patch-research-state-sse-overflow.md) (v1.2.1 research recovery hardening; P1–P3 verified, P4–P6 open) and [`docs/plans/dorothy-ann-two-source-synthesis.md`](docs/plans/dorothy-ann-two-source-synthesis.md) (evidence yield and synthesis behavior). Release bookkeeping is complete in [`docs/plans/archive/dorothy-ann-release-hygiene.md`](docs/plans/archive/dorothy-ann-release-hygiene.md). Read the relevant plan's `Current State`, `Plan Ledger`, and `Open Questions` before changing code.
 
 [`docs/plans/dorothy-ann-v1.1.0.md`](docs/plans/archive/dorothy-ann-v1.1.0.md) is the shipped architectural baseline, not an active work item: read it for contracts, box definitions, and provider rationale, but later amendments win where they disagree (it still describes the removed `/search` command). Keep product behavior, UX states, contracts, provider rationale, and deferred scope in the plan that owns the change.
 

@@ -87,7 +87,7 @@ These records never contain request or prompt text, extracted content, URLs/sour
 
 - [Repository state audit](docs/plans/dorothy-ann-repo-state-audit.md) — shipped versions, plan coverage, and outstanding work
 - [v1.2.1 research recovery plan](docs/plans/patch-research-state-sse-overflow.md) — in-flight patch for interrupted long-context research
-- [Release hygiene plan](docs/plans/dorothy-ann-release-hygiene.md) — tags, versions, documentation, and release inventory
+- [Release hygiene plan](docs/plans/archive/dorothy-ann-release-hygiene.md) — completed tags, version, documentation, and release-inventory reconciliation
 - [Search result kinds amendment](docs/plans/archive/dorothy-ann-search-result-kinds.md) — `/link`, `/image`, and `/video` behavior shipped in v1.2.0
 - [v1.1.0 architecture plan](docs/plans/archive/dorothy-ann-v1.1.0.md) — architectural baseline: boxes, contracts, migration policy, and verification
 - [v1.1.0 release-candidate changelog](docs/releases/dorothy-ann-v1.1.0-rc.md) — historical detailed inventory and RC patch log
