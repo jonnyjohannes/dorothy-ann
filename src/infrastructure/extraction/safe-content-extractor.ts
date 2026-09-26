@@ -24,7 +24,7 @@ export type EmptyResponseShape =
   | "html_no_text_without_script"
   | "html_text_without_semantic_root"
   | "html_text_outside_semantic_root";
-export type ExtractionTextDiagnostic = "no_readable_text" | "under_minimum" | "fallback_recovered" | EmptyResponseShape;
+export type ExtractionTextDiagnostic = "no_readable_text" | "under_minimum" | "fallback_recovered" | "json_ld_recovered" | EmptyResponseShape;
 
 type PublicAddress = { address: string; family: 4 | 6 };
 type FetchWithDispatcher = (input: string | URL, init?: RequestInit & { dispatcher?: Agent }) => Promise<Response>;
@@ -188,6 +188,54 @@ function boundedText(text: string, maxCharacters: number): string {
   return [...text.replace(/\s+/g, " ").trim()].slice(0, maxCharacters).join("");
 }
 
+const ARTICLE_TYPES = new Set(["Article", "NewsArticle", "BlogPosting"]);
+const MAX_JSON_LD_SCRIPTS = 4;
+const MAX_JSON_LD_UNITS = 100_000;
+const MAX_JSON_LD_NODES = 32;
+
+/** Only page-authored articleBody data from the already fetched HTML may qualify. */
+function structuredArticleText(html: string, maxCharacters: number, minCharacters: number): string {
+  if (!/application\/ld\+json/i.test(html)) return "";
+  const { document } = parseHTML(html);
+  let scripts = 0;
+  for (const script of document.querySelectorAll("script[type]")) {
+    if (script.getAttribute("type")?.split(";", 1)[0]?.trim().toLowerCase() !== "application/ld+json") continue;
+    if (++scripts > MAX_JSON_LD_SCRIPTS) break;
+    const payload = script.textContent ?? "";
+    if (!payload || payload.length > MAX_JSON_LD_UNITS) continue;
+    let parsed: unknown;
+    try { parsed = JSON.parse(payload); } catch { continue; }
+    let nodes = 0;
+    const articleText = (candidate: unknown): string => {
+      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return "";
+      const value = candidate as Record<string, unknown>;
+      const types = Array.isArray(value["@type"]) ? value["@type"].slice(0, 4) : [value["@type"]];
+      if (!types.some((type) => typeof type === "string" && ARTICLE_TYPES.has(type)) || typeof value.articleBody !== "string" || value.articleBody.length > MAX_JSON_LD_UNITS) return "";
+      try {
+        const bodyDocument = parseHTML(`<main>${value.articleBody}</main>`).document;
+        sanitizeDocument(bodyDocument);
+        const text = boundedText(bodyDocument.querySelector("main")?.innerText ?? "", maxCharacters);
+        return [...text].length >= minCharacters ? text : "";
+      } catch { return ""; }
+    };
+    for (const root of Array.isArray(parsed) ? parsed : [parsed]) {
+      if (++nodes > MAX_JSON_LD_NODES) break;
+      const direct = articleText(root);
+      if (direct) return direct;
+      if (!root || typeof root !== "object" || Array.isArray(root)) continue;
+      const graph = (root as Record<string, unknown>)["@graph"];
+      if (!Array.isArray(graph)) continue;
+      for (const node of graph) {
+        if (++nodes > MAX_JSON_LD_NODES) break;
+        const nested = articleText(node);
+        if (nested) return nested;
+      }
+      if (nodes > MAX_JSON_LD_NODES) break;
+    }
+  }
+  return "";
+}
+
 function pinnedAgent(addresses: PublicAddress[]): Agent {
   let index = 0;
   return new Agent({
@@ -229,8 +277,8 @@ export class SafeContentExtractor implements ContentExtractor {
       // A fetch may finish after the outer timeout; only count the outcome
       // actually returned to acquisition, never a late background result.
       for (const category of diagnostics) {
-        if ((outcome.status === "viable" && category === "fallback_recovered")
-          || (outcome.status === "skipped" && outcome.reason === "empty_content" && category !== "fallback_recovered")) this.report(category);
+        if ((outcome.status === "viable" && (category === "fallback_recovered" || category === "json_ld_recovered"))
+          || (outcome.status === "skipped" && outcome.reason === "empty_content" && category !== "fallback_recovered" && category !== "json_ld_recovered")) this.report(category);
       }
       if (outcome.status === "skipped" && outcome.reason === "empty_content"
         && diagnostics.includes("html_no_text_with_script") && sampleHtml !== undefined) {
@@ -331,6 +379,13 @@ export class SafeContentExtractor implements ContentExtractor {
             bounded = fallback;
             recordTextDiagnostic("fallback_recovered");
           } else if ([...fallback].length > [...bounded].length) bounded = fallback;
+          if ([...bounded].length < this.config.minCharacters) {
+            const structured = structuredArticleText(raw, limits.maxCharacters, this.config.minCharacters);
+            if (structured) {
+              bounded = structured;
+              recordTextDiagnostic("json_ld_recovered");
+            }
+          }
         }
         const characterCount = [...bounded].length;
         if (characterCount < this.config.minCharacters) {

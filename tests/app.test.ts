@@ -72,7 +72,7 @@ describe("portable v3 Hono API", () => {
     const body = await response.text();
     expect(records).toHaveLength(1);
     expect(samples).not.toHaveBeenCalled();
-    expect(records[0]).toMatchObject({ event: "research_timing", schema_version: 4, terminal_status: "completed", counts: { searches_used: 1, sources_consumed: 2, assessments_used: 1 }, evidence_yield: { distinct_viable_root_ids: 2, extraction_text: { no_readable_text: 0, under_minimum: 0, fallback_recovered: 0, empty_body: 0, plain_no_text: 0, html_no_text_with_script: 0, html_no_text_without_script: 0, html_text_without_semantic_root: 0, html_text_outside_semantic_root: 0 }, requests: [{ requested: 5, returned: 2, normalized_unique: 2, selected: 2, viable: 2 }] } });
+    expect(records[0]).toMatchObject({ event: "research_timing", schema_version: 5, terminal_status: "completed", counts: { searches_used: 1, sources_consumed: 2, assessments_used: 1 }, evidence_yield: { distinct_viable_root_ids: 2, extraction_text: { no_readable_text: 0, under_minimum: 0, fallback_recovered: 0, json_ld_recovered: 0, empty_body: 0, plain_no_text: 0, html_no_text_with_script: 0, html_no_text_without_script: 0, html_text_without_semantic_root: 0, html_text_outside_semantic_root: 0 }, requests: [{ requested: 5, returned: 2, normalized_unique: 2, selected: 2, viable: 2 }] } });
     const serialized = JSON.stringify(records[0]);
     for (const secret of ["SENTINEL_USER_QUESTION", "SENTINEL_ASSESSOR_PROMPT", "SENTINEL_SYNTHESIZER_PROMPT", executionId, turnId, "example.com"]) expect(serialized).not.toContain(secret);
     expect(body).not.toContain("research_timing");
