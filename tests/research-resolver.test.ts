@@ -36,6 +36,7 @@ describe("ResearchResolver", () => {
     const input = await makeInput();
     let calls = 0;
     const phases: string[] = [];
+    const decisions: Array<{ depth: number; directive: string; validationMs: number }> = [];
     const resolver = new ResearchResolver({
       identities,
       assessor: new ResearchAssessor(identities),
@@ -45,6 +46,7 @@ describe("ResearchResolver", () => {
         return { directive: { kind: "resolved", observations: [{ proposition: "The answer", statement: "The available evidence supports the answer.", stance: "supports", support: [{ type: "turn", turnId }] }] } };
       },
       acquirer: new EvidenceAcquirer({ fixture: true }),
+      onAssessmentDecision: (decision) => { decisions.push(decision); throw new Error("ignored telemetry sink"); },
     });
     const result = await resolver.resolve({ ...input, onPhase: (phase) => { phases.push(phase); } });
     expect(result.kind).toBe("resolution");
@@ -58,6 +60,8 @@ describe("ResearchResolver", () => {
     // The root retrieval uses the exact question before the first assessor
     // call; the assessor is reserved for deciding what to do with evidence.
     expect(calls).toBe(1);
+    expect(decisions).toMatchObject([{ depth: 0, directive: "resolved" }]);
+    expect(decisions[0].validationMs).toBeGreaterThanOrEqual(0);
   });
 
   it.each([

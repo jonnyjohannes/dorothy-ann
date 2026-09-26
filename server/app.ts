@@ -98,6 +98,7 @@ function createExecutor(
       }
 
       const timing = researchTimingSink ? new ResearchTimingCollector(researchTimingSink) : undefined;
+      let assessmentCalls = 0;
       let timingResolution: ResearchResolution | undefined;
       let timingLedger: GapLedger | undefined;
       let timingTerminalStatus: "completed" | "failed" | "interrupted" | "executor_error" = "executor_error";
@@ -126,17 +127,36 @@ function createExecutor(
           acquirer,
           acquisitionLimits: { maxCandidatesPerSearch: config.MAX_SEARCH_RESULTS, maxSourcesPerRequest: 5, maxConcurrentSearches: config.MAX_CONCURRENT_SEARCHES, maxConcurrentExtractions: config.MAX_CONCURRENT_EXTRACTIONS, extractionMaxCharacters: config.MAX_EXTRACTED_CHARS_PER_PAGE, extractionTimeoutMs: config.EXTRACTION_TIMEOUT_MS },
           ...(timing ? { onEvidenceYield: (requests: Parameters<ResearchTimingCollector["markEvidenceYield"]>[0]) => timing.markEvidenceYield(requests) } : {}),
+          onAssessmentDecision: (decision) => {
+            timing?.markAssessmentValidation(decision.validationMs);
+            logger.debug("assessment_decision", { stage: "assessing", call: assessmentCalls, ...decision });
+          },
           assess: async (assessment) => {
+            const call = ++assessmentCalls;
+            const started = performance.now();
+            const evidenceSources = assessment.knowledge.evidence.reduce((total, pack) => total + pack.sources.length, 0);
+            const evidenceChars = logger.enabled("debug") ? assessment.knowledge.evidence.reduce((total, pack) => total + pack.sources.reduce((sum, source) => sum + source.page.text.length, 0), 0) : undefined;
+            let outcome: "accepted" | "failed" = "failed";
             try {
-              const result = await timedLlm.assessResearch({ systemPrompt: prompts.assessor, problem: assessment.problem, knowledge: assessment.knowledge, ledger: assessment.ledger, budget: assessment.budget, allowedSupportRefs: assessment.allowedSupportRefs, maxOutputTokens: config.MAX_ASSESSMENT_OUTPUT_TOKENS, signal: assessment.signal });
+              const result = await timedLlm.assessResearch({ systemPrompt: prompts.assessor, problem: assessment.problem, knowledge: assessment.knowledge, ledger: assessment.ledger, budget: assessment.budget, allowedSupportRefs: assessment.allowedSupportRefs, maxOutputTokens: config.MAX_ASSESSMENT_OUTPUT_TOKENS, signal: assessment.signal,
+                onAttempt: (observation) => {
+                  timing?.markAssessmentAttempt(observation);
+                  logger.debug("assessment_attempt", { stage: "assessing", call, ...observation });
+                },
+              });
               timing?.markAssessmentDirective(result.directive.kind);
+              outcome = "accepted";
               return result;
             } catch (error) {
               timing?.markAssessmentFailure(error);
               const code = error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : "unknown";
               const reason = error && typeof error === "object" && "reason" in error && typeof error.reason === "string" ? error.reason : undefined;
-              logger.debug("assessment_failed", { stage: "assessing", failure_code: code, invalid_reason: reason });
+              const allowedCodes = ["provider_bad_request", "provider_rate_limited", "provider_unavailable", "provider_failed", "provider_interrupted", "assessment_invalid_response"];
+              const allowedReasons = ["empty_response", "invalid_json", "missing_directive", "unknown_directive", "invalid_search_query", "invalid_resolved", "invalid_decomposition"];
+              logger.debug("assessment_failed", { stage: "assessing", failure_code: allowedCodes.includes(code) ? code : "other", invalid_reason: reason && allowedReasons.includes(reason) ? reason : undefined });
               throw error;
+            } finally {
+              logger.debug("assessment_call", { stage: "assessing", call, depth: assessment.problem.depth, evidence_sources: Math.min(24, evidenceSources), evidence_chars: Math.min(500_000, evidenceChars ?? 0), elapsed_ms: Math.max(0, Math.min(300_000, Math.round(performance.now() - started))), outcome });
             }
           },
         });

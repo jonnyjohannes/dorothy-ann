@@ -84,6 +84,30 @@ describe("AnthropicProvider v3", () => {
     expect(stillInvalid.requests.map((request) => request.max_tokens)).toEqual([800, 1_200]);
   });
 
+  it("observes each assessment attempt with bounded metadata, including rejected, accepted, and failed calls", async () => {
+    const observations: unknown[] = [];
+    const valid = JSON.stringify({ directive: { kind: "search", query: "next", purpose: "answer", successCriterion: "supported", priority: 1 } });
+    const fake = client([
+      { content: [{ type: "text", text: "not json" }], stop_reason: "max_tokens", usage: { input_tokens: 2_000, output_tokens: 800 } },
+      { content: [{ type: "text", text: valid }], stop_reason: "end_turn", usage: { input_tokens: 2_200, output_tokens: 950 } },
+    ]);
+    const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: fake });
+    await provider.assessResearch({ ...baseAssessment, onAttempt: (record) => { observations.push(record); } });
+    expect(observations).toMatchObject([
+      { attempt: 1, outcome: "rejected", reason: "invalid_json", stopReason: "max_tokens", maxOutputTokens: 800, inputTokens: 2_000, outputTokens: 800 },
+      { attempt: 2, outcome: "accepted", stopReason: "end_turn", maxOutputTokens: 1_600, inputTokens: 2_200, outputTokens: 950 },
+    ]);
+    expect(observations.every((record) => typeof (record as { elapsedMs: number }).elapsedMs === "number" && typeof (record as { inputChars: number }).inputChars === "number")).toBe(true);
+    expect(JSON.stringify(observations)).not.toContain("ASSESSOR EXACT");
+    expect(JSON.stringify(observations)).not.toContain("next");
+
+    const failed = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: { messages: { create: async () => { throw new Error("SECRET_PROVIDER_RESPONSE"); } } } });
+    const failures: unknown[] = [];
+    await expect(failed.assessResearch({ ...baseAssessment, onAttempt: (record) => { failures.push(record); throw new Error("ignored observer error"); } })).rejects.toBeDefined();
+    expect(failures).toMatchObject([{ attempt: 1, outcome: "failed", reason: "provider_error", stopReason: "unknown" }]);
+    expect(JSON.stringify(failures)).not.toContain("SECRET_PROVIDER_RESPONSE");
+  });
+
   it("sends an Anthropic-compatible structured schema while enforcing response bounds locally", async () => {
     const valid = JSON.stringify({ directive: { kind: "search", query: "flamingo color", purpose: "answer", successCriterion: "supported", priority: 1 } });
     const fake = client([{ content: [{ type: "text", text: valid }] }]);

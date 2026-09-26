@@ -2,7 +2,7 @@ import type { GapLedger, ResearchResolution } from "../../src/domain/types.js";
 import { viableEvidenceSourceCount } from "../../src/domain/knowledge.js";
 import type { EvidenceYieldRequest } from "../../src/application/evidence-acquirer.js";
 import type { ContentExtractor } from "../../src/ports/extraction.js";
-import type { LLMProvider } from "../../src/ports/llm.js";
+import type { AssessmentAttemptObservation, LLMProvider } from "../../src/ports/llm.js";
 import type { SearchProvider } from "../../src/ports/providers.js";
 import type { Logger } from "./logger.js";
 
@@ -17,7 +17,7 @@ export interface StageTiming {
 
 export interface ResearchTimingRecord {
   event: "research_timing";
-  schema_version: 6;
+  schema_version: 7;
   terminal_status: "completed" | "failed" | "interrupted" | "executor_error";
   answer_position?: "initial" | "follow_up";
   assessment_failure_code?: "provider_bad_request" | "provider_rate_limited" | "provider_unavailable" | "provider_failed" | "provider_interrupted" | "assessment_invalid_response";
@@ -29,6 +29,19 @@ export interface ResearchTimingRecord {
     known_sources: number;
     evidence_packs: number;
     evidence_sources: number;
+  };
+  assessment_profile: {
+    provider_attempts: number;
+    retried_calls: number;
+    rejected_attempts: number;
+    failed_attempts: number;
+    input_chars_max: number;
+    input_tokens_total: number;
+    output_tokens_total: number;
+    token_usage_reported: number;
+    slowest_attempt_ms: number;
+    parse_ms_total: number;
+    validation_ms_total: number;
   };
   evidence_yield: {
     requests: EvidenceYieldRequest[];
@@ -93,6 +106,11 @@ export class ResearchTimingCollector {
   private readonly assessmentDirectives: NonNullable<ResearchTimingRecord["assessment_directives"]> = [];
   private assessmentInvalidReason: ResearchTimingRecord["assessment_invalid_reason"];
   private readonly evidenceYield: EvidenceYieldRequest[] = [];
+  private readonly assessmentProfile: ResearchTimingRecord["assessment_profile"] = {
+    provider_attempts: 0, retried_calls: 0, rejected_attempts: 0, failed_attempts: 0,
+    input_chars_max: 0, input_tokens_total: 0, output_tokens_total: 0, token_usage_reported: 0,
+    slowest_attempt_ms: 0, parse_ms_total: 0, validation_ms_total: 0,
+  };
 
   constructor(
     private readonly sink: ResearchTimingSink,
@@ -165,6 +183,24 @@ export class ResearchTimingCollector {
     if (reason && reasons.includes(reason as ResearchTimingRecord["assessment_invalid_reason"])) this.assessmentInvalidReason = reason as ResearchTimingRecord["assessment_invalid_reason"];
   }
 
+  markAssessmentAttempt(observation: AssessmentAttemptObservation): void {
+    const profile = this.assessmentProfile;
+    profile.provider_attempts = boundedCount(profile.provider_attempts + 1, 18);
+    if (observation.attempt === 2) profile.retried_calls = boundedCount(profile.retried_calls + 1, 9);
+    if (observation.outcome === "rejected") profile.rejected_attempts = boundedCount(profile.rejected_attempts + 1, 18);
+    if (observation.outcome === "failed") profile.failed_attempts = boundedCount(profile.failed_attempts + 1, 18);
+    profile.input_chars_max = Math.max(profile.input_chars_max, boundedCount(observation.inputChars, 2_000_000));
+    if (observation.inputTokens !== undefined || observation.outputTokens !== undefined) profile.token_usage_reported = boundedCount(profile.token_usage_reported + 1, 18);
+    profile.input_tokens_total = boundedCount(profile.input_tokens_total + boundedCount(observation.inputTokens ?? 0, 1_000_000), 18_000_000);
+    profile.output_tokens_total = boundedCount(profile.output_tokens_total + boundedCount(observation.outputTokens ?? 0, 1_000_000), 18_000_000);
+    profile.slowest_attempt_ms = Math.max(profile.slowest_attempt_ms, boundedCount(observation.elapsedMs, 300_000));
+    profile.parse_ms_total = boundedCount(profile.parse_ms_total + boundedCount(observation.parseMs, 300_000), 5_400_000);
+  }
+
+  markAssessmentValidation(elapsedMs: number): void {
+    this.assessmentProfile.validation_ms_total = boundedCount(this.assessmentProfile.validation_ms_total + boundedCount(elapsedMs, 300_000), 2_700_000);
+  }
+
   markEvidenceYield(requests: EvidenceYieldRequest[]): void {
     for (const request of requests) if (this.evidenceYield.length < 3) this.evidenceYield.push(boundedYield(request));
   }
@@ -182,13 +218,14 @@ export class ResearchTimingCollector {
       const distinctRootIds = resolution && viableEvidenceSourceCount(resolution.knowledge);
       const record: ResearchTimingRecord = {
         event: "research_timing",
-        schema_version: 6,
+        schema_version: 7,
         terminal_status: summary.terminalStatus,
         ...(summary.answerPosition ? { answer_position: summary.answerPosition } : {}),
         ...(this.assessmentFailureCode ? { assessment_failure_code: this.assessmentFailureCode } : {}),
         ...(this.assessmentInvalidReason ? { assessment_invalid_reason: this.assessmentInvalidReason } : {}),
         ...(this.assessmentDirective ? { assessment_directive: this.assessmentDirective, assessment_directives: [...this.assessmentDirectives] } : {}),
         ...(summary.context ? { context: summary.context } : {}),
+        assessment_profile: { ...this.assessmentProfile },
         evidence_yield: {
           requests: this.evidenceYield.map(boundedYield),
           ...(distinctRootIds === undefined ? {} : { distinct_viable_root_ids: boundedCount(distinctRootIds, 24) }),

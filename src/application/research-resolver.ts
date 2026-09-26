@@ -44,6 +44,8 @@ export interface ResearchResolverDependencies {
   acquirer: EvidenceAcquirer;
   acquisitionLimits?: ResearchLimits;
   onEvidenceYield?: (requests: EvidenceYieldRequest[]) => void;
+  /** Turn-local, count-only observer; failures must not affect resolution. */
+  onAssessmentDecision?: (result: { depth: number; directive: "resolved" | "search" | "decompose" | "invalid"; validationMs: number; searchesRemaining: number; assessmentsRemaining: number }) => void;
 }
 
 export interface ResearchResolverInput {
@@ -368,14 +370,25 @@ export class ResearchResolver {
       if (isUnavailable(error)) throw new Error("provider_unavailable");
       throw error;
     }
-    const assessment = await this.dependencies.assessor.assess({
-      ...request,
-      proposal,
-      turnId,
-      evidence: knowledge.evidence,
-    });
-    state.budget.assessmentsRemaining -= 1;
-    state.ledger.assessmentsUsed += 1;
+    const validationStarted = performance.now();
+    let directive: "resolved" | "search" | "decompose" | "invalid" = "invalid";
+    let validationMs = 0;
+    let assessment: ResearchAssessment;
+    try {
+      assessment = await this.dependencies.assessor.assess({
+        ...request,
+        proposal,
+        turnId,
+        evidence: knowledge.evidence,
+      });
+      directive = assessment.directive.kind;
+      state.budget.assessmentsRemaining -= 1;
+      state.ledger.assessmentsUsed += 1;
+    } finally {
+      validationMs = Math.max(0, Math.min(300_000, Math.round(performance.now() - validationStarted)));
+      try { this.dependencies.onAssessmentDecision?.({ depth: problem.depth, directive, validationMs, searchesRemaining: state.budget.searchesRemaining, assessmentsRemaining: state.budget.assessmentsRemaining }); }
+      catch { /* Diagnostics cannot change resolution. */ }
+    }
     if (assessment.directive.kind !== "resolved") await emitPhase(state.onPhase, "recursing");
     await emitPhase(state.onPhase, "resolving");
     return assessment;

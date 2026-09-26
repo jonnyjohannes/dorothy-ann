@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { AssistantContentPart, SourceId } from "../../domain/types.js";
 import type {
+  AssessmentAttemptObservation,
   LLMProvider,
   ObservationProposal,
   ResearchAssessmentInput,
@@ -17,7 +18,7 @@ type MessageEvent = {
   usage?: { input_tokens?: number; output_tokens?: number };
 };
 export type MessageStream = AsyncIterable<MessageEvent>;
-export type MessageResponse = { content?: Array<{ type?: string; text?: string }>; output_text?: string; stop_reason?: string | null; usage?: { output_tokens?: number } };
+export type MessageResponse = { content?: Array<{ type?: string; text?: string }>; output_text?: string; stop_reason?: string | null; usage?: { input_tokens?: number; output_tokens?: number } };
 
 interface MessagesClient {
   create(input: {
@@ -177,33 +178,53 @@ export class AnthropicProvider implements LLMProvider {
     let invalidReason: AssessmentInvalidReason = "empty_response";
     let requestTokens = Math.min(800, input.maxOutputTokens);
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      const envelope = assessmentEnvelope(input, correction);
+      const inputChars = Math.min(2_000_000, input.systemPrompt.length + envelope.length);
+      const cap = requestTokens;
+      const started = performance.now();
+      let reported = false;
+      const observe = (result: Omit<AssessmentAttemptObservation, "attempt" | "elapsedMs" | "inputChars" | "maxOutputTokens">) => {
+        reported = true;
+        try { input.onAttempt?.({ attempt: attempt === 0 ? 1 : 2, elapsedMs: Math.min(300_000, Math.max(0, Math.round(performance.now() - started))), inputChars, maxOutputTokens: cap, ...result }); }
+        catch { /* Diagnostics must never alter assessment. */ }
+      };
       try {
         const request: Parameters<MessagesClient["create"]>[0] = {
           model: this.assessmentModelRef,
-          max_tokens: requestTokens,
+          max_tokens: cap,
           system: input.systemPrompt,
-          messages: [{ role: "user", content: assessmentEnvelope(input, correction) }],
+          messages: [{ role: "user", content: envelope }],
           ...(structuredOutput ? { output_config: { format: { type: "json_schema" as const, schema: assessmentOutputSchema } } } : {}),
         };
         const response = await this.create(request, input.signal);
+        const providerElapsed = performance.now() - started;
         const text = responseText(response);
         const proposal = parseProposal(text, input.allowedSupportRefs, input.problem);
-        if (proposal) return proposal;
-        invalidReason = assessmentInvalidReason(text);
+        const parseMs = Math.min(300_000, Math.max(0, Math.round(performance.now() - started - providerElapsed)));
         const metadata = isStream(response) ? undefined : response;
         const outputTokens = metadata?.usage?.output_tokens;
+        const inputTokens = metadata?.usage?.input_tokens;
+        const boundedTokens = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) ? Math.max(0, Math.min(1_000_000, value)) : undefined;
         const stopReason = metadata?.stop_reason;
+        const normalizedStop = stopReason === "end_turn" || stopReason === "max_tokens" || stopReason === "refusal" ? stopReason : stopReason ? "other" : "unknown";
+        const countedInput = boundedTokens(inputTokens);
+        const countedOutput = boundedTokens(outputTokens);
+        const measurement = { parseMs, stopReason: normalizedStop, ...(countedInput === undefined ? {} : { inputTokens: countedInput }), ...(countedOutput === undefined ? {} : { outputTokens: countedOutput }) } as const;
+        if (proposal) { observe({ ...measurement, outcome: "accepted" }); return proposal; }
+        invalidReason = assessmentInvalidReason(text);
+        observe({ ...measurement, outcome: "rejected", reason: invalidReason });
         try {
           this.onDiagnostic?.({
             event: "assessment_output_rejected", stage: "assessing", reason: invalidReason,
             format: structuredOutput ? "structured" : "fallback",
-            stop_reason: stopReason === "end_turn" || stopReason === "max_tokens" || stopReason === "refusal" ? stopReason : stopReason ? "other" : "unknown",
-            output_tokens: typeof outputTokens === "number" && Number.isSafeInteger(outputTokens) ? Math.max(0, Math.min(1_600, outputTokens)) : 0,
+            stop_reason: normalizedStop,
+            output_tokens: Math.min(1_600, countedOutput ?? 0),
             text_chars: Math.min(16_000, [...text].length),
           });
         } catch { /* Diagnostics must never alter provider behavior. */ }
         if (attempt === 0 && stopReason === "max_tokens") requestTokens = this.assessmentRetryMaxOutputTokens;
       } catch (error) {
+        if (!reported) observe({ parseMs: 0, stopReason: "unknown", outcome: "failed", reason: "provider_error" });
         if (error instanceof AnthropicProviderError && error.code === "provider_bad_request" && structuredOutput) {
           structuredOutput = false;
           try { this.onDiagnostic?.({ event: "assessment_structured_output_fallback", stage: "assessing", reason: "provider_bad_request" }); } catch { /* Diagnostics must never alter provider behavior. */ }

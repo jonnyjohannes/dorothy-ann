@@ -26,6 +26,9 @@ describe("research timing", () => {
     expect(parts).toHaveLength(1);
     collector.markAssessmentDirective("search");
     collector.markAssessmentFailure({ code: "provider_rate_limited", reason: "invalid_search_query" });
+    collector.markAssessmentAttempt({ attempt: 1, elapsedMs: 20, parseMs: 1, inputChars: 3_000, maxOutputTokens: 800, inputTokens: 700, outputTokens: 800, stopReason: "max_tokens", outcome: "rejected", reason: "missing_directive" });
+    collector.markAssessmentAttempt({ attempt: 2, elapsedMs: 30, parseMs: 2, inputChars: 3_100, maxOutputTokens: 1_600, inputTokens: 750, outputTokens: 950, stopReason: "end_turn", outcome: "accepted" });
+    collector.markAssessmentValidation(3);
     time = 45;
     collector.markFirstAnswerSignal();
     time = 50;
@@ -38,7 +41,7 @@ describe("research timing", () => {
 
     expect(record).toEqual({
       event: "research_timing",
-      schema_version: 6,
+      schema_version: 7,
       terminal_status: "completed",
       answer_position: "follow_up",
       assessment_failure_code: "provider_rate_limited",
@@ -46,6 +49,7 @@ describe("research timing", () => {
       assessment_directive: "search",
       assessment_directives: ["search"],
       context: { turns: 1, known_sources: 2, evidence_packs: 1, evidence_sources: 1 },
+      assessment_profile: { provider_attempts: 2, retried_calls: 1, rejected_attempts: 1, failed_attempts: 0, input_chars_max: 3_100, input_tokens_total: 1_450, output_tokens_total: 1_750, token_usage_reported: 2, slowest_attempt_ms: 30, parse_ms_total: 3, validation_ms_total: 3 },
       evidence_yield: { requests: [], distinct_viable_root_ids: 0 },
       resolution_status: "sufficient",
       stop_reason: "sufficient",
@@ -74,7 +78,7 @@ describe("research timing", () => {
       ] },
     } });
     expect(records).toHaveLength(1);
-    expect(records[0]).toMatchObject({ schema_version: 6, resolution_status: "best_effort", evidence_yield: { distinct_viable_root_ids: 1, requests: [{ reused: 1, viable: 1 }] } });
+    expect(records[0]).toMatchObject({ schema_version: 7, resolution_status: "best_effort", evidence_yield: { distinct_viable_root_ids: 1, requests: [{ reused: 1, viable: 1 }] } });
     expect(JSON.stringify(records)).not.toContain("private query");
     expect(JSON.stringify(records)).not.toContain("same");
   });
@@ -85,6 +89,14 @@ describe("research timing", () => {
     collector.markEvidenceYield([{ requested: 5, returned: 5, normalized_unique: 5, invalid_discarded: 0, duplicate_discarded: 0, selected: 5, reused: 0, unselected: 0, viable: 0, empty: 5, failed: 0, fetch_failed: 0, timeout: 0, extract_failed: 0, skipped_other: 0 }]);
     collector.emit({ terminalStatus: "failed", ledger: { gaps: [], searchesUsed: 3, sourcesConsumed: 12, assessmentsUsed: 2 } });
     expect(records[0]).toMatchObject({ counts: { searches_used: 3, sources_consumed: 12 }, evidence_yield: { requests: [{ selected: 5, empty: 5 }] } });
+  });
+
+  it("bounds attempt metrics without accepting text or identifiers", () => {
+    let record: ResearchTimingRecord | undefined;
+    const collector = new ResearchTimingCollector((value) => { record = value; });
+    collector.markAssessmentAttempt({ attempt: 1, elapsedMs: Number.POSITIVE_INFINITY, parseMs: -3, inputChars: 9_999_999, maxOutputTokens: 800, inputTokens: -1, outputTokens: 1_999_999, stopReason: "unknown", outcome: "failed", reason: "provider_error" });
+    collector.emit({ terminalStatus: "failed" });
+    expect(record?.assessment_profile).toMatchObject({ provider_attempts: 1, retried_calls: 0, failed_attempts: 1, input_chars_max: 2_000_000, input_tokens_total: 0, output_tokens_total: 1_000_000, slowest_attempt_ms: 0, parse_ms_total: 0 });
   });
 
   it("records failures without retaining errors or allowing a throwing sink to alter behavior", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createTurnStreamBoundary, type TurnExecutor } from "../src/server/turn-stream-boundary.js";
+import { createTurnStreamBoundary, type TurnExecutor, type TurnStreamDiagnostic } from "../src/server/turn-stream-boundary.js";
 
 const turnId = "123e4567-e89b-12d3-a456-426614174000";
 const executionId = "123e4567-e89b-12d3-a456-426614174001";
@@ -10,7 +10,7 @@ const terminal = {
 };
 const limits = {};
 
-function appFor(executor: TurnExecutor, options: { authenticate?: () => boolean; heartbeatMs?: number } = {}) {
+function appFor(executor: TurnExecutor, options: { authenticate?: () => boolean; heartbeatMs?: number; onDiagnostic?: (record: TurnStreamDiagnostic) => void } = {}) {
   return createTurnStreamBoundary({
     executor,
     maxRequestBytes: 10_000,
@@ -18,6 +18,7 @@ function appFor(executor: TurnExecutor, options: { authenticate?: () => boolean;
     researchLimits: limits,
     heartbeatMs: options.heartbeatMs,
     authenticate: options.authenticate,
+    onDiagnostic: options.onDiagnostic,
   });
 }
 
@@ -44,6 +45,21 @@ describe("portable turn stream boundary", () => {
     expect(body.match(/event: turn\.terminal/g)).toHaveLength(1);
     expect(body).toContain("id: 1");
     expect(body).toContain("id: 3");
+  });
+
+  it("emits one bounded transport summary instead of a log per SSE frame", async () => {
+    const records: TurnStreamDiagnostic[] = [];
+    const app = appFor({ async execute(_request, onSignal) {
+      await onSignal({ type: "phase", phase: "searching" });
+      return terminal;
+    } }, { onDiagnostic: (record) => { records.push(record); } });
+    const response = await app.request("http://localhost/", { method: "POST", body: JSON.stringify({ executionId, turnId, kind: "search", query: "PRIVATE_QUERY" }) });
+    await response.text();
+    expect(records).toMatchObject([
+      { event: "turn_sse_summary", stage: "transport", frames: 3 },
+      { event: "turn_stream_end", stage: "transport", terminal_sent: true },
+    ]);
+    expect(JSON.stringify(records)).not.toContain("PRIVATE_QUERY");
   });
 
   it("validates and sequences every legal research phase while awaiting async writes", async () => {

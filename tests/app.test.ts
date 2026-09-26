@@ -80,13 +80,26 @@ describe("portable v3 Hono API", () => {
     const body = await response.text();
     const summaries = logged.filter((record) => record.event === "research_timing");
     expect(summaries).toHaveLength(1);
-    expect(summaries[0]).toMatchObject({ level: "info", schema_version: 6, terminal_status: "completed", counts: { searches_used: 1, sources_consumed: 2, assessments_used: 1 }, evidence_yield: { distinct_viable_root_ids: 2, requests: [{ requested: 5, returned: 2, normalized_unique: 2, selected: 2, viable: 2 }] } });
+    expect(summaries[0]).toMatchObject({ level: "info", schema_version: 7, terminal_status: "completed", assessment_profile: { provider_attempts: 0, retried_calls: 0 }, counts: { searches_used: 1, sources_consumed: 2, assessments_used: 1 }, evidence_yield: { distinct_viable_root_ids: 2, requests: [{ requested: 5, returned: 2, normalized_unique: 2, selected: 2, viable: 2 }] } });
     const serialized = JSON.stringify(summaries[0]);
     for (const secret of ["SENTINEL_USER_QUESTION", "SENTINEL_ASSESSOR_PROMPT", "SENTINEL_SYNTHESIZER_PROMPT", executionId, turnId, "example.com"]) expect(serialized).not.toContain(secret);
     expect(body).not.toContain("research_timing");
     expect(body).not.toContain("execution_ms");
     expect(body).not.toContain("evidence_yield");
   });
+  it("groups count-only assessment and transport debug events outside the stream", async () => {
+    const logged: LogRecord[] = [];
+    const debugApp = createApp({ config: loadConfig({ DOROTHY_FIXTURE_MODE: "true" }), systemPrompts, logger: createLogger({ level: "debug", sink: (record) => { logged.push(record); } }) });
+    const response = await debugApp.request("http://localhost/api/turn/", { method: "POST", body: JSON.stringify({ executionId, turnId, kind: "research", question: "SENTINEL_USER_QUESTION", answerPosition: "initial", context: { threadId: "00000000-0000-4000-8000-000000000003", turns: [], knownSources: [], availableEvidence: [] } }) });
+    const body = await response.text();
+    expect(logged.map((record) => record.event)).toContain("assessment_call");
+    expect(logged.map((record) => record.event)).toContain("assessment_decision");
+    expect(logged.filter((record) => record.event === "turn_sse_summary")).toHaveLength(1);
+    expect(logged.some((record) => record.event === "turn_sse_frame")).toBe(false);
+    expect(JSON.stringify(logged)).not.toMatch(/SENTINEL_USER_QUESTION|00000000-0000-4000-8000-000000000002/);
+    expect(body).not.toContain("assessment_call");
+  });
+
   it("keeps timing console output disabled at silent log level", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const response = await app.request("http://localhost/api/turn/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ executionId, turnId, kind: "research", question: "timing disabled", answerPosition: "initial", context: { threadId: "00000000-0000-4000-8000-000000000003", turns: [], knownSources: [], availableEvidence: [] } }) });
