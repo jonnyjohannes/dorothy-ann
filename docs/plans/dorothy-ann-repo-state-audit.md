@@ -44,7 +44,7 @@ In flight on `release/v1.2.1` (`ef93dd3`, "fix long-context research recovery"):
 | `research-trail-transcript.md` | done | 1/1 `[x]` | Aligned. |
 | `research-trail-footnote.md` | done | 1/1 `[x]` | Aligned. |
 | `dorothy-ann-color-schemes.md` | complete | 8/8 `[x]`; `src/ui/color-scheme.ts` + `color-scheme.test.ts` | Aligned. |
-| `dorothy-ann-remote-storage.md` | **blocked** | 6/6 `[x]`; `redis-thread-store.ts`, `thread-store-base.ts`, `/api/storage/threads` route wired in `src/server/app.ts:34` | **Stale status.** All ledger items are verified; the only blocker is manual two-browser verification against a configured Upstash deployment. Should read `done, external verification pending` rather than `blocked`. |
+| `dorothy-ann-remote-storage.md` | done (was `blocked`) | 7 items, now 7/7 `[x]`; `redis-thread-store.ts`, `thread-store-base.ts`, `/api/storage/threads` route wired in `src/server/app.ts:34` | **Resolved 2026-09-21.** Items 1–6 were already verified; item 7 acceptance was `[!]` pending two-browser Upstash verification, which the owner has since confirmed working in deployed use. |
 | `patch-research-state-sse-overflow.md` | planning | P1–P3 `[x]`, P4–P6 `[ ]` | **The only genuinely outstanding plan.** |
 | `docs/releases/dorothy-ann-v1.1.0-rc.md` | release candidate | — | Stale; v1.1.0 shipped. No equivalent inventory exists for v1.2.0 or v1.2.1. |
 

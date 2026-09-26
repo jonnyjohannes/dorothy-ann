@@ -256,7 +256,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [x] 4. Browser remote store and runtime selection — fetch adapter, revision tracking, same-origin credentials, and fixture/non-fixture selection implemented and focused tests pass.
 - [x] 5. UI recovery and export simplification — no-draft export, completed-only lookup behavior, and commit retry are implemented and verified by focused/full UI checks.
 - [x] 6. Deployment and operator setup — Upstash/Vercel secret handoff and fixture/non-fixture rules documented; `.env.example` verified.
-- [!] 7. Acceptance — repository checks pass, but two-browser remote verification is blocked without configured non-fixture Upstash credentials.
+- [x] 7. Acceptance — repository checks pass, and the Upstash-backed store has since been confirmed working in real deployed use across browsers.
 
 ## Risks and Edge Cases
 
