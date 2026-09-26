@@ -2,7 +2,11 @@
 
 ## source of truth
 
-The active specification is [`docs/plans/dorothy-ann-v1.1.0.md`](docs/plans/dorothy-ann-v1.1.0.md). Read its `Current State`, `Handoff`, `Implementation Plan`, and `Plan Ledger` before changing code. Keep product behavior, UX states, contracts, provider rationale, and deferred scope in that plan.
+Start from [`docs/plans/dorothy-ann-repo-state-audit.md`](docs/plans/dorothy-ann-repo-state-audit.md), the current-state snapshot of shipped versions, plan coverage, and genuinely outstanding work.
+
+The active plans are [`docs/plans/patch-research-state-sse-overflow.md`](docs/plans/patch-research-state-sse-overflow.md) (v1.2.1 research recovery hardening; P1–P3 verified, P4–P6 open) and [`docs/plans/dorothy-ann-release-hygiene.md`](docs/plans/dorothy-ann-release-hygiene.md) (tags, versions, docs, and release inventory). Read the relevant plan's `Current State`, `Plan Ledger`, and `Open Questions` before changing code.
+
+[`docs/plans/dorothy-ann-v1.1.0.md`](docs/plans/dorothy-ann-v1.1.0.md) is the shipped architectural baseline, not an active work item: read it for contracts, box definitions, and provider rationale, but later amendments win where they disagree (it still describes the removed `/search` command). Keep product behavior, UX states, contracts, provider rationale, and deferred scope in the plan that owns the change.
 
 ## architecture and boundaries
 
@@ -19,11 +23,11 @@ This is one strict-TypeScript npm package targeting Node 22.
 
 Domain/application code must not import React, Hono, Vercel, provider SDKs, Node-only APIs, or IndexedDB adapters. Keep provider, runtime, persistence, authentication, and extraction implementations behind their documented ports. Do not add global client state or speculative abstraction layers.
 
-Ordinary non-command input and `/threads/new?q=...` create a `ResearchTurn` regardless of punctuation. `/link`, `/image`, and `/video` prompt commands explicitly create a `SearchTurn` with the corresponding result kind. Research nodes use `resolved | search | decompose(all | any)` directives; root outcomes are `sufficient | best_effort | insufficient`, followed by at most one root synthesis. Active execution is controller-only. Durable history contains terminal v3 turns and bounded read-only migrated legacy archive entries; legacy archive content never becomes evidence, context, retry input, or a child turn.
+Ordinary non-command input and `/threads/new?q=...` create a `ResearchTurn` regardless of punctuation. `/link`, `/image`, and `/video` prompt commands explicitly create a `SearchTurn` with the corresponding result kind. Research nodes use `resolved | search | decompose(all | any)` directives; root outcomes are `sufficient | best_effort | insufficient`, followed by at most one root synthesis. Routes are `/` and `/new` (home), `/threads`, `/threads/new`, `/threads/:threadId`, `/settings`, and `/unlock`; unknown paths render home. Active execution is controller-only. Durable history contains terminal v3 turns and bounded read-only migrated legacy archive entries; legacy archive content never becomes evidence, context, retry input, or a child turn.
 
-The visible product boxes are `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, `UnlockBox`, and `SystemStatusBox`; `Hotkeys` is the non-visible layout-control box. The application owns transcript separators. Synthesized answers may use emphasized labels, lists, tables, code, quotes, and whitespace, but must not generate headings or horizontal rules.
+The visible product boxes are `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, `UnlockBox`, and `SystemStatusBox`, all under `src/ui/boxes/`. Global keyboard handling lives in `GlobalShortcuts` in `src/ui/App.tsx`; the `Hotkeys` box described in the v1.1.0 plan was never built, so do not cite it as existing structure. The application owns transcript separators. Synthesized answers may use emphasized labels, lists, tables, code, quotes, and whitespace, but must not generate headings or horizontal rules.
 
-The search-result-kind amendment is tracked in [`docs/plans/dorothy-ann-search-result-kinds.md`](docs/plans/dorothy-ann-search-result-kinds.md). Its prompt-input URL is `/threads/new?q=<prompt input>`, with a shared classifier for bare research plus `/link`, `/image`, and `/video` `SearchTurn` result kinds. Media results remain durable bounded source records but never enter extraction or factual research evidence. Supported video cards mount paused provider playback when they enter the viewport, retain linked-thumbnail fallback while offscreen or after failure, and keep titles as external source-page links. Do not describe this amendment as release-ready unless its plan status is `done`.
+The search-result-kind amendment is tracked in [`docs/plans/dorothy-ann-search-result-kinds.md`](docs/plans/dorothy-ann-search-result-kinds.md). Its prompt-input URL is `/threads/new?q=<prompt input>`, with a shared classifier for bare research plus `/link`, `/image`, and `/video` `SearchTurn` result kinds. Media results remain durable bounded source records but never enter extraction or factual research evidence. Supported video cards mount paused provider playback when they enter the viewport, retain linked-thumbnail fallback while offscreen or after failure, and keep titles as external source-page links. That amendment is `done` and shipped in v1.2.0; `/search` no longer exists anywhere in `src/`.
 
 ## implementation workflow
 

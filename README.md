@@ -35,7 +35,7 @@ The root uses the exact user question for its first search when no admissible ex
 
 ## search result kinds
 
-`/threads/new?q=<prompt input>` is the sole prompt-input URL. The shared classifier is used for typed and URL input: bare text creates a `ResearchTurn`, while `/link <query>`, `/image <query>`, and `/video <query>` create link, image, and video `SearchTurn` result kinds. Media results are retained as bounded durable source records for reload and export; they never enter factual extraction. Supported video cards mount a paused inline provider player when they enter the viewport; offscreen, unsupported, or failed cards retain the linked-thumbnail fallback, and titles remain external source-page links.
+`/threads/new?q=<prompt input>` is the canonical prompt-input URL, and a `?q` value on the home route redirects into it. The shared classifier is used for typed and URL input: bare text creates a `ResearchTurn`, while `/link <query>`, `/image <query>`, and `/video <query>` create link, image, and video `SearchTurn` result kinds. Media results are retained as bounded durable source records for reload and export; they never enter factual extraction. Supported video cards mount a paused inline provider player when they enter the viewport; offscreen, unsupported, or failed cards retain the linked-thumbnail fallback, and titles remain external source-page links.
 
 ## architecture
 
@@ -47,7 +47,7 @@ The package is strict TypeScript targeting Node 22. Domain and application code 
 - `src/infrastructure/` — Anthropic/Brave/extraction, browser gateway/storage, Redis, identity, and runtime adapters
 - `src/server/` — portable Hono composition and authenticated HTTP/SSE turn boundary
 - `server/` and `api/` — thin Node/Vercel runtime adapters
-- `src/ui/` — route composition, workspace/turn controllers, semantic primitives, and typed `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, `UnlockBox`, and `SystemStatusBox` components; `Hotkeys` is the non-visible layout-control box
+- `src/ui/` — route composition, workspace/turn controllers, semantic primitives, and typed `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, `UnlockBox`, and `SystemStatusBox` components; global keyboard shortcuts live in `GlobalShortcuts`
 - `tests/` — domain, application, contract, infrastructure, UI, and Playwright coverage
 
 `ASSESSOR.md` and `SYNTHESIZER.md` are the only target LLM system-prompt assets. Runtime loading keeps them out of browser bundles and durable product data; dynamic context, schemas, retries, and evidence remain typed user/protocol input.
@@ -73,8 +73,12 @@ These records never contain request or prompt text, extracted content, URLs/sour
 
 ## documentation
 
-- [v1.1.0 release-candidate changelog](docs/releases/dorothy-ann-v1.1.0-rc.md) — durable detailed inventory, verification, and append-only RC patch log
-- [v1.1.0 architecture plan](docs/plans/dorothy-ann-v1.1.0.md) — implemented boxes, contracts, migration policy, verification, and handoff
+- [Repository state audit](docs/plans/dorothy-ann-repo-state-audit.md) — shipped versions, plan coverage, and outstanding work
+- [v1.2.1 research recovery plan](docs/plans/patch-research-state-sse-overflow.md) — in-flight patch for interrupted long-context research
+- [Release hygiene plan](docs/plans/dorothy-ann-release-hygiene.md) — tags, versions, documentation, and release inventory
+- [Search result kinds amendment](docs/plans/dorothy-ann-search-result-kinds.md) — `/link`, `/image`, and `/video` behavior shipped in v1.2.0
+- [v1.1.0 architecture plan](docs/plans/dorothy-ann-v1.1.0.md) — architectural baseline: boxes, contracts, migration policy, and verification
+- [v1.1.0 release-candidate changelog](docs/releases/dorothy-ann-v1.1.0-rc.md) — historical detailed inventory and RC patch log
 - [v1.0.0 plan](docs/plans/dorothy-ann-v1.0.0.md) — original product baseline
 - [Repository guide](AGENTS.md) — working boundaries, verification, secrets, and implementation rules
 
