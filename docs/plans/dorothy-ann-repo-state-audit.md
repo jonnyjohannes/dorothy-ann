@@ -2,84 +2,73 @@
 
 ## Current State
 
-- Status: reference document (audit snapshot, not an execution plan)
-- Verification: `npm run lint` pass, `npm run typecheck` pass, `npx vitest run` → 260 pass / 1 fail; `npm run build` and `npm run test:e2e` not run for this audit
-- Owner: Jonny
-- Executor: audit only; no source changes
-- Last updated: 2026-09-21
-- Current focus: reconcile shipped code against `docs/plans/` and name what is actually outstanding
-- Next action: decide on the uncommitted prompt-asset edits (see [Noteworthy](#noteworthy) item 1), then finish v1.2.1 ledger items P4–P6
-- Branch / PR / session: audited on `release/v1.2.1` (one commit ahead of `main`)
+- Status: current-state snapshot; informational, not an execution plan
+- Last updated: 2026-09-26
+- Audited branch: `release/v1.2.1` at `6256189`; `main` and `origin/main` remain at `bb106fb`
+- Verification: source state is changing concurrently; no full suite/build/e2e run for this refresh
+- Next action: work from the two active implementation plans below; refresh this snapshot when either lands
 
-## Abstract
+## Summary
 
-`docs/plans/` holds twelve plan files and one release inventory covering six squashed release commits on `main`. Implementation coverage against those plans is high: every plan except `patch-research-state-sse-overflow.md` reports `done`/`complete`, and spot checks confirm the claimed code exists at the documented boundaries. The real gaps are documentation and release hygiene, not missing features — stale version pointers, missing git tags, an un-updated `package.json` version, a plan marked `blocked` whose blocker is external, and one uncommitted prompt-asset edit that currently breaks a test.
+The shipped product and release bookkeeping are aligned through **v1.2.0**: all six release tags exist on `origin`, `package.json` is `1.2.0`, and the v1.2.0 release inventory is written. The release-hygiene plan is complete and archived.
 
-## Shipped versions (from `git log main`)
+There are two active implementation tracks:
 
-`main` has exactly six commits, each one squashed release.
+1. **Citation/evidence yield:** enforce a floor of two distinct usable extracted root sources before synthesis, and use measurements to decide whether acquisition changes are warranted. The active plan clarifies this is **not** a two-citation quota or a source-independence test.
+2. **v1.2.1 research recovery:** finish browser progress recovery, assess-provider compatibility, and release verification.
 
-| Commit | Date | Version | What it delivered |
+The worktree currently contains uncommitted prompt, application, server, and test changes, plus an untracked two-source synthesis plan. The two-source plan records the instrumentation and live observations described below. Those changes are concurrent work, not part of this audit.
+
+## Shipped versions (`git log main`)
+
+`main` has six squashed release commits. Their annotated tags are published to `origin`; for annotated tags, `git ls-remote --tags` shows both the tag-object SHA and the peeled commit SHA (`^{}`).
+
+| Commit | Date | Version | Summary |
 | --- | --- | --- | --- |
-| `9ca8037` | 2026-09-05 | v1.0.0-alpha0 | Repository foundation only: license, README, AGENTS, and the 2,234-line alpha specification. No application source. |
-| `d236441` | 2026-09-06 | v1.0.0-alpha1 | The working prototype in one push (~10.8k lines, 55 files): Vite/Hono single package, owner auth with scrypt + signed sessions, Brave lookup, SSRF-bounded Readability extraction, Anthropic streaming with citation sentinels, SSE turn orchestration, IndexedDB storage, and fixture mode. |
-| `4d55fea` | 2026-09-13 | v1.0.0-alpha2 | The persistent research workspace: fullscreen scrollback shell, sticky header, `/settings` + `/threads` routes, v2 thread envelope with migration and seven-day expiry, deterministic export, and terminal-`?` research routing. |
-| `657dc89` | 2026-09-15 | v1.0.0 | Adaptive research launch: strict `ready` vs `needs_more_research` decision with 1–3 follow-up Brave searches before synthesis. Small diff (22 files), the point where Dorothy Ann became Jonny's default search engine. Also the only tagged release. |
-| `cc04806` | 2026-09-19 | v1.1.0 | The big refactor (143 files, ~14.7k lines): explicit domain/application/ports/infrastructure/server/ui boundaries, v3 `Thread` aggregate with CAS commits, recursive `resolved \| search \| decompose` research protocol with one root synthesis, named product boxes, and runtime-loaded `ASSESSOR.md` / `SYNTHESIZER.md`. |
-| `bb106fb` | 2026-09-20 | v1.2.0 | Image and video search support (59 files): `SearchResultKind = link \| image \| video`, `/link` `/image` `/video` prompt commands replacing `/search`, viewport-mounted video playback with thumbnail fallback, research activity footnotes, root two-source corroboration in the assessor, and centralized retention policy. |
+| `9ca8037` | 2026-09-05 | v1.0.0-alpha0 | Repository foundation: license, README, agent guide, and initial product specification. |
+| `d236441` | 2026-09-06 | v1.0.0-alpha1 | Working Vite/Hono prototype: auth, Brave lookup, bounded extraction, Anthropic streaming, SSE, IndexedDB, and fixture mode. |
+| `4d55fea` | 2026-09-13 | v1.0.0-alpha2 | Persistent workspace, thread envelope/migration, seven-day expiry, export, and browser shell. |
+| `657dc89` | 2026-09-15 | v1.0.0 | Adaptive research launch with bounded additional search before synthesis. |
+| `cc04806` | 2026-09-19 | v1.1.0 | Typed domain/application/ports/infrastructure/server/UI architecture; v3 thread aggregate; recursive research with one root synthesis. |
+| `bb106fb` | 2026-09-20 | v1.2.0 | Typed link/image/video search, viewport-loaded video playback, root corroboration prompt policy, research footnotes, and retention improvements. |
 
-In flight on `release/v1.2.1` (`ef93dd3`, "fix long-context research recovery"): a five-file patch touching `research-resolver.ts`, `turn-stream-boundary.ts`, `server/app.ts`, plus `app.test.ts` coverage and the patch plan. Not merged to `main`.
+Current release metadata: `package.json`/`package-lock.json` report `1.2.0`; tags `v1.0.0-alpha0`, `v1.0.0-alpha1`, `v1.0.0-alpha2`, `v1.0.0`, `v1.1.0`, and `v1.2.0` are present on `origin`. [`docs/releases/dorothy-ann-v1.2.0.md`](../releases/dorothy-ann-v1.2.0.md) records the v1.2.0 inventory. v1.2.1 has not shipped or been tagged.
 
-## Plan coverage
+## Active plans and pending work
 
-| Plan | Declared status | Code evidence | Verdict |
-| --- | --- | --- | --- |
-| `dorothy-ann-v1.0.0-alpha1.md` | "alpha2 implementation complete" | 11 items still `[~]`, 9 operator-checklist boxes `[ ]` | **Historical.** Superseded by alpha2/v1.0.0/v1.1.0; the open boxes are stale, not outstanding work. Worth an explicit `superseded` status. |
-| `dorothy-ann-v1.0.0-alpha2.md` | complete | 8/8 `[x]` | Aligned. |
-| `dorothy-ann-v1.0.0.md` | done | 22/22 `[x]` | Aligned. |
-| `dorothy-ann-v1.1.0.md` | "release candidate; implementation and regression hardening complete" | 36/36 `[x]`; boundaries, boxes, and prompt assets all present | **Status lags reality.** v1.1.0 merged to `main` two days later; this should read `released`. |
-| `dorothy-ann-search-result-kinds.md` | done | 10/10 `[x]`; `prompt-classifier.ts:7` maps `/link` `/image` `/video`, video player/preview tests present | Aligned and shipped in v1.2.0. |
-| `dorothy-ann-independent-evidence.md` | done | 4/4 `[x]`; root two-source policy present in `ASSESSOR.md` | Aligned; live-provider smoke still noted as pending. |
-| `centralize-thread-retention.md` | done | 1/1 `[x]`; `src/domain/retention.ts` exports `THREAD_RETENTION_MS` + `threadExpiryAt` | Aligned. |
-| `research-trail-transcript.md` | done | 1/1 `[x]` | Aligned. |
-| `research-trail-footnote.md` | done | 1/1 `[x]` | Aligned. |
-| `dorothy-ann-color-schemes.md` | complete | 8/8 `[x]`; `src/ui/color-scheme.ts` + `color-scheme.test.ts` | Aligned. |
-| `dorothy-ann-remote-storage.md` | done (was `blocked`) | 7 items, now 7/7 `[x]`; `redis-thread-store.ts`, `thread-store-base.ts`, `/api/storage/threads` route wired in `src/server/app.ts:34` | **Resolved 2026-09-21.** Items 1–6 were already verified; item 7 acceptance was `[!]` pending two-browser Upstash verification, which the owner has since confirmed working in deployed use. |
-| `patch-research-state-sse-overflow.md` | planning | P1–P3 `[x]`, P4–P6 `[ ]` | **The only genuinely outstanding plan.** |
-| `docs/releases/dorothy-ann-v1.1.0-rc.md` | release candidate | — | Stale; v1.1.0 shipped. No equivalent inventory exists for v1.2.0 or v1.2.1. |
+| Plan | Status | Remaining work |
+| --- | --- | --- |
+| [`dorothy-ann-two-source-synthesis.md`](dorothy-ann-two-source-synthesis.md) | P1 in progress | P1: collect the representative live/staging sample. P2: add the two-usable-root-source synthesis gate. P3: use measured yield to decide whether bounded extraction backfill or other acquisition changes are warranted. P4: align prompts and complete end-to-end verification. |
+| [`patch-research-state-sse-overflow.md`](patch-research-state-sse-overflow.md) | P1–P3 verified | P4: ensure interruption/connection-loss/error exits clear browser progress and provide recovery. P5: verify Anthropic structured-output compatibility or record a deployment blocker. P6: run release checks and write v1.2.1 release documentation. |
 
-Structural checks all pass: no domain/application imports of React/Hono/Vercel/provider SDKs were found out of place, the route table in `src/ui/App.tsx` matches the documented canonical routes, and `/search` is fully gone from `src/` as the search-result-kinds amendment requires.
+### Citation/evidence yield: current evidence and decisions
 
-## Outstanding work
+The two-source plan's opt-in, allowlisted timing instrumentation is implemented as schema v2. Two operator-provided live observations are recorded there: each ended with only one distinct viable root source; one produced a `sufficient` answer from that single source. Across the two observations, 12 sources were selected for extraction, two were viable, six returned `empty_content`, and four `fetch_failed`. This supports investigating extraction yield and gating synthesis; it does **not** establish that unselected candidates would have succeeded or justify backfill by itself.
 
-```text
-v1.2.1 patch plan ──┬── P4 progress-state recovery ──▶ browser UI never stuck on "analyzing"
-                    ├── P5 structured-output compat ──▶ needs live Anthropic credentials
-                    └── P6 release verification + docs ──▶ blocked on P4/P5
-```
+Before P2, the plan asks the owner to settle whether relevant extracted context sources count (proposed: yes), whether one-source exhaustion should yield an insufficient/retryable result rather than a synthesized best-effort answer (proposed: yes), and how to reconcile the earlier four-source heuristic for complex requests. Its proposed contract is two distinct usable source IDs available to root synthesis; citations need not number two and conflicting evidence may count. No application gate or prompt alignment is complete yet.
 
-1. **P4 — progress-state recovery (not started).** `ThreadRoute.tsx` sets `message` on failure and clears `activeRequest`, but the only retry affordance wired through `onIntent` is `controller.current?.retryCommit()` — a save retry, not a research retry. The plan's deliverable ("exposes a bounded retry action" for interruption, connection loss, and timeout) is not met, and there is no UI test asserting the absence of an indefinite active state.
-2. **P5 — assessment structured-output compatibility (not started).** Requires live-provider confirmation of whether the configured model supports `output_config.format.json_schema`. External dependency; fixture coverage for the fallback path can land without it.
-3. **P6 — release verification and docs (not started).** Needs the full check suite plus a v1.2.1 release inventory. Note that no `docs/releases/` entry exists for v1.2.0 either, so this is really two releases of inventory debt.
-4. **Four open questions in the patch plan** remain unanswered, including whether interruption retry should restart research or retain the candidate — that one gates P3/P4 design.
-5. **External/manual verification carried across three plans:** two-browser Upstash check (remote storage), live-provider smoke after restart (independent evidence), and manual browser inspection of a multi-search thread (both research-trail plans). All are operational, none block code.
+The v1.2.1 plan's P4–P6 remain separate; its open retry-semantics question and live-provider/deployment checks still need resolution. P5 may require Anthropic credentials.
 
-## Noteworthy
+## Completed plans and release hygiene
 
-1. **Uncommitted prompt edits break a test.** `ASSESSOR.md` and `SYNTHESIZER.md` have unstaged reformatting (prose paragraphs → headed bullet sections, +98/−22 lines). The semantics look preserved, but `tests/system-prompts.test.ts:48` asserts the literal string `"For the root problem (depth 0), return \`resolved\` only when"`, which the rewrite deletes. Suite is **260 pass / 1 fail** because of this. These are runtime-loaded assets that change model behavior — decide deliberately: finish the reformat and update the exact-string assertions, or revert. Do not leave it dangling in the working tree.
-2. **Only `v1.0.0` is tagged.** v1.1.0 and v1.2.0 both merged to `main` with release-shaped commit messages and no tag. Git history is the only version record.
-3. **`package.json` still says `"version": "1.0.0"`** while v1.2.0 is shipped. The package is `private: true` so nothing breaks, but every `npm run` banner prints the wrong version.
-4. **`AGENTS.md` points at the wrong source of truth.** It names `docs/plans/dorothy-ann-v1.1.0.md` as the active specification, but v1.2.0 shipped after it and v1.2.1 is in flight. The v1.1.0 plan also still describes `/search <query>` as the raw-link path, which the search-result-kinds amendment replaced with `/link`. A reader following AGENTS.md lands on superseded routing vocabulary.
-5. **Plan-file size was becoming a liability — resolved 2026-09-21.** `dorothy-ann-v1.1.0.md` (3,331 lines / 248 KB) and `dorothy-ann-v1.0.0-alpha1.md` (2,335 lines / 169 KB) were 83% of the ~7,700 documentation lines. All four superseded release plans now live in `docs/plans/archive/` with `archived` statuses; nothing was rewritten or deleted. The active plan directory is now nine short working files.
-6. **Small plans, clean execution.** The v1.2.0-era plans (retention, research trails, independent evidence) are 80–142 lines with 1–4 ledger items each and all landed verified. That pattern is working noticeably better than the monolithic specs.
-7. **Test suite is healthy and proportionate.** 34 test files / 261 tests against 79 source files, plus 3 Playwright specs run across Chromium and WebKit (the "six e2e tests" the plans cite). Lint and typecheck are clean.
-8. **Branch state.** `release/v1.2.1` is one commit ahead of `main` and `patch/research-state-sse-overflow` still exists locally — the latter looks like an abandoned earlier attempt at the same work.
+`docs/plans/` now contains the two active plans plus this audit. The other 12 plans—including [`archive/dorothy-ann-release-hygiene.md`](archive/dorothy-ann-release-hygiene.md)—are archived because their planned work is complete. Archived does not mean inaccurate; the status of each plan indicates whether it remains authoritative for shipped behavior or has been superseded.
 
-## Suggested sequence
+Resolved since the previous audit:
 
-1. Resolve the `ASSESSOR.md` / `SYNTHESIZER.md` working-tree edits and get the suite back to green.
-2. Answer the patch plan's retry-semantics open question, then implement P4 with UI regression coverage.
-3. Run the full check suite, write `docs/releases/dorothy-ann-v1.2.1.md` (backfilling v1.2.0), and close P5/P6.
-4. Housekeeping: tag `v1.1.0` and `v1.2.0` retroactively, bump `package.json`, repoint `AGENTS.md` at the current plan, flip the stale `blocked`/`release candidate` statuses, and delete the dead local branch.
+- Retroactive tags published; H5 verified from the owner's remote listing.
+- `package.json` and lockfile version updated to `1.2.0`.
+- AGENTS.md and README reconciled with the implementation; keyboard shortcuts documented under their actual implementation.
+- Remote-storage plan marked done after owner-confirmed deployed use.
+- v1.2.0 inventory written; H7 complete.
+- `patch/research-state-sse-overflow` deleted after confirming it had no unique commits beyond `release/v1.2.1`.
+- Completed plans moved to `docs/plans/archive/`; links were updated as plans moved.
+
+## Non-blocking follow-ups
+
+Some completed feature plans retain optional manual/live verification notes: live-provider corroboration behavior and a manual multi-search transcript inspection. These are operational follow-ups in archived plans, not open implementation-ledger items. The remote-storage two-browser acceptance is confirmed complete by the owner.
+
+## Verification boundaries
+
+This snapshot was updated while implementation work was present in the working tree. Do not infer that the current worktree is green: the two-source plan records its focused fixture/lint/typecheck/build checks and notes its then-current full-suite prompt assertion failure and two accessibility contrast failures. Re-run applicable checks after the active implementation work lands. This audit itself does not claim a build, full test suite, or e2e run.
 
 <|°_°|>
