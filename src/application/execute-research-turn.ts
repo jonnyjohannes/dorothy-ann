@@ -44,7 +44,7 @@ export interface ResearchTurnExecutionInput {
   finishedAt?: () => IsoTimestamp;
   signal?: AbortSignal;
   onProvisionalText?: (text: string) => void | Promise<void>;
-  interruptionReason?: TurnInterruption["reason"]; 
+  interruptionReason?: TurnInterruption["reason"];
 }
 
 export interface ResearchTurnExecutionResult {
