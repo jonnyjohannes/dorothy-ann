@@ -1,5 +1,13 @@
 :root {
   --paper: #e0e0e0;
+  --command-foreground-1: var(--ink);
+  --command-foreground-2: var(--ink);
+  --command-foreground-3: var(--ink);
+  --command-foreground-4: var(--ink);
+  --command-foreground-5: var(--ink);
+  --command-foreground-6: var(--ink);
+  --command-foreground-7: var(--ink);
+  --command-foreground-8: var(--ink);
   --ink: #1e1e1e;
   --muted: #626262;
   --accent: #f6c945;
@@ -102,6 +110,60 @@
     --accent-6: #eb6f92;
     --accent-7: #f6c177;
     --accent-8: #e0def4;
+  }
+}
+:root[data-color-scheme="catppuccin"] {
+  --command-foreground-1: #fff;
+  --command-foreground-2: #fff;
+  --command-foreground-3: #fff;
+  --command-foreground-4: #000;
+  --command-foreground-5: #000;
+  --command-foreground-6: #000;
+  --command-foreground-7: #000;
+  --command-foreground-8: #fff;
+}
+:root[data-color-scheme="rose-pine"] {
+  --command-foreground-1: #fff;
+  --command-foreground-2: #fff;
+  --command-foreground-3: #000;
+  --command-foreground-4: #000;
+  --command-foreground-5: #000;
+  --command-foreground-6: #000;
+  --command-foreground-7: #000;
+  --command-foreground-8: #fff;
+}
+:root[data-theme="dark"][data-color-scheme="mono"],
+:root[data-theme="dark"]:not([data-color-scheme]),
+:root[data-theme="dark"][data-color-scheme="catppuccin"],
+:root[data-theme="dark"][data-color-scheme="rose-pine"] {
+  --command-foreground-1: var(--paper);
+  --command-foreground-2: var(--paper);
+  --command-foreground-3: var(--paper);
+  --command-foreground-4: var(--paper);
+  --command-foreground-5: var(--paper);
+  --command-foreground-6: var(--paper);
+  --command-foreground-7: var(--paper);
+  --command-foreground-8: var(--paper);
+}
+:root[data-theme="dark"][data-color-scheme="rose-pine"] {
+  --command-foreground-3: #fff;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"][data-color-scheme="mono"],
+  :root[data-theme="auto"]:not([data-color-scheme]),
+  :root[data-theme="auto"][data-color-scheme="catppuccin"],
+  :root[data-theme="auto"][data-color-scheme="rose-pine"] {
+    --command-foreground-1: var(--paper);
+    --command-foreground-2: var(--paper);
+    --command-foreground-3: var(--paper);
+    --command-foreground-4: var(--paper);
+    --command-foreground-5: var(--paper);
+    --command-foreground-6: var(--paper);
+    --command-foreground-7: var(--paper);
+    --command-foreground-8: var(--paper);
+  }
+  :root[data-theme="auto"][data-color-scheme="rose-pine"] {
+    --command-foreground-3: #fff;
   }
 }
 * {

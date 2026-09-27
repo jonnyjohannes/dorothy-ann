@@ -33,7 +33,7 @@ export function HomeRoute() {
     else if (command.type === "invalid") setMessage(command.message);
   };
 
-  return <main className={styles.shell}>
+  return <main className={`${styles.shell} ${styles.promptShell}`}>
     <StickyHeader onIntent={onIntent} />
     <section className={`${styles.routeLayout} app-route-scroll`}>
       <h1 className={styles.pageTitle}><code>/new</code></h1>
@@ -46,8 +46,10 @@ export function HomeRoute() {
         <p><button className={styles.commandListAction} type="button" onClick={() => populateSearchCommand("/video")}><code>/video</code></button><span><code>{"{query}"}</code></span></p>
         <p><Link to="/settings"><code>/settings</code></Link><span><code>&lt;alt&gt;+c</code></span></p>
       </div>
-      <PromptBox value={value} onChange={setValue} onIntent={onIntent} />
       {message && <p className={styles.commandMessage} role="status">{message}</p>}
     </section>
+    <footer className={`${styles.promptFooter} app-prompt-footer`}>
+      <PromptBox value={value} onChange={setValue} onIntent={onIntent} />
+    </footer>
   </main>;
 }

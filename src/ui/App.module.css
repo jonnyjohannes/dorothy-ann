@@ -13,7 +13,7 @@
   background: var(--paper);
   color: var(--ink);
 }
-.threadShell {
+.promptShell {
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 .header {
@@ -172,49 +172,39 @@
 .commandList p > span {
   white-space: nowrap;
 }
-.commandList p:nth-child(8n + 1) { --command-accent: var(--accent-1); }
-.commandList p:nth-child(8n + 2) { --command-accent: var(--accent-2); }
-.commandList p:nth-child(8n + 3) { --command-accent: var(--accent-3); }
-.commandList p:nth-child(8n + 4) { --command-accent: var(--accent-4); }
-.commandList p:nth-child(8n + 5) { --command-accent: var(--accent-5); }
-.commandList p:nth-child(8n + 6) { --command-accent: var(--accent-6); }
-.commandList p:nth-child(8n + 7) { --command-accent: var(--accent-7); }
-.commandList p:nth-child(8n + 8) { --command-accent: var(--accent-8); }
+.commandList p:nth-child(8n + 1) { --command-accent: var(--accent-1); --command-foreground: var(--command-foreground-1); }
+.commandList p:nth-child(8n + 2) { --command-accent: var(--accent-2); --command-foreground: var(--command-foreground-2); }
+.commandList p:nth-child(8n + 3) { --command-accent: var(--accent-3); --command-foreground: var(--command-foreground-3); }
+.commandList p:nth-child(8n + 4) { --command-accent: var(--accent-4); --command-foreground: var(--command-foreground-4); }
+.commandList p:nth-child(8n + 5) { --command-accent: var(--accent-5); --command-foreground: var(--command-foreground-5); }
+.commandList p:nth-child(8n + 6) { --command-accent: var(--accent-6); --command-foreground: var(--command-foreground-6); }
+.commandList p:nth-child(8n + 7) { --command-accent: var(--accent-7); --command-foreground: var(--command-foreground-7); }
+.commandList p:nth-child(8n + 8) { --command-accent: var(--accent-8); --command-foreground: var(--command-foreground-8); }
 .commandList p > :first-child {
   --link-marker-color: var(--command-accent);
-  color: var(--ink);
+  color: var(--command-foreground, var(--ink));
 }
 .commandList a {
   color: inherit;
-  background-color: color-mix(in srgb, var(--command-accent, var(--accent)) 20%, var(--paper));
+  background-color: var(--command-accent, var(--accent));
 }
-.commandList a:hover,
 .commandList a:focus-visible {
-  background-color: color-mix(in srgb, var(--command-accent, var(--accent)) 28%, var(--paper));
   outline: 2px solid var(--ink);
-  outline-offset: 2px;
-}
-.commandList a:active {
-  background-color: color-mix(in srgb, var(--command-accent, var(--accent)) 34%, var(--paper));
+  outline-offset: 3px;
 }
 .commandListAction {
   width: 100%;
   border: 0;
   padding: 0.16em 0.55em;
-  background: color-mix(in srgb, var(--command-accent, currentColor) 20%, var(--paper));
-  color: var(--ink);
+  background: var(--command-accent, var(--accent));
+  color: var(--command-foreground, var(--ink));
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
-.commandListAction:hover,
 .commandListAction:focus-visible {
-  background: color-mix(in srgb, var(--command-accent, currentColor) 28%, var(--paper));
   outline: 2px solid var(--ink);
-  outline-offset: 2px;
-}
-.commandListAction:active {
-  background: color-mix(in srgb, var(--command-accent, currentColor) 34%, var(--paper));
+  outline-offset: 3px;
 }
 .center {
   display: grid;
@@ -558,9 +548,10 @@
 .answerMarkdown pre,
 .answerMarkdown blockquote { max-width: 70ch; }
 .routeLayout {
-  width: min(100%, 110rem);
+  width: 100%;
+  min-width: 0;
   min-height: 0;
-  margin: 0 auto;
+  margin: 0;
   padding: clamp(1.5rem, 5vw, 5rem) 0 max(2rem, env(safe-area-inset-bottom));
   overflow: auto;
   overscroll-behavior: contain;
@@ -568,7 +559,7 @@
   scrollbar-color: var(--accent) transparent;
 }
 .threadContent {
-  width: min(100%, 110rem);
+  width: 100%;
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -666,36 +657,31 @@
   padding-left: 1.25rem;
 }
 .researchActivity li { margin: 0.2rem 0; }
-.promptBox {
-  position: fixed;
-  z-index: 3;
-  right: clamp(1rem, 3vw, 3rem);
-  bottom: max(1rem, env(safe-area-inset-bottom));
-  left: clamp(1rem, 3vw, 3rem);
+.promptFooter {
   display: flex;
+  width: 100%;
+  min-width: 0;
+  padding-block: 0.65rem max(0.4rem, env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--paper) 96%, transparent);
+}
+.promptBox {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
   gap: 0.6rem;
+  margin: 0;
   padding: 0.4rem 0.75rem;
   border: 1px solid var(--line);
   border-radius: 0;
-  background: color-mix(in srgb, var(--paper) 96%, transparent);
+  background: var(--paper);
   box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 12%);
   backdrop-filter: blur(10px);
-}
-.threadShell > .promptBox {
-  position: relative;
-  inset: auto;
-  margin: 0;
-  padding-bottom: max(0.4rem, env(safe-area-inset-bottom));
-}
-.routeLayout > .promptBox {
-  position: relative;
-  inset: auto;
-  margin: 2rem 0 0;
 }
 .promptBox:focus-within { border-color: var(--accent); }
 .promptBox > input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); padding: 0.65rem 0.7rem; }
 .promptHint { align-self: center; color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
-.commandMessage { width: min(100%, 110rem); margin: 1rem auto; color: var(--muted); }
+.commandMessage { width: 100%; margin: 1rem 0; color: var(--muted); }
 .researchPlanLive {
   margin: 2rem 0;
   padding: 1rem 1.25rem;
@@ -850,9 +836,6 @@
   .topicLayout,
   .researchLayout {
     display: block;
-  }
-  .promptBox {
-    bottom: max(0.75rem, env(safe-area-inset-bottom));
   }
   .promptHint { display: none; }
   .promptBox > button { padding-inline: 0.7rem; }

@@ -26,16 +26,19 @@ describe("global link treatment", () => {
     expect(appStyles).toMatch(/\.evidence a\.sourceAccent\s*\{[^}]*padding:\s*0\.16em 0\.55em;/s);
   });
 
-  it("cycles homepage command swatches through all scheme accents with ink foregrounds", () => {
+  it("cycles homepage command swatches through vivid accents with theme-aware foregrounds", () => {
     for (let index = 1; index <= 8; index += 1) {
       expect(appStyles).toContain(`--command-accent: var(--accent-${index})`);
+      expect(appStyles).toContain(`--command-foreground: var(--command-foreground-${index})`);
+      expect(globalStyles).toContain(`--command-foreground-${index}:`);
     }
-    expect(appStyles).toMatch(/\.commandList p > :first-child\s*\{[^}]*--link-marker-color:\s*var\(--command-accent\);[^}]*color:\s*var\(--ink\)/s);
-    expect(appStyles).toMatch(/\.commandListAction\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--command-accent, currentColor\) 20%, var\(--paper\)\);[^}]*color:\s*var\(--ink\)/s);
-    expect(appStyles).toMatch(/\.commandListAction:hover,[\s\S]*?background:\s*color-mix\(in srgb, var\(--command-accent, currentColor\) 28%, var\(--paper\)\)/);
-    expect(appStyles).toContain("color-mix(in srgb, var(--command-accent, currentColor) 34%, var(--paper))");
-    expect(appStyles).toMatch(/\.commandList a\s*\{[^}]*background-color:\s*color-mix\(in srgb, var\(--command-accent, var\(--accent\)\) 20%, var\(--paper\)\)/s);
-    expect(appStyles).toContain("color-mix(in srgb, var(--command-accent, var(--accent)) 34%, var(--paper))");
+    expect(appStyles).toMatch(/\.commandList p > :first-child\s*\{[^}]*--link-marker-color:\s*var\(--command-accent\);[^}]*color:\s*var\(--command-foreground, var\(--ink\)\)/s);
+    expect(appStyles).toMatch(/\.commandList a\s*\{[^}]*background-color:\s*var\(--command-accent, var\(--accent\)\)/s);
+    expect(appStyles).toMatch(/\.commandListAction\s*\{[^}]*background:\s*var\(--command-accent, var\(--accent\)\);[^}]*color:\s*var\(--command-foreground, var\(--ink\)\)/s);
+    expect(appStyles).not.toMatch(/\.commandList(?:Action)?(?::hover| a:hover)[^{]*\{[^}]*outline:/s);
+    expect(appStyles).toMatch(/\.commandList a:focus-visible\s*\{[^}]*outline:\s*2px solid/s);
+    expect(appStyles).toMatch(/\.commandListAction:focus-visible\s*\{[^}]*outline:\s*2px solid/s);
+    expect(globalStyles).toContain(':root[data-theme="dark"][data-color-scheme="rose-pine"]');
   });
 
   it("uses one shared responsive three-to-two-to-one evidence grid", () => {

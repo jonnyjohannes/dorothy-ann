@@ -213,12 +213,15 @@ test("command swatch text keeps WCAG AA contrast across theme and color-scheme v
     return { ratio: (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05), color: style.color, background: style.backgroundColor };
   }));
   for (const scheme of ["mono", "catppuccin", "rose-pine"]) {
-    for (const theme of ["light", "dark"]) {
+    for (const theme of ["light", "dark", "auto"]) {
+      await page.emulateMedia({ colorScheme: theme === "light" ? "light" : "dark" });
       await page.evaluate(({ scheme, theme }) => { document.documentElement.dataset.colorScheme = scheme; document.documentElement.dataset.theme = theme; }, { scheme, theme });
       const defaultRatios = await contrastRatios();
       expect(defaultRatios.every(({ ratio }) => ratio >= 4.5), `${scheme}/${theme} default contrast: ${JSON.stringify(defaultRatios)}`).toBe(true);
       for (const button of await buttons.all()) {
       await button.hover();
+      const hoveredOutline = await button.evaluate((element) => getComputedStyle(element).outlineStyle);
+      expect(hoveredOutline).toBe("none");
       const hoveredRatio = await button.evaluate((element) => { const style = getComputedStyle(element); const parse = (value: string) => { const scale = value.startsWith("color(srgb") ? 1 : 255; return value.match(/[\d.]+/g)!.slice(0, 3).map(Number).map((channel) => channel / scale).map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4); }; const lum = (value: string) => { const [r, g, b] = parse(value); return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!; }; const a = lum(style.color); const b = lum(style.backgroundColor); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); });
       expect(hoveredRatio).toBeGreaterThanOrEqual(4.5);
       await button.focus();
@@ -229,6 +232,12 @@ test("command swatch text keeps WCAG AA contrast across theme and color-scheme v
       await page.mouse.up();
       }
     }
+  }
+  if (test.info().project.name === "chromium") {
+    await buttons.first().focus();
+    await page.keyboard.press("Tab");
+    await expect(buttons.nth(1)).toBeFocused();
+    await expect.poll(() => buttons.nth(1).evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
   }
 });
 
@@ -247,6 +256,23 @@ test("route shells keep document fixed and unlock uses the shared passphrase lay
     await expect(page.locator(".app-route-scroll")).toHaveCount(1);
     await expect(page.locator(".app-route-scroll")).toBeVisible();
     await expect.poll(() => page.locator(".app-route-scroll").evaluate((element) => element.getBoundingClientRect().width / window.innerWidth)).toBeGreaterThan(0.88);
+    const expectedPromptFooter = path === "/new" || path === "thread";
+    const promptFooter = page.locator(".app-prompt-footer");
+    await expect(promptFooter).toHaveCount(expectedPromptFooter ? 1 : 0);
+    if (expectedPromptFooter) {
+      const [routeBounds, footerBounds, shellBounds] = await Promise.all([
+        page.locator(".app-route-scroll").boundingBox(),
+        promptFooter.boundingBox(),
+        page.locator("main").first().boundingBox(),
+      ]);
+      expect(routeBounds, `${path} route bounds`).not.toBeNull();
+      expect(footerBounds, `${path} footer bounds`).not.toBeNull();
+      expect(shellBounds, `${path} shell bounds`).not.toBeNull();
+      expect(footerBounds!.x).toBeCloseTo(routeBounds!.x, 0);
+      expect(footerBounds!.width).toBeCloseTo(routeBounds!.width, 0);
+      expect(footerBounds!.y).toBeGreaterThan(routeBounds!.y);
+      expect(footerBounds!.y + footerBounds!.height).toBeCloseTo(shellBounds!.y + shellBounds!.height, 0);
+    }
     const documentOverflow = await page.evaluate(() => document.documentElement.scrollHeight > document.documentElement.clientHeight || document.documentElement.scrollWidth > document.documentElement.clientWidth);
     expect(documentOverflow, `${path} document overflow`).toBe(false);
     if (path === "/new" || path === "/unlock") {
