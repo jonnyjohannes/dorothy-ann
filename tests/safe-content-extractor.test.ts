@@ -54,6 +54,27 @@ describe("SafeContentExtractor", () => {
     expect(await slow.extract(source, { ...limits, timeoutMs: 5 })).toMatchObject({ status: "failed", code: "timeout" });
   });
 
+  it("records only completed winner subphases, including redirect safety, not late timeout work", async () => {
+    const phases: string[] = [];
+    const redirect = new SafeContentExtractor(config, async () => new Response(null, { status: 302, headers: { location: "http://127.0.0.1/private" } }), undefined,
+      (phase, elapsedMs) => { phases.push(phase); expect(elapsedMs).toBeGreaterThanOrEqual(0); });
+    expect(await redirect.extract(source, limits)).toMatchObject({ status: "skipped", reason: "unsafe_url" });
+    expect(phases).toEqual(["safety", "http"]);
+    const late: string[] = [];
+    const slow = new SafeContentExtractor(config, async () => {
+      await new Promise((resolve) => setTimeout(resolve, 35));
+      return new Response("A complete article. ".repeat(40), { headers: { "content-type": "text/plain" } });
+    }, undefined, (phase) => { late.push(phase); });
+    expect(await slow.extract(source, { ...limits, timeoutMs: 5 })).toMatchObject({ status: "failed", code: "timeout" });
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(late).toEqual([]);
+    const success: string[] = [];
+    const plain = new SafeContentExtractor(config, async () => new Response("A complete article. ".repeat(40), { headers: { "content-type": "text/plain" } }), undefined,
+      (phase) => { success.push(phase); throw new Error("observer ignored"); });
+    expect(await plain.extract(source, limits)).toMatchObject({ status: "viable" });
+    expect(success).toEqual(["safety", "http", "body", "text"]);
+  });
+
   it("validates every redirect target before fetching it", async () => {
     let fetched = 0;
     const redirect = new SafeContentExtractor(config, async () => {

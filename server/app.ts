@@ -23,7 +23,7 @@ import { createPortableApp } from "../src/server/app.js";
 import type { TurnExecutor, TurnExecutionRequest, TurnExecutionTerminal } from "../src/server/turn-stream-boundary.js";
 import { createThreadStorageRoutes } from "../src/server/thread-storage-routes.js";
 import type { ThreadStore } from "../src/ports/storage-v3.js";
-import { loggerResearchTimingSink, ResearchTimingCollector, type ResearchTimingSink } from "./runtime/research-timing.js";
+import { loggerResearchTimingSink, logAssessmentAnomaly, ResearchTimingCollector, type ResearchTimingSink } from "./runtime/research-timing.js";
 import { logSelectedExtractionFailure } from "./runtime/extraction-log.js";
 import { createLogger, type Logger } from "./runtime/logger.js";
 
@@ -114,12 +114,15 @@ function createExecutor(
         };
         await emitResearchPhase("resolving");
 
-        const timedSearch = timing?.decorateSearch(search) ?? search;
+        const observedSearch = timing && search instanceof BraveSearchProvider
+          ? search.withTiming((phase, elapsedMs, succeeded) => timing.markSearchSubphase(phase, elapsedMs, succeeded)) : search;
+        const timedSearch = timing?.decorateSearch(observedSearch) ?? observedSearch;
         const extractionMetadata = new Map<string, ExtractionFailureMetadata>();
         const extractor = config.DOROTHY_FIXTURE_MODE ? undefined : new SafeContentExtractor({
           maxFetchBytes: config.MAX_FETCH_BYTES, maxRedirects: config.MAX_REDIRECTS,
           userAgent: "dorothy-ann/1.1", minCharacters: 120,
-        }, undefined, (sourceId, metadata) => { extractionMetadata.set(sourceId, metadata); });
+        }, undefined, (sourceId, metadata) => { extractionMetadata.set(sourceId, metadata); },
+        (phase, elapsedMs) => timing?.markExtractionSubphase(phase, elapsedMs));
         const timedExtractor = extractor && timing ? timing.decorateExtractor(extractor) : extractor;
         const timedLlm = timing?.decorateLlm(llm) ?? llm;
         const acquirer = new EvidenceAcquirer({ search: timedSearch, extractor: timedExtractor, fixture: config.DOROTHY_FIXTURE_MODE,
@@ -134,6 +137,7 @@ function createExecutor(
           assessor,
           acquirer,
           acquisitionLimits: { maxCandidatesPerSearch: config.MAX_SEARCH_RESULTS, maxSourcesPerRequest: 5, maxConcurrentSearches: config.MAX_CONCURRENT_SEARCHES, maxConcurrentExtractions: config.MAX_CONCURRENT_EXTRACTIONS, extractionMaxCharacters: config.MAX_EXTRACTED_CHARS_PER_PAGE, extractionTimeoutMs: config.EXTRACTION_TIMEOUT_MS },
+          ...(timing ? { onAcquisitionWall: (elapsedMs: number, succeeded: boolean) => timing.markAcquisitionWall(elapsedMs, succeeded) } : {}),
           ...(timing ? { onEvidenceYield: (requests: Parameters<ResearchTimingCollector["markEvidenceYield"]>[0]) => timing.markEvidenceYield(requests) } : {}),
           onAssessmentDecision: (decision) => {
             timing?.markAssessmentValidation(decision.validationMs);
@@ -149,6 +153,7 @@ function createExecutor(
               const result = await timedLlm.assessResearch({ systemPrompt: prompts.assessor, problem: assessment.problem, knowledge: assessment.knowledge, ledger: assessment.ledger, budget: assessment.budget, allowedSupportRefs: assessment.allowedSupportRefs, maxOutputTokens: config.MAX_ASSESSMENT_OUTPUT_TOKENS, signal: assessment.signal,
                 onAttempt: (observation) => {
                   timing?.markAssessmentAttempt(observation);
+                  logAssessmentAnomaly(logger, observation);
                   logger.debug("assessment_attempt", { stage: "assessing", call, ...observation });
                 },
               });

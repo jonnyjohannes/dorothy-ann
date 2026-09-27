@@ -142,7 +142,7 @@ describe("AnthropicProvider v3", () => {
     const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: fake });
     await provider.assessResearch({ ...baseAssessment, onAttempt: (record) => { observations.push(record); } });
     expect(observations).toMatchObject([
-      { attempt: 1, outcome: "rejected", reason: "invalid_json", stopReason: "max_tokens", maxOutputTokens: 800, inputTokens: 2_000, outputTokens: 800 },
+      { attempt: 1, outcome: "rejected", reason: "invalid_json", outputShape: "incomplete_outer_json", stopReason: "max_tokens", maxOutputTokens: 800, inputTokens: 2_000, outputTokens: 800 },
       { attempt: 2, outcome: "accepted", stopReason: "end_turn", maxOutputTokens: 1_600, inputTokens: 2_200, outputTokens: 950 },
     ]);
     expect(observations.every((record) => typeof (record as { elapsedMs: number }).elapsedMs === "number" && typeof (record as { inputChars: number }).inputChars === "number")).toBe(true);
@@ -154,6 +154,26 @@ describe("AnthropicProvider v3", () => {
     await expect(failed.assessResearch({ ...baseAssessment, onAttempt: (record) => { failures.push(record); throw new Error("ignored observer error"); } })).rejects.toBeDefined();
     expect(failures).toMatchObject([{ attempt: 1, outcome: "failed", reason: "provider_error", stopReason: "unknown" }]);
     expect(JSON.stringify(failures)).not.toContain("SECRET_PROVIDER_RESPONSE");
+  });
+
+  it("classifies truncated outer objects separately from complete invalid output and counts accepted observations", async () => {
+    const records: import("../src/ports/llm.js").AssessmentAttemptObservation[] = [];
+    const proposal = JSON.stringify({ directive: { kind: "resolved", observations: [{ proposition: "p", statement: "s", stance: "supports", support: [{ type: "source", sourceId: baseAssessment.allowedSupportRefs[0] && "sourceId" in baseAssessment.allowedSupportRefs[0] ? baseAssessment.allowedSupportRefs[0].sourceId : "unknown" }] }] } });
+    const fake = client([
+      { content: [{ type: "text", text: '{"directive":{"kind":"resolved","observations":[{"statement":"secret"}' }], stop_reason: "max_tokens" },
+      { content: [{ type: "text", text: proposal }] },
+    ]);
+    await new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: fake }).assessResearch({ ...baseAssessment, onAttempt: (record) => { records.push(record); } });
+    expect(records).toMatchObject([{ outcome: "rejected", outputShape: "incomplete_outer_json" }, { outcome: "accepted", acceptedObservations: 1 }]);
+    expect(JSON.stringify(records)).not.toContain("secret");
+    const invalid = client([{ content: [{ type: "text", text: '{"directive":{"kind":"resolved","observations":[]}}' }] }, { content: [{ type: "text", text: proposal }] }]);
+    const invalidRecords: typeof records = [];
+    await new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: invalid }).assessResearch({ ...baseAssessment, onAttempt: (record) => { invalidRecords.push(record); } });
+    expect(invalidRecords[0]?.outputShape).toBe("complete_invalid_directive");
+    const absent = client([{ content: [{ type: "text", text: '{"note":"private"}' }] }, { content: [{ type: "text", text: proposal }] }]);
+    const absentRecords: typeof records = [];
+    await new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: absent }).assessResearch({ ...baseAssessment, onAttempt: (record) => { absentRecords.push(record); } });
+    expect(absentRecords[0]).toMatchObject({ outcome: "rejected", outputShape: "complete_no_directive" });
   });
 
   it("sends an Anthropic-compatible structured schema while enforcing response bounds locally", async () => {

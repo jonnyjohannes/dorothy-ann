@@ -49,6 +49,9 @@ export interface AssessmentAttemptObservation {
   outputTokens?: number;
   stopReason: "end_turn" | "max_tokens" | "refusal" | "other" | "unknown";
   outcome: "accepted" | "rejected" | "failed";
+  /** Count-only validated output diagnostic; absent if no provider output. */
+  acceptedObservations?: number;
+  outputShape?: "incomplete_outer_json" | "complete_no_directive" | "complete_invalid_directive";
   reason?: "empty_response" | "invalid_json" | "missing_directive" | "unknown_directive" | "invalid_search_query" | "invalid_resolved" | "invalid_decomposition" | "provider_error";
 }
 

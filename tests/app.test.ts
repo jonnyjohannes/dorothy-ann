@@ -81,7 +81,7 @@ describe("portable v3 Hono API", () => {
     const body = await response.text();
     const summaries = logged.filter((record) => record.event === "research_timing");
     expect(summaries).toHaveLength(1);
-    expect(summaries[0]).toMatchObject({ level: "info", schema_version: 7, terminal_status: "completed", assessment_profile: { provider_attempts: 0, retried_calls: 0 }, counts: { searches_used: 1, sources_consumed: 2, assessments_used: 1 }, evidence_yield: { distinct_viable_root_ids: 2, requests: [{ requested: 5, returned: 2, normalized_unique: 2, selected: 2, viable: 2 }] } });
+    expect(summaries[0]).toMatchObject({ level: "info", schema_version: 8, terminal_status: "completed", assessment_profile: { provider_attempts: 0, retried_calls: 0 }, acquisition_wall: { calls: 1, succeeded: 1 }, counts: { searches_used: 1, sources_consumed: 2, assessments_used: 1 }, evidence_yield: { distinct_viable_root_ids: 2, requests: [{ requested: 5, returned: 2, normalized_unique: 2, selected: 2, viable: 2 }] } });
     const serialized = JSON.stringify(summaries[0]);
     for (const secret of ["SENTINEL_USER_QUESTION", "SENTINEL_ASSESSOR_PROMPT", "SENTINEL_SYNTHESIZER_PROMPT", executionId, turnId, "example.com"]) expect(serialized).not.toContain(secret);
     expect(body).not.toContain("research_timing");

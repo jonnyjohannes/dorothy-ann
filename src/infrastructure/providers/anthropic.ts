@@ -209,9 +209,12 @@ export class AnthropicProvider implements LLMProvider {
         const countedInput = boundedTokens(inputTokens);
         const countedOutput = boundedTokens(outputTokens);
         const measurement = { parseMs, stopReason: normalizedStop, ...(countedInput === undefined ? {} : { inputTokens: countedInput }), ...(countedOutput === undefined ? {} : { outputTokens: countedOutput }) } as const;
-        if (proposal) { observe({ ...measurement, outcome: "accepted" }); return proposal; }
+        if (proposal) {
+          observe({ ...measurement, outcome: "accepted", acceptedObservations: proposal.directive.kind === "resolved" ? Math.min(24, proposal.directive.observations.length) : 0 });
+          return proposal;
+        }
         invalidReason = assessmentInvalidReason(text);
-        observe({ ...measurement, outcome: "rejected", reason: invalidReason });
+        observe({ ...measurement, outcome: "rejected", reason: invalidReason, outputShape: rejectedOutputShape(text) });
         try {
           this.onDiagnostic?.({
             event: "assessment_output_rejected", stage: "assessing", reason: invalidReason,
@@ -418,6 +421,31 @@ function jsonObjectCandidates(text: string): unknown[] {
     }
   }
   return candidates;
+}
+
+function rejectedOutputShape(text: string): NonNullable<AssessmentAttemptObservation["outputShape"]> {
+  const start = text.indexOf("{");
+  if (start < 0) return "incomplete_outer_json";
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let index = start; index < text.length; index += 1) {
+    const character = text[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') quoted = false;
+    } else if (character === '"') quoted = true;
+    else if (character === "{") depth += 1;
+    else if (character === "}" && --depth === 0) {
+      try {
+        const parsed: unknown = JSON.parse(text.slice(start, index + 1));
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return "complete_no_directive";
+        return "directive" in parsed ? "complete_invalid_directive" : "complete_no_directive";
+      } catch { return "incomplete_outer_json"; }
+    }
+  }
+  return "incomplete_outer_json";
 }
 
 function assessmentInvalidReason(text: string): AssessmentInvalidReason {

@@ -44,6 +44,8 @@ export interface ResearchResolverDependencies {
   acquirer: EvidenceAcquirer;
   acquisitionLimits?: ResearchLimits;
   onEvidenceYield?: (requests: EvidenceYieldRequest[]) => void;
+  /** Optional wall span across concurrent acquisition work; no source data. */
+  onAcquisitionWall?: (elapsedMs: number, succeeded: boolean) => void;
   /** Turn-local, count-only observer; failures must not affect resolution. */
   onAssessmentDecision?: (result: { depth: number; directive: "resolved" | "search" | "decompose" | "invalid"; validationMs: number; searchesRemaining: number; assessmentsRemaining: number }) => void;
 }
@@ -403,15 +405,23 @@ export class ResearchResolver {
       problemDepth: problem.depth,
       createdOrder: state.ledger.gaps.length,
     };
-    const result = await this.dependencies.acquirer.acquire({
-      requests: [request],
-      knownSources: [...problem.context.knownSources, ...state.admittedSources],
-      availableEvidenceSourceIds: state.knowledge.evidence.flatMap((pack) => pack.sources.filter((source) => source.page.text.trim()).map((source) => source.sourceId)),
-      budget: state.budget,
-      limits: this.dependencies.acquisitionLimits ?? {},
-      onStage: (stage) => emitPhase(state.onPhase, stage),
-      onYield: this.dependencies.onEvidenceYield,
-    });
+    const started = performance.now();
+    let succeeded = false;
+    let result: EvidenceAcquisitionResult;
+    try {
+      result = await this.dependencies.acquirer.acquire({
+        requests: [request],
+        knownSources: [...problem.context.knownSources, ...state.admittedSources],
+        availableEvidenceSourceIds: state.knowledge.evidence.flatMap((pack) => pack.sources.filter((source) => source.page.text.trim()).map((source) => source.sourceId)),
+        budget: state.budget,
+        limits: this.dependencies.acquisitionLimits ?? {},
+        onStage: (stage) => emitPhase(state.onPhase, stage),
+        onYield: this.dependencies.onEvidenceYield,
+      });
+      succeeded = true;
+    } finally {
+      try { this.dependencies.onAcquisitionWall?.(performance.now() - started, succeeded); } catch { /* Diagnostics never affect acquisition. */ }
+    }
     await emitPhase(state.onPhase, "resolving");
     const searches = state.budget.searchesRemaining - result.budget.searchesRemaining;
     const sources = state.budget.sourcesRemaining - result.budget.sourcesRemaining;

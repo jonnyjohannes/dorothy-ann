@@ -36,6 +36,19 @@ describe("Brave v3 normalization", () => {
     expect(video[0]).toMatchObject({ kind: "video", videoUrl: "https://example.com/watch", canonicalUrl: "https://example.com/watch", thumbnailUrl: "https://cdn.example/thumb.jpg", creator: "Creator", durationSeconds: 90 });
   });
 
+  it("profiles HTTP and JSON normalization independently without leaking query or changing results", async () => {
+    const timings: Array<[string, number, boolean]> = [];
+    const provider = new BraveSearchProvider("secret", async () => new Response(JSON.stringify({ web: { results: [] } })),
+      { sourceId: async () => "src_test" as never }).withTiming((phase, ms, succeeded) => { timings.push([phase, ms, succeeded]); });
+    await expect(provider.search("private query", { maxResults: 5 })).resolves.toEqual([]);
+    expect(timings.map(([phase, , success]) => [phase, success])).toEqual([["http", true], ["json_normalization", true]]);
+    expect(JSON.stringify(timings)).not.toContain("private query");
+    const rejected: Array<[string, boolean]> = [];
+    await expect(new BraveSearchProvider("secret", async () => new Response("bad json"), { sourceId: async () => "src_test" as never })
+      .withTiming((phase, _elapsedMs, succeeded) => { rejected.push([phase, succeeded]); }).search("private query", { maxResults: 5 })).rejects.toThrow();
+    expect(rejected).toEqual([["http", true], ["json_normalization", false]]);
+  });
+
   it("bounds untrusted result metadata before it reaches terminal validation", async () => {
     const result = await normalizeBravePayload({ web: { results: [
       { title: "🚌".repeat(501), url: "https://example.com/usable", description: "evidence ".repeat(200) },

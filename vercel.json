@@ -4,6 +4,7 @@
       "includeFiles": "{ASSESSOR.md,SYNTHESIZER.md}"
     }
   },
+  "headers": [{ "source": "/(.*)", "headers": [{ "key": "Referrer-Policy", "value": "no-referrer" }] }],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }

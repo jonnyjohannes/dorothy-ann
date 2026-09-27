@@ -146,10 +146,17 @@ export class SafeContentExtractor implements ContentExtractor {
     private readonly config: ExtractorConfig,
     private readonly fetcher: FetchWithDispatcher = fetchWithDispatcher,
     private readonly onFailure?: (sourceId: SearchResult["sourceId"], metadata: ExtractionFailureMetadata) => void,
+    private readonly onTiming?: (phase: "safety" | "http" | "body" | "text", elapsedMs: number) => void,
   ) {}
 
+  private async measure<T>(timings: Partial<Record<"safety" | "http" | "body" | "text", number>>, phase: "safety" | "http" | "body", run: () => Promise<T>): Promise<T> {
+    const started = performance.now();
+    try { return await run(); }
+    finally { timings[phase] = (timings[phase] ?? 0) + performance.now() - started; }
+  }
+
   async extract(source: SearchResult, limits: ExtractionLimits): Promise<ExtractionOutcome> {
-    const state: { phase: ExtractionFailureMetadata["failure_phase"]; detail: ExtractionFailureMetadata["failure_detail"]; bucket?: ExtractionFailureMetadata["http_status_bucket"] } = { phase: "url_check", detail: "other" };
+    const state: { phase: ExtractionFailureMetadata["failure_phase"]; detail: ExtractionFailureMetadata["failure_detail"]; bucket?: ExtractionFailureMetadata["http_status_bucket"]; timings: Partial<Record<"safety" | "http" | "body" | "text", number>> } = { phase: "url_check", detail: "other", timings: {} };
     const observe = (outcome: ExtractionOutcome, metadata: ExtractionFailureMetadata) => {
       if (outcome.status !== "viable") {
         try { this.onFailure?.(source.sourceId, metadata); } catch { /* Diagnostics cannot change extraction. */ }
@@ -158,24 +165,30 @@ export class SafeContentExtractor implements ContentExtractor {
     };
     if (source.kind !== "link") return observe({ sourceId: source.sourceId, status: "skipped", reason: "unsupported_content" }, { failure_phase: "url_check", failure_detail: "unsupported_content" });
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<{ outcome: ExtractionOutcome; metadata: ExtractionFailureMetadata }>((resolve) => {
-      timer = setTimeout(() => resolve({ outcome: { sourceId: source.sourceId, status: "failed", code: "timeout", retryable: true },
+    const timeout = new Promise<{ timedOut: boolean; outcome: ExtractionOutcome; metadata: ExtractionFailureMetadata }>((resolve) => {
+      timer = setTimeout(() => resolve({ timedOut: true, outcome: { sourceId: source.sourceId, status: "failed", code: "timeout", retryable: true },
         metadata: { failure_phase: state.phase, failure_detail: "deadline" } }), limits.timeoutMs);
     });
     try {
       const winner = await Promise.race([
-        this.extractInternal(source, limits, state).then((outcome) => ({ outcome, metadata: {
+        this.extractInternal(source, limits, state).then((outcome) => ({ timedOut: false, outcome, metadata: {
           failure_phase: state.phase, failure_detail: state.detail, ...(state.bucket ? { http_status_bucket: state.bucket } : {}),
         } })),
         timeout,
       ]);
+      if (!winner.timedOut) for (const phase of ["safety", "http", "body", "text"] as const) {
+        const elapsed = state.timings[phase];
+        if (elapsed !== undefined) {
+          try { this.onTiming?.(phase, elapsed); } catch { /* Observers cannot change extraction. */ }
+        }
+      }
       return observe(winner.outcome, winner.metadata);
     } finally { if (timer) clearTimeout(timer); }
   }
 
-  private async extractInternal(source: SearchResult, limits: ExtractionLimits, state: { phase: ExtractionFailureMetadata["failure_phase"]; detail: ExtractionFailureMetadata["failure_detail"]; bucket?: ExtractionFailureMetadata["http_status_bucket"] }): Promise<ExtractionOutcome> {
+  private async extractInternal(source: SearchResult, limits: ExtractionLimits, state: { phase: ExtractionFailureMetadata["failure_phase"]; detail: ExtractionFailureMetadata["failure_detail"]; bucket?: ExtractionFailureMetadata["http_status_bucket"]; timings: Partial<Record<"safety" | "http" | "body" | "text", number>> }): Promise<ExtractionOutcome> {
     let current: URL;
-    try { current = await assertSafeUrl(source.url, () => { state.phase = "dns"; }); }
+    try { current = await this.measure(state.timings, "safety", () => assertSafeUrl(source.url, () => { state.phase = "dns"; })); }
     catch (error) {
       state.detail = state.phase === "dns" && isDnsFailure(error) ? "dns_failure" : "unsafe_url"; return { sourceId: source.sourceId, status: "skipped", reason: "unsafe_url" }; }
 
@@ -186,20 +199,20 @@ export class SafeContentExtractor implements ContentExtractor {
       let dispatcher: Agent | undefined;
       try {
         state.phase = "dns";
-        dispatcher = pinnedAgent(await resolvePublicAddresses(current));
+        dispatcher = pinnedAgent(await this.measure(state.timings, "safety", () => resolvePublicAddresses(current)));
         state.phase = "fetch";
-        const response = await this.fetcher(current, {
+        const response = await this.measure(state.timings, "http", () => this.fetcher(current, {
           redirect: "manual", signal: controller.signal,
           headers: { "user-agent": this.config.userAgent, accept: "text/html,text/plain;q=0.9" },
           dispatcher,
-        });
+        }));
         if (response.status >= 300 && response.status < 400) {
           state.phase = "redirect"; state.detail = "redirect_blocked";
           const location = response.headers.get("location");
           if (!location || redirects === this.config.maxRedirects)
             return { sourceId: source.sourceId, status: "skipped", reason: "blocked" };
           followingRedirect = true;
-          current = await assertSafeUrl(new URL(location, current).toString(), () => { state.phase = "dns"; });
+          current = await this.measure(state.timings, "safety", () => assertSafeUrl(new URL(location, current).toString(), () => { state.phase = "dns"; }));
           followingRedirect = false;
           continue;
         }
@@ -214,13 +227,18 @@ export class SafeContentExtractor implements ContentExtractor {
           state.detail = "unsupported_content";
           return { sourceId: source.sourceId, status: "skipped", reason: "unsupported_content" };
         }
-        const body = await readBoundedBody(response, this.config.maxFetchBytes, controller.signal);
+        const body = await this.measure(state.timings, "body", () => readBoundedBody(response, this.config.maxFetchBytes, controller.signal));
         if (!body.byteLength) state.detail = "zero_byte_body";
         if (!body.byteLength) return { sourceId: source.sourceId, status: "skipped", reason: "empty_content" };
         state.phase = "text";
-        const raw = new TextDecoder().decode(body);
-        const text = boundedText(contentType === "text/html" ? readableText(raw) : raw, limits.maxCharacters);
-        const characterCount = [...text].length;
+        const textStarted = performance.now();
+        let text: string;
+        let characterCount: number;
+        try {
+          const raw = new TextDecoder().decode(body);
+          text = boundedText(contentType === "text/html" ? readableText(raw) : raw, limits.maxCharacters);
+          characterCount = [...text].length;
+        } finally { state.timings.text = (state.timings.text ?? 0) + performance.now() - textStarted; }
         if (characterCount < this.config.minCharacters) {
           state.detail = characterCount === 0 ? "no_readable_text" : "short_text";
           return { sourceId: source.sourceId, status: "skipped", reason: "empty_content" };

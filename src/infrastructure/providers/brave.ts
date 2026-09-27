@@ -35,7 +35,16 @@ export class BraveSearchProvider implements SearchProvider {
     private readonly fetcher: BraveFetch = fetch,
     private readonly identities: SourceIdentity,
     private readonly endpoint = "https://api.search.brave.com/res/v1/web/search",
+    private readonly onTiming?: (phase: "http" | "json_normalization", elapsedMs: number, succeeded: boolean) => void,
   ) {}
+
+  withTiming(onTiming: (phase: "http" | "json_normalization", elapsedMs: number, succeeded: boolean) => void): BraveSearchProvider {
+    return new BraveSearchProvider(this.apiKey, this.fetcher, this.identities, this.endpoint, onTiming);
+  }
+
+  private observe(phase: "http" | "json_normalization", started: number, succeeded: boolean): void {
+    try { this.onTiming?.(phase, performance.now() - started, succeeded); } catch { /* Observers cannot change search. */ }
+  }
 
   async search(query: string, options: SearchOptions): Promise<SearchResult[]> {
     const kind = options.resultKind ?? "link";
@@ -50,9 +59,21 @@ export class BraveSearchProvider implements SearchProvider {
     url.searchParams.set("q", query);
     url.searchParams.set("count", String(Math.min(options.maxResults, 10)));
     if (options.locale) url.searchParams.set("search_lang", options.locale);
-    const response = await this.fetcher(url.toString(), { headers: { Accept: "application/json", "X-Subscription-Token": this.apiKey } });
+    const started = performance.now();
+    let response: Response;
+    let httpSucceeded = false;
+    try {
+      response = await this.fetcher(url.toString(), { headers: { Accept: "application/json", "X-Subscription-Token": this.apiKey } });
+      httpSucceeded = true;
+    } finally { this.observe("http", started, httpSucceeded); }
     if (!response.ok) throw new Error(response.status === 429 ? "provider_rate_limited" : "provider_unavailable");
-    return normalizeBravePayload(await response.json() as unknown, options.maxResults, this.identities, kind);
+    const parseStarted = performance.now();
+    let parsed = false;
+    try {
+      const result = await normalizeBravePayload(await response.json() as unknown, options.maxResults, this.identities, kind);
+      parsed = true;
+      return result;
+    } finally { this.observe("json_normalization", parseStarted, parsed); }
   }
 }
 
