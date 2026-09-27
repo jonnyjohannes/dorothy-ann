@@ -190,18 +190,27 @@ function createExecutor(
         } else {
           await onSignal({ type: "research_state", state: { kind: "checkpoint", checkpoint: root.checkpoint } });
         }
-        const result = await executeResearchTurn({ turnId: request.turnId, userMessage: requestMessage(request), createdAt: new Date().toISOString() as never, context, answerPosition: request.answerPosition, resolver: { resolve: async () => resolution as ResearchResolutionResult }, synthesizer: phaseSynthesizer, assessmentModelRef: "assessment", synthesisModelRef: "synthesis", searchRef: "brave", signal });
+        let previewChars = 0;
+        let previewFrames = 0;
+        let queued = "";
+        const flushPreview = async () => {
+          if (!queued || signal.aborted || previewFrames >= 256) return;
+          const delta = queued.slice(0, 64_000 - previewChars);
+          queued = "";
+          if (!delta) return;
+          await onSignal({ type: "answer_delta", delta });
+          previewChars += delta.length;
+          previewFrames += 1;
+          if (previewFrames === 1) timing?.markFirstAnswerSignal();
+        };
+        const result = await executeResearchTurn({ turnId: request.turnId, userMessage: requestMessage(request), createdAt: new Date().toISOString() as never, context, answerPosition: request.answerPosition, resolver: { resolve: async () => resolution as ResearchResolutionResult }, synthesizer: phaseSynthesizer, assessmentModelRef: "assessment", synthesisModelRef: "synthesis", searchRef: "brave", signal, onProvisionalText: async (text) => {
+          if (signal.aborted || previewChars >= 64_000 || previewFrames >= 256) return;
+          queued += text.slice(0, 64_000 - previewChars - queued.length);
+          // The first safe fragment is written immediately. Later fragments batch.
+          if (previewFrames === 0 || queued.length >= 256 || queued.length === 64_000 - previewChars) await flushPreview();
+        } });
+        if (result.turn.status === "completed") await flushPreview();
         timingTerminalStatus = result.turn.status;
-        if (result.turn.status === "completed") {
-          let firstAnswer = true;
-          for (const part of result.turn.result.answer.parts) if (part.type === "text") {
-            if (firstAnswer) {
-              timing?.markFirstAnswerSignal();
-              firstAnswer = false;
-            }
-            await onSignal({ type: "answer_delta", delta: part.markdown });
-          }
-        }
         return terminalFor(result);
       } finally {
         timing?.emit({

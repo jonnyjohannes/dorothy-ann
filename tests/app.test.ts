@@ -48,6 +48,7 @@ describe("portable v3 Hono API", () => {
     expect(events.findIndex((event) => event.phase === "synthesizing")).toBeGreaterThan(types.indexOf("research_state"));
     expect(events.findIndex((event) => event.phase === "synthesizing")).toBeLessThan(types.indexOf("answer_delta"));
     expect(types.at(-1)).toBe("terminal");
+    expect(events.filter((event) => event.type === "answer_delta")).toHaveLength(1);
     expect(body).not.toContain("event: turn.error");
   });
 

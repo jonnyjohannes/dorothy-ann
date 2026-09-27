@@ -188,6 +188,15 @@ export function createTurnStreamBoundary(options: TurnStreamBoundaryOptions): Ho
       let largestFrameBytes = 0;
       let terminalSent = false;
       let protocolInvalid = false;
+      let previewChars = 0;
+      let previewFrames = 0;
+      writer.onAbort(abortRequest);
+      let writes = Promise.resolve();
+      const writeFrame = (frame: string) => {
+        const next = writes.then(async () => { await writer.write(frame); });
+        writes = next.catch(() => { abort.abort(); });
+        return next;
+      };
       const write = async (type: TurnExecutionEvent["type"], payload: Omit<TurnExecutionEvent, keyof TurnExecutionEventBase | "type">) => {
         const event = { executionId: request.executionId, turnId: request.turnId, sequence, type, ...payload } as TurnExecutionEvent;
         sequence += 1;
@@ -198,19 +207,30 @@ export function createTurnStreamBoundary(options: TurnStreamBoundaryOptions): Ho
           frameBytes = Math.min(10_000_000, frameBytes + bytes);
           largestFrameBytes = Math.max(largestFrameBytes, Math.min(1_000_000, bytes));
         }
-        await writer.write(frame);
+        await writeFrame(frame);
       };
 
       await write("accepted", { kind: request.kind });
-      const heartbeat = setInterval(() => { void writer.write(`: heartbeat\n\n`); }, options.heartbeatMs ?? 15_000);
+      const heartbeat = setInterval(() => { if (!abort.signal.aborted) void writeFrame(`: heartbeat\n\n`); }, options.heartbeatMs ?? 15_000);
       try {
         const terminal = await options.executor.execute(requestForExecutor, async (signal) => {
-          if (terminalSent) return;
+          if (terminalSent || abort.signal.aborted) return;
           if (!validateSignal(signal, requestForExecutor)) {
             protocolInvalid = true;
             try { options.onDiagnostic?.({ event: "turn_invalid_signal", stage: "transport", signal_type: signal.type }); } catch { /* Diagnostics must never alter stream behavior. */ }
             abort.abort();
             return;
+          }
+          if (signal.type === "answer_delta") {
+            if (previewFrames >= 256 || previewChars >= 64_000) return;
+            // The executor normally enforces this cap; validate independent callers too.
+            if (previewChars + signal.delta.length > 64_000) {
+              protocolInvalid = true;
+              abort.abort();
+              return;
+            }
+            previewFrames += 1;
+            previewChars += signal.delta.length;
           }
           await write(signal.type, signal.type === "phase" ? { phase: signal.phase } : signal.type === "source_delta" ? { sources: signal.sources, occurrences: signal.occurrences } : signal.type === "research_state" ? { state: signal.state } : { delta: signal.delta });
         }, abort.signal);

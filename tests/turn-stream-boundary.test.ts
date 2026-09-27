@@ -23,6 +23,28 @@ function appFor(executor: TurnExecutor, options: { authenticate?: () => boolean;
 }
 
 describe("portable turn stream boundary", () => {
+  it("flushes a provisional delta before the deferred provider completes, then rejects overflow without a terminal", async () => {
+    let release!: () => void;
+    const wait = new Promise<void>((resolve) => { release = resolve; });
+    const app = appFor({ async execute(_request, onSignal) {
+      await onSignal({ type: "answer_delta", delta: "first" });
+      await wait;
+      await onSignal({ type: "answer_delta", delta: "x".repeat(64_000) });
+      return { kind: "research", outcome: {}, sourceRecords: [] } as never;
+    } });
+    const response = await app.request("http://localhost/", { method: "POST", body: JSON.stringify({ executionId, turnId, kind: "research", question: "hello", answerPosition: "initial", context: { threadId: "123e4567-e89b-12d3-a456-426614174002", turns: [], knownSources: [], availableEvidence: [] } }) });
+    const reader = response.body!.getReader();
+    const first = new TextDecoder().decode((await reader.read()).value);
+    expect(first).toContain("turn.accepted");
+    let body = first;
+    while (!body.includes("turn.answer_delta")) body += new TextDecoder().decode((await reader.read()).value);
+    expect(body).not.toContain("turn.terminal");
+    release();
+    while (true) { const next = await reader.read(); if (next.done) break; body += new TextDecoder().decode(next.value); }
+    expect(body).toContain("invalid_event");
+    expect(body).not.toContain("turn.terminal");
+  });
+
   it("validates the request, injects server limits, and sequences accepted/terminal exactly once", async () => {
     let calls = 0;
     const app = appFor({
