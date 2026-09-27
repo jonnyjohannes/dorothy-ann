@@ -61,7 +61,7 @@ describe("AnthropicProvider v3", () => {
     expect(fake.requests.every((request) => request.max_tokens === 800)).toBe(true);
   });
 
-  it("uses 1,200 on the first attempt without widening ordinary correction or 400 fallback", async () => {
+  it("uses up to 1,200 on the first and ordinary corrective attempts, but 800 for 400 fallback", async () => {
     const input = { ...baseAssessment, maxOutputTokens: 1_200 };
     const valid = JSON.stringify({ directive: { kind: "search", query: "flamingo color", purpose: "answer", successCriterion: "supported", priority: 1 } });
     const first = client([{ content: [{ type: "text", text: valid }] }]);
@@ -73,7 +73,23 @@ describe("AnthropicProvider v3", () => {
       { content: [{ type: "text", text: valid }] },
     ]);
     await new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: corrected }).assessResearch(input);
-    expect(corrected.requests.map((request) => request.max_tokens)).toEqual([1_200, 800]);
+    expect(corrected.requests.map((request) => request.max_tokens)).toEqual([1_200, 1_200]);
+
+    const invalidResolved = JSON.stringify({ directive: { kind: "resolved", observations: [{ proposition: "p", statement: "s", stance: "supports", support: [{ type: "source", sourceId: "not-allowed" }] }] } });
+    const resolvedCorrection = client([
+      { content: [{ type: "text", text: invalidResolved }], stop_reason: "end_turn", usage: { output_tokens: 1_023 } },
+      { content: [{ type: "text", text: valid }], stop_reason: "end_turn" },
+    ]);
+    await new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: resolvedCorrection }).assessResearch(input);
+    expect(resolvedCorrection.requests.map((request) => request.max_tokens)).toEqual([1_200, 1_200]);
+    expect(((resolvedCorrection.requests[1].messages as Array<{ content: string }>)[0].content)).toContain("previous response failed validation");
+
+    const lower = client([
+      { content: [{ type: "text", text: "not json" }], stop_reason: "end_turn" },
+      { content: [{ type: "text", text: valid }] },
+    ]);
+    await new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: lower }).assessResearch({ ...input, maxOutputTokens: 900 });
+    expect(lower.requests.map((request) => request.max_tokens)).toEqual([900, 900]);
 
     const truncated = client([
       { content: [{ type: "text", text: '{"directive":' }], stop_reason: "max_tokens" },

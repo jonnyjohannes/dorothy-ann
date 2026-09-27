@@ -224,7 +224,7 @@ export class AnthropicProvider implements LLMProvider {
         } catch { /* Diagnostics must never alter provider behavior. */ }
         if (attempt === 0) requestTokens = stopReason === "max_tokens"
           ? this.assessmentRetryMaxOutputTokens
-          : Math.min(800, input.maxOutputTokens);
+          : Math.min(1_200, input.maxOutputTokens);
       } catch (error) {
         if (!reported) observe({ parseMs: 0, stopReason: "unknown", outcome: "failed", reason: "provider_error" });
         if (error instanceof AnthropicProviderError && error.code === "provider_bad_request" && structuredOutput) {
