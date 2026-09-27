@@ -91,7 +91,7 @@ The `research_timing` record includes per-request selected/viable/empty/failure 
 
 ## documentation
 
-- [Provisional research synthesis streaming](docs/plans/provisional-research-synthesis-streaming.md) — planning only: active unverified preview, terminal replacement and failure cleanup; presentation and bounds still await owner decisions. The separate 1,200-token first-assessment-cap trial is committed locally (`395b9ff`), not yet measured live.
+- [Provisional research synthesis streaming](docs/plans/provisional-research-synthesis-streaming.md) — ready spec, not implemented: labelled plain-text preview, terminal replacement and failure cleanup. An operator-supplied post-change trace after the separate first-assessment-cap trial (`395b9ff`) showed one 938-token first attempt accepted in 10.5s; synthesis first output arrived at 569ms, but the first server answer signal waited until near the 21.4s execution end. This is not a controlled speedup or a browser-flush measurement.
 - [Research failure diagnostics](docs/plans/archive/research-failure-diagnostics.md) — selected-source failure classifications, existing assessment latency triage and Vercel lookup; remediation awaits evidence and separate approval.
 - [v1.2.1 long-context recovery](docs/plans/archive/dorothy-ann-v1.2.1-long-context-recovery.md) — the rejected `research_state` schema-bound bug is fixed; broader retry UX and v1.2.1 release bookkeeping were deferred
 - [Two-source synthesis and evidence-yield plan](docs/plans/archive/dorothy-ann-two-source-synthesis.md) — shipped root synthesis gate, charged backfill, and logging standardization; extraction-yield recovery remains a separate open concern

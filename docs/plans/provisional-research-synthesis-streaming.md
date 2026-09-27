@@ -2,13 +2,13 @@
 
 ## Current State
 
-- Status: planning
-- Verification: not run (read-only reconnaissance only)
+- Status: ready
+- Verification: not run (read-only reconnaissance and owner UX decision only)
 - Owner: Jonny
 - Executor: unassigned
 - Last updated: 2026-09-26
-- Current focus: agree on what the browser shows before an answer passes terminal validation.
-- Next action: Jonny chooses the draft presentation in Open Questions; then reconcile the spec and assess readiness. No streaming implementation is authorized yet.
+- Current focus: plain-text provisional UX and implementation boundaries are settled; no streaming code exists yet.
+- Next action: await explicit implementation authorization; then claim the ledger on `release/v1.2.1` and begin P1. Readiness alone does not authorize streaming changes.
 - Branch / PR / session: `release/v1.2.1` / none; independent first-assessment-cap trial committed as `395b9ff`.
 
 ## Abstract
@@ -50,7 +50,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` verified, `[!]` blocked.
   - Verify: stream-boundary/app tests using a deferred provider show an `answer_delta` **before** provider completion and terminal; final terminal still authoritative; many tiny/large parts, overflow, slow writer, disconnect and provider refusal never create an invalid frame, extra provider call or durable provisional answer. Assert bounded aggregate metadata only.
   - Evidence: —
 - [ ] P3 — Present and clean up the draft in the active turn
-  - Deliverable: active `ThreadRoute` renders a visibly labelled provisional preview, distinct from `TranscriptBox` and with no clickable or apparently verified citation controls. Limit controller event history and draft storage without breaking monotonic SSE sequence validation or `turn-projection`/`ResearchStatus`; clear preview on all terminal states, interrupted/disconnected runs, invalid protocol/terminal, navigation and commit failure/retry. A completed terminal replaces it only after terminal/source closure validation and commit succeeds; only terminal outcome enters IndexedDB/context/export/retry.
+  - Deliverable: active `ThreadRoute` renders whitespace-preserving plain text labelled “provisional · checking answer and citations”, distinct from `TranscriptBox`; no Markdown parser, live links or citation controls. Cap preview storage at 64k code units and complete controller event history at 512 events; reject excess events as invalid protocol instead of dropping source/projection evidence. Validate monotonic SSE sequence independently of retained array length. Clear preview on all terminal states, interrupted/disconnected runs, invalid protocol/terminal, navigation and commit failure/retry. A completed terminal replaces it only after terminal/source closure validation and commit succeeds; only terminal outcome enters IndexedDB/context/export/retry.
   - Verify: controller, projection and UI tests cover early visible text, successful replacement with normalized/cited answer, failed/refused synthesis after visible draft, user cancel/navigation, disconnected stream, malformed terminal, commit failure/retry and screen-reader announcement behavior. No stale draft flashes on a new run.
   - Evidence: —
 - [ ] P4 — Regression, browser flush and rollout checks
@@ -67,8 +67,8 @@ For an otherwise valid multi-second synthesis, a user sees partial text clearly 
 - `src/infrastructure/providers/anthropic.ts` already streams parser-produced text/citation parts; its `CitationParser` buffers incomplete citation markers. The model's first output can precede completion, but a marker or fragmented heading can delay/alter visible text.
 - `src/application/answer-synthesizer.ts` collects all parts, filters unreachable citations, coalesces text, demotes the first Markdown heading and validates terminal `AssistantContent` before returning. `server/app.ts` currently awaits that result via `executeResearchTurn` and only then emits text-only `answer_delta` events before terminal.
 - `src/server/turn-stream-boundary.ts` validates individual 64k-string-length deltas but has no cumulative preview cap. Browser gateway has per-event/parser-buffer limits. `src/ui/controllers/turn-controller.ts` accumulates both all events and a concatenated draft; `turn-projection.ts` also reads events. `ThreadRoute` already shows an active-only draft, hidden on inactive turns, but controller snapshots retain it after failure/interruption. Transcript and persistence use the terminal turn.
-- A supplied production diagnostic measured synthesis first output ≈512ms **after** resolution, while assessment alone took ≈24.6s. Those timings are not browser/SSE flush measurements and cannot establish end-to-end ~0.5s responsiveness.
-- Separate assessment-cap trial `395b9ff` raises only the first attempt's default/ceiling to 1,200; normal correction/400 fallback remains ≤800 and truncation retry ≤1,600. It is not a prerequisite for streaming and no production result is known.
+- Operator-supplied post-change trace: synthesis first output at 569ms after synthesis began; full synthesis 9,045ms; resolution 12,368ms; first **server answer signal** at 21,435ms of 21,436ms execution. Roughly 8.5s elapsed between the inferred first provider output and first answer signal because current emission waits for validation. The turn completed with three viable root sources and one accepted assessment; 11 SSE frames (largest 31,027 bytes), clean terminal and no transport abort. This does **not** measure first browser paint or prove Vercel/browser flushing. An earlier trace measured first synthesis output at 512ms after resolution, also not an end-to-end 0.5s answer.
+- Separate assessment-cap trial `395b9ff` raises only the first attempt's default/ceiling to 1,200; normal correction/400 fallback remains ≤800 and truncation retry ≤1,600. In that post-change trace, the first attempt accepted a 938-token `resolved` output in 10,502ms; an earlier 800-capped run needed two attempts and 24,596ms of assessment. The samples differ and do not establish a controlled speedup. This trial is not a prerequisite for streaming.
 
 ## Scope
 
@@ -86,15 +86,15 @@ For an otherwise valid multi-second synthesis, a user sees partial text clearly 
 
 - **Terminal is authoritative** — preview is not a `Turn` and never supplies context, citations, retry input, storage or export. On terminal completion render the validated answer, not a concat of deltas.
 - **Reuse research `answer_delta` with documented provisional meaning** — current UI already treats it as active-only. Do not add a new durable field. A terminal can fail after deltas, and the final answer can differ; tests must enforce this.
-- **Text parts only before terminal** — citation parts remain in the validator/terminal path. No live citation activation or source attribution from unvalidated tokens.
+- **Plain-text draft (owner chose A)** — render parsed text with preserved whitespace and a visible “provisional · checking answer and citations” label; do not interpret Markdown or create links/citation controls until the validated terminal. Citation parts remain in the validator/terminal path; no live source attribution from unvalidated tokens.
 - **Preserve single root synthesis and full validation** — streaming is an observation of the same run; no second provider pass or early `completed` terminal.
-- **Bound preview without truncating truth** — emit at most 64,000 JS code units and 256 preview frames per turn; then show “preview paused; final answer pending” and continue validating the full stream. These are transport/UI caps, not an enlargement or truncation of the durable answer contract.
+- **Bound preview without truncating truth** — emit at most 64,000 JS code units and 256 preview frames per turn; then show “preview paused; final answer pending” and continue validating the full stream. Cap the controller's complete event history at 512 and reject excess frames rather than silently pruning source evidence. These are transport/UI caps, not an enlargement or truncation of the durable answer contract.
 
 ## Detailed Plan
 
 ### Application/provider
 
-Add an optional async text observer to `AnswerSynthesizerInput` (or equivalent provider-neutral streaming seam), awaited during iteration. Keep provider part parsing in the adapter, support an abort signal for the Anthropic synthesis request as well as between yields, and allow cancellation to tear down iteration. The observer may stop publishing preview after its own transport budget, but the synthesizer still consumes the stream and validates the full answer. Never mask terminal validation/refusal failures behind a successful preview; transport abort must not yield a completed turn.
+Add an optional async text observer to `AnswerSynthesizerInput` (or equivalent provider-neutral streaming seam), awaited during iteration. Keep provider part parsing in the adapter; add an optional `signal` to the provider-neutral `ResearchSynthesisInput`, forward it to the Anthropic synthesis SDK request and check it between yields so cancellation can tear down iteration. The observer may stop publishing preview after its own transport budget, but the synthesizer still consumes the stream and validates the full answer. Never mask terminal validation/refusal failures behind a successful preview; transport abort must not yield a completed turn.
 
 ### Server/SSE
 
@@ -102,7 +102,7 @@ Forward only parsed text from the synthesis observer to `onSignal({ type: "answe
 
 ### Browser/UX
 
-The open presentation decision below governs rendering. Whatever form is chosen, label preview as provisional/unverified, avoid per-token screen-reader announcements, prevent clickable unvalidated citations, and remove it on **all** exit paths, not just via an `active` conditional. Maintain a bounded event window and an independent monotonic sequence counter: current `active.events.length + 1` cannot serve as the sequence check if events are pruned. `turn-projection`/status must not infer the entire answer from a truncated event window. When a terminal fails validation or storage commit, do not show a saved answer; retry only the validated terminal candidate when available.
+Render the draft as whitespace-preserving **plain text**, visibly marked provisional/unverified. Do not parse Markdown, expose clickable links/citations or announce per-token changes to screen readers; announce state changes instead. Clear it on **all** exit paths, not just via an `active` conditional. Bound complete event history to 512; reject excess frames via the existing invalid-protocol path rather than pruning events needed by `turn-projection`/status. Track the monotonic sequence independently of array length and keep the 64k preview cap. When a terminal fails validation or storage commit, do not show a saved answer; retry only the validated terminal candidate when available.
 
 ### Rollout and stop conditions
 
@@ -124,4 +124,4 @@ Use fixture mode to verify flush order and DOM visibility. Measure first parser 
 
 ## Open Questions
 
-- **Draft presentation** — Jonny — blocks readiness. Recommended: plain text with preserved whitespace and a visible “provisional · checking answer and citations” label; no Markdown rendering/links until terminal. Alternative: live Markdown with citations/links inert, accepting partial formatting changes and extra sanitization/assistive-tech testing. Other presentation?
+- None blocking readiness. Production deployment, operational measurements and any Vercel-side mutation require a separate per-command approval.
