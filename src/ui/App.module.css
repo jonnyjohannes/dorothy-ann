@@ -675,6 +675,9 @@
 .researchPlanLive code { color: inherit; font: inherit; }
 .researchPlanLive small { display: block; color: var(--muted); }
 .researchLoader { display: flex; align-items: center; gap: 0.75rem; margin: 3rem 0 1rem; color: var(--muted); }
+.provisionalAnswer { max-width: 90rem; margin: 0 0 2rem; border-left: 3px solid var(--accent); padding-left: 0.75rem; }
+.provisionalAnswer p { color: var(--muted); font-size: 0.85rem; }
+.provisionalText { white-space: pre-wrap; overflow-wrap: anywhere; }
 .loaderBars { display: inline-flex; align-items: end; gap: 0.18rem; height: 1.5rem; border-left: 3px solid var(--accent); padding-left: 0.6rem; }
 .loaderBars i { display: block; width: 0.22rem; height: 0.6rem; background: var(--accent); animation: loaderPulse 0.9s ease-in-out infinite alternate; }
 .loaderBars i:nth-child(2) { animation-delay: 0.18s; }

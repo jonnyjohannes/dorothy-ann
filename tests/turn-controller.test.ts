@@ -22,6 +22,51 @@ function gatewayFor(events: TurnGatewayEvent[], after?: (signal: AbortSignal) =>
 }
 
 describe("TurnController", () => {
+  const researchInput = (): TurnStartInput => ({ ...input(), kind: "research", context: { threadId, turns: [], knownSources: [], availableEvidence: [] }, answerPosition: "initial" });
+  const researchAccepted: TurnGatewayEvent = { ...accepted, kind: "research" };
+  const draft = (sequence: number, delta: string): TurnGatewayEvent => ({ executionId, turnId, sequence, type: "answer_delta", delta });
+  const failedTerminal: TurnGatewayEvent = { ...terminal, sequence: 3, terminal: { kind: "research", outcome: { status: "failed", failure: { kind: "synthesis_failure", code: "refused", message: "Refused.", retryable: false }, execution: { kind: "recorded", assessmentModelRef: "assessment", synthesisModelRef: "synthesis", searchRef: "fixture" }, researchState: { kind: "resolution", resolution: { status: "sufficient", stopReason: "sufficient", knowledge: { problemId: `problem_${"B".repeat(43)}`, findings: [], evidence: [], unresolvedGapIds: [] }, ledger: { gaps: [], assessmentsUsed: 1, searchesUsed: 0, sourcesConsumed: 0 }, tasks: [] } } }, sourceRecords: [] } };
+
+  it("shows only a bounded active draft and clears it after refused synthesis", async () => {
+    const snapshots: string[] = [];
+    let committed: unknown;
+    const controller = new TurnController(gatewayFor([researchAccepted, draft(2, "# Provisional [[cite:untrusted]]"), failedTerminal]), storeWith(async ({ turn }) => { committed = turn; return { ok: true, value: { disposition: "committed", record: record("r1") } }; }), undefined, (view) => { snapshots.push(view.answerDraft); });
+    expect(await controller.run(researchInput())).toMatchObject({ ok: true, turn: { status: "failed" } });
+    expect(snapshots).toContain("# Provisional [[cite:untrusted]]");
+    expect(controller.snapshot).toMatchObject({ active: false, answerDraft: "", events: [] });
+    expect(JSON.stringify(committed)).not.toContain("Provisional");
+  });
+
+  it("rejects oversized, excessive or out-of-sequence previews without saving partial content", async () => {
+    const store = storeWith(async () => { throw new Error("must not commit"); });
+    for (const events of [[researchAccepted, draft(2, "a".repeat(64_001))], [researchAccepted, ...Array.from({ length: 512 }, (_, index) => draft(index + 2, ""))], [researchAccepted, draft(3, "wrong sequence")]]) {
+      const controller = new TurnController(gatewayFor(events), store);
+      expect(await controller.run(researchInput())).toMatchObject({ ok: false, error: "invalid_event" });
+      expect(controller.snapshot.answerDraft).toBe("");
+    }
+  });
+
+  it("clears on disconnect, cancellation and failed commit while preserving terminal retry", async () => {
+    const lost = new TurnController(gatewayFor([researchAccepted, draft(2, "partial")]), storeWith(async () => ({ ok: true, value: { disposition: "committed", record: record("r1") } })));
+    expect(await lost.run(researchInput())).toMatchObject({ ok: true, turn: { status: "interrupted" } });
+    expect(lost.snapshot.answerDraft).toBe("");
+    let available = false;
+    const store = storeWith(async () => available ? { ok: true, value: { disposition: "committed", record: record("r1") } } : { ok: false, failure: { code: "storage_unavailable", retryable: true } });
+    const retry = new TurnController(gatewayFor([researchAccepted, draft(2, "partial"), failedTerminal]), store);
+    expect(await retry.run(researchInput())).toMatchObject({ ok: false, error: "commit_retryable" });
+    expect(retry.snapshot.answerDraft).toBe("");
+    available = true;
+    expect(await retry.retryCommit()).toMatchObject({ ok: true, turn: { status: "failed" } });
+    expect(retry.snapshot.answerDraft).toBe("");
+    const cancel = new TurnController(gatewayFor([researchAccepted, draft(2, "partial")], (signal) => new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }))), store);
+    const running = cancel.run(researchInput());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(cancel.snapshot.answerDraft).toBe("partial");
+    cancel.cancel("navigation");
+    expect(cancel.snapshot.answerDraft).toBe("");
+    expect(await running).toMatchObject({ ok: true, turn: { status: "interrupted" } });
+  });
+
   it("rejects stale, duplicate, and gapped sequences without committing", async () => {
     let commits = 0;
     const store = storeWith(async () => { commits += 1; return { ok: true, value: { disposition: "committed", record: record("r1") } }; });
