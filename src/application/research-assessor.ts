@@ -37,7 +37,7 @@ export interface ObservationProposal {
 
 export type ResearchDirectiveProposal =
   | { kind: "resolved"; observations: ObservationProposal[] }
-  | { kind: "search"; surface?: "web" | "news"; query: string; purpose: string; successCriterion: string; priority: 1 | 2 | 3 }
+  | { kind: "search"; surface?: "web"; query: string; purpose: string; successCriterion: string; priority: 1 | 2 | 3 }
   | { kind: "decompose"; operator: "all" | "any"; problems: ResearchProblemProposal[] };
 
 export interface ResearchAssessmentProposal {
@@ -46,7 +46,7 @@ export interface ResearchAssessmentProposal {
 
 export type ResearchDirective =
   | { kind: "resolved"; knowledge: KnowledgeUnit }
-  | { kind: "search"; surface?: "web" | "news"; query: string; purpose: string; successCriterion: string; priority: 1 | 2 | 3 }
+  | { kind: "search"; surface?: "web"; query: string; purpose: string; successCriterion: string; priority: 1 | 2 | 3 }
   | { kind: "decompose"; operator: "all" | "any"; problems: ResearchProblemProposal[] };
 
 export interface ResearchAssessment {
@@ -200,7 +200,7 @@ export class ResearchAssessor {
     }
 
     if (directive.kind === "search") {
-      if (directive.surface !== undefined && directive.surface !== "web" && directive.surface !== "news") throw new ResearchAssessmentValidationError("surface_invalid");
+      if (directive.surface !== undefined && directive.surface !== "web") throw new ResearchAssessmentValidationError("surface_invalid");
       const query = text(directive.query, "query", 500);
       return {
         problemId: input.problem.id,

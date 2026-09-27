@@ -52,11 +52,11 @@ describe("FileSystemPromptSource", () => {
     expect(catalog.assessor).toContain("each explicit material obligation");
     expect(catalog.assessor).toContain("without a two-source quota");
     expect(catalog.assessor).toContain("Fresh retrieval is mandatory for time-sensitive requests.");
-    expect(catalog.assessor).toContain('**news** (`"news"`)');
-    expect(catalog.assessor).toContain('“latest news on storms,” “storm news, latest updates,”');
-    expect(catalog.assessor).toContain('at the first post-web assessment, prefer a focused `search` directive with `surface: "news"` before `resolved`');
-    expect(catalog.assessor).toContain('Two usable web sources alone do not satisfy that intent.');
-    expect(catalog.assessor).not.toContain("surface.news");
+    expect(catalog.assessor).toContain("group sources supporting the same material claim into one observation");
+    expect(catalog.assessor).toContain("Keep distinct obligations and contradictory or qualifying accounts separate");
+    expect(catalog.assessor).toContain('Omit `surface`; assessor searches use web discovery only.');
+    expect(catalog.assessor).toContain("two usable sources alone do not establish freshness");
+    expect(catalog.assessor).not.toContain('surface: "news"');
     expect(catalog.assessor).not.toContain("at least four materially independent sources overall");
     expect(catalog.synthesizer).toBe(await readFile(new URL("../SYNTHESIZER.md", import.meta.url), "utf8"));
     expect(catalog.synthesizer).toContain("**`initial`** — begin exactly with `According to my research`");

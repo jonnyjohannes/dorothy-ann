@@ -52,7 +52,6 @@ const assessmentOutputSchema = {
           additionalProperties: false,
           properties: {
             kind: { const: "search" },
-            surface: { type: "string", enum: ["web", "news"] },
             query: boundedString(500),
             purpose: boundedString(240),
             successCriterion: boundedString(500),
@@ -478,12 +477,12 @@ function parseResolved(value: Record<string, unknown>, allowedSupportRefs: Resea
 
 function parseSearch(value: Record<string, unknown>, problem: ResearchAssessmentInput["problem"]): ResearchAssessmentProposal | undefined {
   const query = value.query ?? value.search;
-  if (!bounded(query, 500) || (value.surface !== undefined && value.surface !== "web" && value.surface !== "news")) return undefined;
+  if (!bounded(query, 500) || (value.surface !== undefined && value.surface !== "web")) return undefined;
   const purpose = bounded(value.purpose, 240) ? value.purpose : problem.purpose;
   const proposedCriterion = value.successCriterion ?? value.success_criterion;
   const successCriterion = bounded(proposedCriterion, 500) ? proposedCriterion : problem.successCriterion;
   const priority = parsePriority(value.priority) ?? 1;
-  return { directive: { kind: "search", ...(value.surface ? { surface: value.surface as "web" | "news" } : {}), query, purpose, successCriterion, priority } };
+  return { directive: { kind: "search", ...(value.surface ? { surface: "web" as const } : {}), query, purpose, successCriterion, priority } };
 }
 
 function parseDecompose(value: Record<string, unknown>): ResearchAssessmentProposal | undefined {

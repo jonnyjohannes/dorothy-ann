@@ -107,7 +107,7 @@ describe("ResearchResolver", () => {
     expect(turnV3Schema.safeParse(execution.turn).success).toBe(true);
   });
 
-  it("searches web first, then optionally news with the same query and shared evidence budget", async () => {
+  it("searches web first, then uses a focused web query with the same evidence budget", async () => {
     const input = await makeInput();
     const [a, b] = await Promise.all(["a", "b"].map(async (name) => {
       const url = `https://example.com/${name}`;
@@ -119,24 +119,24 @@ describe("ResearchResolver", () => {
     const resolver = new ResearchResolver({
       identities, assessor: new ResearchAssessor(identities),
       assess: async (): Promise<ResearchAssessmentProposal> => ++assessments === 1
-        ? { directive: { kind: "search", surface: "news", query: "Question?", purpose: "Find timely accounts", successCriterion: "Supported answer", priority: 1 } }
+        ? { directive: { kind: "search", query: "follow-up reports", purpose: "Find timely accounts", successCriterion: "Supported answer", priority: 1 } }
         : { directive: { kind: "resolved", observations: [{ proposition: "Accounts", statement: "Two extracted accounts agree.", stance: "supports", support: [{ type: "source", sourceId: b.sourceId }] }] } },
       acquirer: new EvidenceAcquirer({
-        search: { search: async (_query, options) => { surfaces.push(options.resultKind ?? "web"); return options.resultKind === "news" ? [a, b] : [a]; } },
+        search: { search: async (query, options) => { surfaces.push(options.resultKind ?? "web"); return query === "follow-up reports" ? [a, b] : [a]; } },
         extractor: { extract: async (candidate) => { extracted.push(candidate.url); return { sourceId: candidate.sourceId, status: "viable", page: { sourceId: candidate.sourceId, canonicalUrl: candidate.canonicalUrl, text: "Extracted article text.", extractedAt: "2026-01-01T00:00:00.000Z" as never, characterCount: 23 } }; } },
       }),
     });
     const result = await resolver.resolve(input);
-    expect(surfaces).toEqual(["web", "news"]);
+    expect(surfaces).toEqual(["web", "web"]);
     expect(extracted).toEqual([a.url, b.url]);
     expect(result.kind).toBe("resolution");
     if (result.kind !== "resolution") return;
-    expect(result.resolution).toMatchObject({ status: "sufficient", ledger: { searchesUsed: 2, sourcesConsumed: 2 }, tasks: [{ query: "Question?" }, { query: "question?", surface: "news", evidence: [{ sourceId: a.sourceId, rank: 1 }, { sourceId: b.sourceId, rank: 2 }] }] });
+    expect(result.resolution).toMatchObject({ status: "sufficient", ledger: { searchesUsed: 2, sourcesConsumed: 2 }, tasks: [{ query: "Question?" }, { query: "follow-up reports", evidence: [{ sourceId: a.sourceId, rank: 1 }, { sourceId: b.sourceId, rank: 2 }] }] });
     const parsed = researchResolutionV3Schema.safeParse(result.resolution);
     if (!parsed.success) throw new Error(JSON.stringify(parsed.error.issues));
   });
 
-  it("records reused viable news hits but not failed article candidates", async () => {
+  it("records reused viable web hits but not failed article candidates", async () => {
     const input = await makeInput();
     const url = "https://example.com/reused";
     const article = { kind: "link" as const, sourceId: await identities.sourceId(url), rank: 1, title: "Report", url, canonicalUrl: url, displayUrl: "example.com" };
@@ -144,9 +144,9 @@ describe("ResearchResolver", () => {
     let calls = 0;
     const resolver = new ResearchResolver({
       identities, assessor: new ResearchAssessor(identities),
-      assess: async (): Promise<ResearchAssessmentProposal> => ({ directive: { kind: "search", surface: "news", query: "Question?", purpose: "Check reporting", successCriterion: "Supported answer", priority: 1 } }),
+      assess: async (): Promise<ResearchAssessmentProposal> => ({ directive: { kind: "search", query: "follow-up reports", purpose: "Check reporting", successCriterion: "Supported answer", priority: 1 } }),
       acquirer: new EvidenceAcquirer({
-        search: { search: async (_query, options) => { calls++; return options.resultKind === "news" ? [article, { ...article, sourceId: await identities.sourceId("https://example.com/failed"), rank: 2, url: "https://example.com/failed", canonicalUrl: "https://example.com/failed" }] : [article]; } },
+        search: { search: async (query) => { calls++; return query === "follow-up reports" ? [article, { ...article, sourceId: await identities.sourceId("https://example.com/failed"), rank: 2, url: "https://example.com/failed", canonicalUrl: "https://example.com/failed" }] : [article]; } },
         extractor: { extract: async (candidate) => { extractions++; return candidate.sourceId === article.sourceId
           ? { sourceId: candidate.sourceId, status: "viable", page: { sourceId: candidate.sourceId, canonicalUrl: candidate.canonicalUrl, text: "Valid extracted article.", extractedAt: "2026-01-01T00:00:00.000Z" as never, characterCount: 24 } }
           : { sourceId: candidate.sourceId, status: "failed", code: "fetch_failed", retryable: true }; } },
@@ -157,11 +157,11 @@ describe("ResearchResolver", () => {
     if (result.kind !== "resolution") return;
     expect(calls).toBe(2);
     expect(extractions).toBe(2);
-    expect(result.resolution.tasks[1]).toMatchObject({ surface: "news", status: "partial", evidence: [{ sourceId: article.sourceId, rank: 1 }] });
+    expect(result.resolution.tasks[1]).toMatchObject({ query: "follow-up reports", status: "partial", evidence: [{ sourceId: article.sourceId, rank: 1 }] });
     expect(result.resolution.status).not.toBe("sufficient");
   });
 
-  it("marks previously admitted context evidence found by news without refetching it", async () => {
+  it("marks previously admitted context evidence found by another web search without refetching it", async () => {
     const input = await makeInput();
     const url = "https://example.com/previous";
     const sourceId = await identities.sourceId(url);
@@ -169,15 +169,15 @@ describe("ResearchResolver", () => {
     const surfaces: string[] = [];
     let extractions = 0;
     const resolver = new ResearchResolver({ identities, assessor: new ResearchAssessor(identities),
-      assess: async (): Promise<ResearchAssessmentProposal> => ({ directive: { kind: "search", surface: "news", query: "follow-up", purpose: "Check reporting", successCriterion: "Supported", priority: 1 } }),
-      acquirer: new EvidenceAcquirer({ search: { search: async (_query, options) => { surfaces.push(options.resultKind ?? "web"); return options.resultKind === "news" ? [{ kind: "link", sourceId, rank: 1, title: "Earlier article", url, canonicalUrl: url, displayUrl: "example.com" }] : []; } }, extractor: { extract: async () => { extractions++; throw new Error("should not extract"); } } }),
+      assess: async (): Promise<ResearchAssessmentProposal> => ({ directive: { kind: "search", query: "follow-up", purpose: "Check reporting", successCriterion: "Supported", priority: 1 } }),
+      acquirer: new EvidenceAcquirer({ search: { search: async (_query, options) => { surfaces.push(options.resultKind ?? "web"); return _query === "follow-up" ? [{ kind: "link", sourceId, rank: 1, title: "Earlier article", url, canonicalUrl: url, displayUrl: "example.com" }] : []; } }, extractor: { extract: async () => { extractions++; throw new Error("should not extract"); } } }),
     });
     const result = await resolver.resolve(input);
-    expect(surfaces).toEqual(["web", "news"]);
+    expect(surfaces).toEqual(["web", "web"]);
     expect(extractions).toBe(0);
     expect(result.kind).toBe("resolution");
     if (result.kind !== "resolution") return;
-    expect(result.resolution.tasks[1]).toMatchObject({ surface: "news", evidence: [{ sourceId, rank: 1 }] });
+    expect(result.resolution.tasks[1]).toMatchObject({ query: "follow-up", evidence: [{ sourceId, rank: 1 }] });
   });
 
   it("lets a one-source child resolve, then gates only the joined root before one synthesis", async () => {

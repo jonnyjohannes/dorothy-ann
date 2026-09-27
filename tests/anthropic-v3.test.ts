@@ -224,11 +224,14 @@ describe("AnthropicProvider v3", () => {
     expect(result.directive).toMatchObject({ kind: "search", query: "independent reporting", priority: 1 });
   });
 
-  it("accepts validated news selection but rejects unknown search surfaces", async () => {
-    const news = client([{ content: [{ type: "text", text: JSON.stringify({ directive: { kind: "search", surface: "news", query: "latest", purpose: "report", successCriterion: "supported", priority: 1 } }) }] }]);
-    await expect(new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: news }).assessResearch(baseAssessment)).resolves.toMatchObject({ directive: { kind: "search", surface: "news" } });
-    const invalid = client([{ content: [{ type: "text", text: JSON.stringify({ directive: { kind: "search", surface: "images", query: "latest" } }) }] }]);
-    await expect(new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: invalid }).assessResearch(baseAssessment)).rejects.toMatchObject({ code: "assessment_invalid_response", reason: "invalid_search_query" });
+  it("offers web-only search to the model and rejects news or unknown surfaces from untrusted responses", async () => {
+    const web = client([{ content: [{ type: "text", text: JSON.stringify({ directive: { kind: "search", surface: "web", query: "latest", purpose: "report", successCriterion: "supported", priority: 1 } }) }] }]);
+    await expect(new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: web }).assessResearch(baseAssessment)).resolves.toMatchObject({ directive: { kind: "search", surface: "web" } });
+    expect(JSON.stringify(web.requests[0].output_config)).not.toContain('"news"');
+    for (const surface of ["news", "images"]) {
+      const invalid = client(Array.from({ length: 2 }, () => ({ content: [{ type: "text", text: JSON.stringify({ directive: { kind: "search", surface, query: "latest", purpose: "report", successCriterion: "supported", priority: 1 } }) }] })));
+      await expect(new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: invalid }).assessResearch(baseAssessment)).rejects.toMatchObject({ code: "assessment_invalid_response", reason: "invalid_search_query" });
+    }
   });
 
   it("fills trusted search metadata when unstructured output supplies only a query", async () => {
