@@ -118,66 +118,6 @@ test("a disconnected fixture stream clears its provisional text without a saved 
   await expect(page.getByText("This is a bounded fixture answer grounded in the available evidence.")).toHaveCount(0);
 });
 
-test("native scroll surfaces gain accessible square accent indicators on desktop and mobile", async ({ page }) => {
-  await page.goto("/");
-  await page.evaluate(() => {
-    const pageContent = document.createElement("div");
-    pageContent.style.height = "200vh";
-    document.body.append(pageContent);
-    const threadList = document.createElement("ul");
-    threadList.style.cssText = "height: 100px; overflow: auto";
-    threadList.innerHTML = Array.from({ length: 30 }, (_, index) => `<li>Thread ${index}</li>`).join("");
-    const threadContainer = document.createElement("div");
-    threadContainer.className = "threadPicker";
-    threadContainer.append(threadList);
-    document.body.append(threadContainer);
-    const menu = document.createElement("div");
-    menu.className = "ui-listbox-menu";
-    menu.setAttribute("role", "listbox");
-    menu.setAttribute("aria-label", "Test choices");
-    menu.style.cssText = "height: 100px; overflow: auto";
-    menu.innerHTML = Array.from({ length: 30 }, (_, index) => `<div>Choice ${index}</div>`).join("");
-    document.body.append(menu);
-    const markdown = document.createElement("div");
-    markdown.className = "ui-markdown";
-    const code = document.createElement("pre");
-    code.style.cssText = "width: 240px; height: 5rem";
-    code.textContent = "x".repeat(2000);
-    markdown.append(code);
-    document.body.append(markdown);
-  });
-  const scrollbar = page.getByRole("scrollbar", { name: "Code horizontal scroll position" });
-  await expect(scrollbar).toBeVisible();
-  await expect(page.getByRole("scrollbar", { name: "Saved threads scroll position" })).toBeVisible();
-  await expect(page.getByRole("scrollbar", { name: "Test choices scroll position" })).toBeVisible();
-  await expect(page.getByRole("scrollbar", { name: "Page scroll position" })).toBeVisible();
-  await expect(scrollbar).toHaveAttribute("aria-controls");
-  await expect(scrollbar).toHaveAttribute("aria-valuemax", /[1-9]/);
-  const geometry = await scrollbar.evaluate((element) => ({
-    radius: getComputedStyle(element.firstElementChild!).borderRadius,
-    accent: getComputedStyle(element.firstElementChild!).backgroundColor,
-    nativeHidden: getComputedStyle(document.querySelector("pre")!).scrollbarWidth,
-  }));
-  expect(geometry.radius).toBe("0px");
-  const activeAccent = await page.evaluate(() => { const probe = document.createElement("div"); probe.style.color = "var(--accent)"; document.body.append(probe); const color = getComputedStyle(probe).color; probe.remove(); return color; });
-  expect(geometry.accent).toBe(activeAccent);
-  expect(geometry.nativeHidden).toBe("none");
-  await scrollbar.focus();
-  await page.keyboard.press("End");
-  await expect(scrollbar).toHaveAttribute("aria-valuenow", /[1-9]/);
-  const code = page.locator("pre");
-  await expect.poll(() => code.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
-  if (test.info().project.name === "chromium") {
-    const endPosition = await code.evaluate((element) => element.scrollLeft);
-    await code.scrollIntoViewIfNeeded();
-    const thumb = scrollbar.locator("div");
-    const thumbBounds = await thumb.boundingBox();
-    expect(thumbBounds).not.toBeNull();
-    await thumb.dragTo(thumb, { sourcePosition: { x: Math.max(1, thumbBounds!.width - 2), y: thumbBounds!.height / 2 }, targetPosition: { x: Math.max(1, thumbBounds!.width - 37), y: thumbBounds!.height / 2 } });
-    await expect.poll(() => code.evaluate((element) => element.scrollLeft)).toBeLessThan(endPosition);
-  }
-});
-
 test("home has no serious accessibility violations", async ({ page }) => {
   await page.goto("/");
   const results = await new AxeBuilder({ page }).analyze();

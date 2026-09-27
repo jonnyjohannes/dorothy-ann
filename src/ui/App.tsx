@@ -8,7 +8,6 @@ import { UnlockRoute } from "./routes/UnlockRoute";
 import { SystemStatusBox } from "./boxes/SystemStatusBox";
 import { primaryAccentSlot, readColorScheme, readPrimaryAccent } from "./color-scheme";
 import { threadSelectorReturnTo, threadSelectorState } from "./navigation-state";
-import { ScrollIndicators } from "./ScrollIndicators";
 
 function applyTheme(theme: string) {
   const prefersDark = typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -89,7 +88,7 @@ function AuthGate({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 export function App() {
-  return <><ThemeBootstrap /><ScrollIndicators /><AuthGate><GlobalShortcuts /><Routes>
+  return <><ThemeBootstrap /><AuthGate><GlobalShortcuts /><Routes>
     <Route path="/unlock" element={<UnlockRoute />} />
     <Route path="/settings" element={<SettingsRoute />} />
     <Route path="/threads" element={<ThreadsRoute />} />

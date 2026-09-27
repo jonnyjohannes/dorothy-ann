@@ -107,51 +107,6 @@
 * {
   box-sizing: border-box;
 }
-.has-custom-scroll-indicator {
-  scrollbar-width: none !important;
-}
-.has-custom-scroll-indicator::-webkit-scrollbar {
-  display: none;
-}
-.app-scroll-indicator {
-  --scroll-track-width: 0.4rem;
-  position: fixed;
-  z-index: 20;
-  display: block;
-  background: transparent;
-  touch-action: none;
-  outline-offset: 2px;
-}
-.app-scroll-indicator:focus-visible {
-  outline: 2px solid var(--accent);
-}
-.app-scroll-indicator > div {
-  position: absolute;
-  display: block;
-  background: var(--accent);
-}
-.app-scroll-indicator--vertical {
-  top: var(--scroll-track-start);
-  right: var(--scroll-track-edge);
-  width: var(--scroll-track-width);
-  height: var(--scroll-track-size);
-}
-.app-scroll-indicator--vertical > div {
-  top: var(--scroll-thumb-start);
-  width: 100%;
-  height: var(--scroll-thumb-size);
-}
-.app-scroll-indicator--horizontal {
-  left: var(--scroll-track-start);
-  bottom: var(--scroll-track-edge);
-  width: var(--scroll-track-size);
-  height: var(--scroll-track-width);
-}
-.app-scroll-indicator--horizontal > div {
-  left: var(--scroll-thumb-start);
-  width: var(--scroll-thumb-size);
-  height: 100%;
-}
 body {
   margin: 0;
   min-width: 320px;
