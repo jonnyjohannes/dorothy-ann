@@ -9,7 +9,7 @@
 - Last updated: 2026-09-27
 - Current focus: implementation and fixture verification complete; the validated terminal alone is durable.
 - Next action: any production smoke, operational measurement or Vercel-side change requires a separate per-command operator approval. No deployment was performed.
-- Branch / PR / session: `release/v1.2.1` / none; implementation commits `76fdee2`, `bd1b0bb`, `b543b9b`, `677a7b7` (no tag). Independent first-assessment-cap trial: `395b9ff`.
+- Branch / PR / session: `release/v1.2.1` / none; implementation through `61f2017` (no tag). Independent first-assessment-cap trial: `395b9ff`.
 
 ## Abstract
 
@@ -60,7 +60,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` verified, `[!]` blocked.
 
 ## Handoff
 
-- Shipped locally through `677a7b7`, without deployment or release tag. Provider text observation, SSE budgeting/backpressure, active-only plain-text preview and terminal cleanup are implemented and covered.
+- Implemented locally through `61f2017`, without deployment or release tag. Provider text observation, SSE budgeting/backpressure, active-only plain-text preview and terminal cleanup are implemented and covered.
 - A deferred fixture separates provider first yield from completion by 750ms. Deferred boundary reads first `answer_delta` before release; Playwright observes the preview before terminal in Chromium and mobile WebKit. No synchronized first-yield/server-write/browser-paint time measurements were captured, so fixture ordering is the evidence, not a latency estimate.
 - Operator-controlled production smoke, SDK abort behavior under a live provider, intermediary flush timing and any deployment remain external follow-up with fresh approval per command.
 
