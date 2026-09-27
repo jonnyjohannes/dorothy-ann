@@ -2,14 +2,16 @@
 
 ## Current State
 
-- Status: implementing
+- Status: done
 - Verification: P1 focused tests (44), P2 timing/app tests (16), lint/typecheck, 337 tests, build, bundle privacy scan and diff check passed; browser suite blocked by reused non-fixture local server (2/8 passed)
 - Owner: Jonny
 - Executor: MUSCLE worker on `release/v1.2.1`
+- Shipping commit: `3707388` (diagnostics implementation and runbook); tag: none
 - Last updated: 2026-09-27
-- Current focus: deploy the smallest selected-source failure classification and document how to use the assessment telemetry already in production.
-- Next action: complete orientation/archive bookkeeping. Operator Vercel smoke follows deployment and is not a prerequisite to coding.
+- Current focus: implementation and documentation complete; production deployment and operator validation remain external.
+- Next action: Jonny verifies Vercel Request ID grouping and fresh sparse/slow turns after deployment; retry fixture e2e on an isolated local port when available. No remediation is authorized.
 - Branch / PR / session: `release/v1.2.1` / none
+- Local verification: 44 focused tests, 16 timing/app tests, 337 full tests, lint, typecheck, build, client bundle privacy scan and diff check passed. Browser e2e 2/8 passed; 6 prompt tests blocked by reused non-fixture local server (Unlock screen).
 
 ## Abstract
 

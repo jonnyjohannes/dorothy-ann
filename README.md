@@ -91,7 +91,7 @@ The `research_timing` record includes per-request selected/viable/empty/failure 
 
 ## documentation
 
-- [Research failure diagnostics](docs/plans/research-failure-diagnostics.md) — selected-source failure classifications, existing assessment latency triage and Vercel lookup; remediation awaits evidence and separate approval.
+- [Research failure diagnostics](docs/plans/archive/research-failure-diagnostics.md) — selected-source failure classifications, existing assessment latency triage and Vercel lookup; remediation awaits evidence and separate approval.
 - [v1.2.1 long-context recovery](docs/plans/archive/dorothy-ann-v1.2.1-long-context-recovery.md) — the rejected `research_state` schema-bound bug is fixed; broader retry UX and v1.2.1 release bookkeeping were deferred
 - [Two-source synthesis and evidence-yield plan](docs/plans/archive/dorothy-ann-two-source-synthesis.md) — shipped root synthesis gate, charged backfill, and logging standardization; extraction-yield recovery remains a separate open concern
 - [Release hygiene plan](docs/plans/archive/dorothy-ann-release-hygiene.md) — completed tags, version, documentation, and release-inventory reconciliation
