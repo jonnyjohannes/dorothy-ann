@@ -49,17 +49,18 @@ The app-wide accent scrollbar feature (`bc965d7`) and route-scroll/layout/swatch
 
 ## Verification and release gates
 
-Plan-level fixture and local verification is recorded in each linked plan; those separate results do not prove the cumulative candidate passed the complete suite. Candidate verification run in this session:
+Plan-level fixture and live-provider limits are recorded in each linked plan. Candidate verification after local remediation:
 
-- `npm ci` — passed; 513 packages audited, zero vulnerabilities.
+- `npm ci` — passed; 560 packages installed, zero vulnerabilities; reproducible Zod comment patch applied.
+- `npm run lint` — passed.
 - `npm run typecheck` — passed.
-- `npm run lint` — failed on four ESLint errors in `server/runtime/extraction-log.ts`, `src/application/research-resolver.ts`, and `src/domain/thread-context.ts`.
-- `npm test` — 360 passed, 2 failed: Node version assertion expects 22.x rather than 24.x; jsdom computed-color assertion expects hex but receives equivalent RGB.
-- `npm run build` — passed with Zod/Rollup annotation warnings and oversized HLS/DASH chunk warnings.
+- `npm test` — 362 passed.
+- `npm run build` — passed; Zod/Rollup false annotation warnings are gone. ReactPlayer's provider-specific Mux (533.35 kB), HLS (591.58 kB), and DASH (858.98 kB) chunks remain dynamically loaded and trigger the >500 kB warning. The initial HTML preloads no such chunk; Jonny chose to retain playback and accept these provider-specific lazy-chunk warnings without raising the build threshold.
 - `CI=1 DOROTHY_E2E_VITE_PORT=5273 npm run test:e2e -- --workers=2` — 16 passed, 10 opt-in Analytics cases skipped.
-- `git diff --check` — passed before version metadata update; rerun before finalizing.
+- `npm audit` — zero vulnerabilities.
+- `git diff --check` — passed after release-gate documentation updates.
 
-The active [`vercel-build-node-runtime.md`](../plans/vercel-build-node-runtime.md) remains blocked: Vercel function build behavior was unverified because project setup was unavailable, and residual build warnings/test blockers remain. Resolve the release-gate decision before merge/tag/deploy. Live Brave behavior and live provider timing are not claimed. No deployment authorization is granted by this file.
+PR #15's Vercel Preview passed on prior remote candidate `ed1526f`; these local fixes need a fresh Preview run. The active [`vercel-build-node-runtime.md`](../plans/vercel-build-node-runtime.md) records the accepted provider-chunk warnings and Production command gate. Live Brave behavior and live provider timing are not claimed. No Production deployment authorization is granted by this file.
 
 ## Release identity
 

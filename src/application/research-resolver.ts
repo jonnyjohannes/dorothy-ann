@@ -368,12 +368,12 @@ export class ResearchResolver {
     try {
       proposal = await this.dependencies.assess(request);
     } catch (error) {
-      if (isUnavailable(error)) throw new Error("provider_unavailable");
+      if (isUnavailable(error)) throw new Error("provider_unavailable", { cause: error });
       throw error;
     }
     const validationStarted = performance.now();
     let directive: "resolved" | "search" | "decompose" | "invalid" = "invalid";
-    let validationMs = 0;
+    let validationMs: number;
     let assessment: ResearchAssessment;
     try {
       assessment = await this.dependencies.assessor.assess({

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import ReactPlayer from "react-player";
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { canPlay as playerPatterns } from "react-player/patterns";
 import type { SourceId, SourceRecord } from "../../domain/types";
 import { sourceAccentSlotForIndex } from "../color-scheme";
 import styles from "../App.module.css";
@@ -35,6 +35,8 @@ function LinkedMediaThumbnail({ href, label, thumbnailUrl }: LinkedMediaThumbnai
   return <a className={styles.mediaAttachment} href={href} target="_blank" rel="noreferrer" aria-label={label}><img className={styles.mediaThumbnail} src={thumbnailUrl} alt="" loading="lazy" /></a>;
 }
 
+const LazyReactPlayer = lazy(() => import("react-player"));
+
 interface VideoMediaProps extends LinkedMediaThumbnailProps {
   videoUrl: string;
 }
@@ -67,13 +69,15 @@ function useViewportEntry(enabled: boolean) {
 
 function VideoMedia({ href, label, thumbnailUrl, videoUrl }: VideoMediaProps) {
   const [playbackFailed, setPlaybackFailed] = useState(false);
-  const canPlay = ReactPlayer.canPlay?.(videoUrl) === true;
+  const canPlay = videoUrl.length > 0 && Object.values(playerPatterns).some((matches) => matches(videoUrl));
   const { boundaryRef, hasEnteredViewport } = useViewportEntry(canPlay && !playbackFailed);
   const showPlayer = canPlay && hasEnteredViewport && !playbackFailed;
 
+  const fallback = <a className={styles.mediaFallbackLink} href={href} target="_blank" rel="noreferrer" aria-label={label}><img className={styles.mediaThumbnail} src={thumbnailUrl} alt="" loading="lazy" /></a>;
+
   return <div ref={boundaryRef} className={styles.mediaAttachment}>
     {showPlayer
-      ? <ReactPlayer
+      ? <Suspense fallback={fallback}><LazyReactPlayer
           src={videoUrl}
           playing={false}
           controls
@@ -81,8 +85,8 @@ function VideoMedia({ href, label, thumbnailUrl, videoUrl }: VideoMediaProps) {
           width="100%"
           height="100%"
           onError={() => setPlaybackFailed(true)}
-        />
-      : <a className={styles.mediaFallbackLink} href={href} target="_blank" rel="noreferrer" aria-label={label}><img className={styles.mediaThumbnail} src={thumbnailUrl} alt="" loading="lazy" /></a>}
+        /></Suspense>
+      : fallback}
   </div>;
 }
 

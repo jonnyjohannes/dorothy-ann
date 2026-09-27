@@ -2,13 +2,13 @@
 
 ## Current State
 
-- Status: blocked
-- Verification: Node 24.17.0 clean install, strict typecheck, app build, e2e smoke, and npm audit completed; full lint/unit suite and Vercel build are blocked by the findings below
+- Status: implementing
+- Verification: Node 24.17.0 `npm ci`, lint, typecheck, 362 tests, build, 16 isolated fixture e2e tests (10 optional Analytics skips), and `npm audit` pass after local fixes. Build still warns for three provider-specific dynamic media chunks; PR #15's earlier Preview passed at `ed1526f`.
 - Owner: Jonny
 - Executor: implementation worker on `release/v1.2.1`
-- Last updated: 2026-06-18
-- Current focus: P3 cannot meet the warning-free contract without an owner-approved resolution for upstream Zod/Rollup annotation and ReactPlayer HLS/DASH chunk warnings; P4 is consequently incomplete
-- Next action: obtain Jonny's direction on accepting/remediating the residual build warnings. No deployment; P5 remains separately gated on exact-command approval
+- Last updated: 2026-09-27
+- Current focus: Jonny chose to retain Mux/HLS/DASH playback and accept their provider-specific lazy-chunk size warnings; no warning thresholds are suppressed. Local fixes are ready for a fresh PR Preview.
+- Next action: commit and push the verified candidate to PR #15, confirm the updated Preview, then prepare release/merge steps. Production deployment remains separately gated on exact-command approval.
 
 ## Abstract
 
@@ -30,22 +30,22 @@ The browser app and Vercel API function are built in separate steps. The log's f
 
 Status: `[ ]` not started, `[~]` in progress, `[x]` verified, `[!]` blocked.
 
-- [~] P1 — align root compiler settings with the strict project configs used by local checks.
+- [x] P1 — align root compiler settings with the strict project configs used by local checks.
   - Deliverable: Vercel function type analysis uses strict null checking, with no suppression or weakened check.
   - Verify: reproduce the reported Vercel function build locally; run `npm run typecheck`, `npm run build`, and `vercel build` and confirm all listed server/schema errors are gone.
-  - Evidence: root `strict: true` preserves project references; Node 24.17.0 `npm run typecheck` and `npm run build` pass with no TS diagnostics. Vercel CLI returns `project_settings_required`; supervisor explicitly prohibited pulling/linking/inspecting remote project settings for this slice, so the function build and its prior TS diagnostics remain unverified.
+  - Evidence: root `strict: true` preserves project references; Node 24.17.0 typecheck and build pass with no TS diagnostics. PR #15's Vercel Preview passed at `ed1526f` with this strict root configuration, resolving the previous remote function-build failure on that candidate.
 - [~] P2 — select and align the Node runtime target across repository pins.
   - Deliverable: update both `package.json` `engines.node` and `mise.toml` `[tools].node` to Node 24.x; assess Node 24 compatibility for this app and its dependencies before changing them. Check for a Vercel project-level runtime override and do not change Vercel-side settings without separate explicit approval.
   - Verify: `mise` selects Node 24, `package.json` declares the matching supported range, and local Vercel build output resolves to Node 24; run applicable repository checks under that runtime.
-  - Evidence: both repository pins now declare Node 24; `mise exec node@24.17.0` selected v24.17.0. Clean `npm ci`, app build, and e2e smoke ran there. Vercel runtime override and build-output selection are unverified because remote project settings may not be inspected in this slice.
-- [!] P3 — remove the warnings and dependency notices shown in the supplied build log.
-  - Deliverable: resolve the Zod/Rollup PURE annotation warnings, oversized HLS/DASH chunks, deprecated package notices, and two moderate npm audit findings through compatible fixes; do not hide warnings by raising thresholds, suppressing diagnostics, or using breaking `npm audit fix --force`. If a warning cannot be removed safely, stop and get a decision.
-  - Verify: clean install and build output contain no corresponding warnings; `npm audit` has no findings (or stop if safe remediation is unavailable); tests cover any changed loading behavior.
-  - Evidence: clean Node 24.17.0 `npm ci` has no deprecation notices and `npm audit` reports zero findings after the listed-only dev-tool updates. Build still reports Zod 4.6.5/Rollup PURE-comment placement warnings at `node_modules/zod/v4/core/regexes.js` and `core/util.js`, plus HLS 591.58 kB and DASH 859.00 kB chunks (>500 kB) from `react-player`. Per supervisor direction, no warning suppression/threshold changes or provider-loading/availability changes were attempted; row blocked pending owner direction.
-- [!] P4 — run full local/repository verification under Node 24.x and Vercel's build pipeline.
-  - Deliverable: strict typecheck, app build, and Vercel function build all pass with clean logs.
-  - Verify: `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `npm run test:e2e`, `vercel build`, `npm audit`, and `git diff --check`; inspect final `git status`.
-  - Evidence: Node 24.17.0 `npm ci`, typecheck, app build, e2e (16 passed, 10 conditionally skipped), and audit passed, but lint fails four ESLint 10 diagnostics; unit tests have two failures (the Node-runtime assertion still expects 22.x, and an existing computed-color expectation differs under upgraded jsdom); `vercel build` is blocked by `project_settings_required` and remote setup is prohibited for this slice. Build also retains P3 warnings.
+  - Evidence: both repository pins declare Node 24; `mise exec node@24.17.0` selected v24.17.0. Clean install, app build, and e2e smoke ran there. PR Preview passed for the prior candidate; the explicit project runtime override has not been inspected.
+- [x] P3 — resolve reported warnings and dependency notices, recording the accepted lazy-media exception.
+  - Deliverable: remove Zod/Rollup false annotation warnings, deprecated package notices, and npm audit findings; retain HLS/DASH/Mux playback through lazy provider loading without suppressing size diagnostics. Record provider-chunk warnings as intentional and accepted.
+  - Verify: clean install has no deprecation notices; Zod warnings are absent; initial app chunks remain under 500 kB; provider chunks are dynamically loaded only for supported in-viewport video; `npm audit` is clean; tests cover loading/fallback behavior.
+  - Evidence: clean Node 24.17.0 `npm ci` has no deprecation notices and `npm audit` reports zero findings. A reproducible `patch-package` patch changes only two Zod explanatory comments that Rollup mistook for annotations; actual `@__PURE__` call annotations remain and both warning messages are gone. `EvidenceBox` now dynamically imports ReactPlayer only after a supported video card enters the viewport. Three >500 kB chunks remain: Mux (533.35 kB), HLS (591.58 kB), and DASH (858.98 kB); they are provider-specific dynamic chunks, not initial HTML modulepreloads. Jonny chose to retain these formats and accept the documented lazy-chunk warnings; no build warning thresholds were raised.
+- [~] P4 — run full local/repository verification under Node 24.x and the PR Preview pipeline.
+  - Deliverable: strict typecheck, app build, and Vercel Preview pass; the documented lazy-provider warnings are accepted.
+  - Verify: `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `npm run test:e2e`, `npm audit`, and `git diff --check`; then verify the current commit's Vercel Preview and inspect final `git status`.
+  - Evidence: `npm ci` (560 packages, zero vulnerabilities), lint, typecheck, all 362 unit tests, build, `npm audit`, and isolated fixture e2e (16 passed, 10 opt-in Analytics skips) pass after local fixes. `git diff --check` passes. Build has only the three conditional provider chunk warnings under P3. PR #15 Vercel Preview passed on previous remote candidate `ed1526f`; this local fix set needs a fresh Preview run.
 - [ ] P5 — deploy the verified build to Production.
   - Deliverable: the intended Dorothy Ann Production deployment is `READY` and serves the built app/API on its expected aliases.
   - Verify: first confirm exact Vercel project/environment and show the exact deployment command and expected effect; obtain Jonny's separate explicit approval for that command. Then inspect deployment status and perform a bounded read-only smoke check. No `vercel link` or other project mutation without its own explicit approval.
@@ -53,17 +53,17 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` verified, `[!]` blocked.
 
 ## Desired Outcome
 
-The app passes strict local typechecking and repository checks under Node 24.x; Vercel's local build completes without errors or the listed warnings; npm install/audit is clean; and the verified commit is deployed `READY` to the intended Production project/aliases after separate command-level approval.
+The app passes strict local typechecking and repository checks under Node 24.x; Vercel Preview passes for the release candidate; npm install/audit is clean; intentional lazy media-provider chunk warnings are documented and accepted; and the verified commit is deployed `READY` to the intended Production project/aliases after separate command-level approval.
 
 ## Current Reality
 
 - Deployment log targets `release/v1.2.1` at `d95923a`. Vite completes, then Vercel's later function build reports TS2339 union-narrowing errors in `src/server/thread-storage-routes.ts` and `src/server/turn-stream-boundary.ts`, and TS2322 Zod/schema output errors in `src/domain/schemas.ts`.
 - Implementation started from `release/v1.2.1` at `be477b4`, ahead of the specified `c0943c7` only by observability-plan commits; the source code baseline is unchanged. `tsconfig.json` now carries root `strict: true` while retaining app/server project references. `vercel.json` does not pin a framework or build command; `api/index.ts` imports the server/domain graph built after Vite.
-- Under Node v24.17.0, local typecheck succeeds, but `vercel build` returns `project_settings_required`. The supervisor prohibited pulling/linking/inspecting remote project settings in this slice, so function compiler behavior and any Vercel runtime override remain unverified.
-- Re-running TypeScript against `api/index.ts` with `strictNullChecks` disabled reproduces the same family of optional-property and discriminated-union errors in the log. This strongly indicates Vercel's function type analysis is using root compiler defaults rather than the referenced project configs. The likely correction is to make strictness explicit in the root config Vercel reads, then verify with `vercel build`; do not paper over the symptoms with casts or skipped checks.
+- Under Node v24.17.0, local typecheck and build succeed. PR #15's Vercel Preview passed at `ed1526f` for `jonnyjohannes-projects/dorothy-ann`; local fixes still need a fresh Preview result. No local Vercel link or Production deployment was performed.
+- Re-running TypeScript against `api/index.ts` with `strictNullChecks` disabled reproduced the prior optional-property and discriminated-union errors. Making root `strict: true` explicit resolved the issue in local checks and the previous PR Preview; no casts or skipped checks were introduced.
 - `package.json` and `mise.toml` now declare Node 24.x; checks ran on Node v24.17.0. Node 26 remains outside the plan scope.
-- Listed dependency updates removed npm install deprecation notices and the two moderate audit findings (`npm audit`: zero vulnerabilities). Build output still contains Zod PURE-annotation notices and oversized HLS/DASH chunks (details recorded under P3); these are not TypeScript failures.
-- A different active plan, `docs/plans/client-observability.md`, still has open P4/P5 items; this work does not change its Analytics/privacy scope.
+- Listed dependency updates removed npm install deprecation notices and the two moderate audit findings (`npm audit`: zero vulnerabilities). A reproducible Zod comment patch removes Rollup's false annotation warnings. App-entry chunks are below 500 kB; Mux, HLS, and DASH provider chunks remain above that threshold and load through ReactPlayer's dynamic provider imports. Jonny accepted retaining these formats and documenting the conditional chunk warnings under P3.
+- The active Analytics/log-navigation follow-up is separate and unchanged.
 
 ## Scope
 
@@ -127,19 +127,19 @@ Run `npm ci`, lint, typecheck, unit tests, build, e2e, `npm audit`, and `vercel 
 
 ### Not verified / external pending
 
-- Vercel function build/effective root compiler behavior and the project runtime override remain unverified. CLI `vercel build` requires project settings; remote setup/inspection is prohibited in this slice.
-- P3 warning-free build remains blocked on upstream Zod/Rollup annotation warnings and HLS/DASH chunk sizes. `npm audit` is clean and npm install deprecation notices are gone, but P3 is not complete.
-- Lint reports four errors under ESLint 10; unit tests have two failures (a Node pin assertion still expecting 22.x, and a computed-color assertion differs under upgraded jsdom). These are recorded without further source/UI edits after the block decision.
+- Vercel Preview completed successfully for prior candidate `ed1526f`, proving the remote build works with the strict root TypeScript configuration. The updated local fix set still needs a fresh Preview run; the project's explicit Node runtime override has not been inspected.
+- The Zod/Rollup false annotation warnings are fixed by a reproducible comment-only patch. Jonny accepted the three intentionally lazy provider chunks over 500 kB; their warning is documented without changing the build threshold.
+- Local lint, typecheck, and all 362 unit tests pass. The post-fix Vercel Preview result is pending until the candidate changes are pushed.
 - Production deployment remains pending a confirmed project/environment, exact command proposal, and separate command-level approval.
 
 ## Handoff
 
-P3 is blocked; do not change warning policy or video provider loading to force a clean build without Jonny's direction. P4 is incomplete and P5 untouched. Before Vercel project setup/build, obtain explicit target confirmation because `vercel build` requires project settings; do not run `vercel pull` or link state in this slice. No exact Production command or target is confirmed, so no deployment command should run.
+Local lint, typecheck, unit tests, build, audit, and fixture e2e pass; the intentional Mux/HLS/DASH lazy-chunk warnings are accepted and documented. Commit and push the candidate to PR #15, confirm the fresh Vercel Preview, and complete release review. Production is not deployed. Before any Production mutation, show the exact command, target project/environment (`jonnyjohannes-projects/dorothy-ann`, Production), and expected effect, and obtain separate explicit approval.
 
 ## Open Questions
 
-- Vercel project-level runtime override, if any, must be discovered during implementation; changing that setting requires separate explicit approval.
-- The exact Production project/command must be confirmed before the deployment step; command-level approval is mandatory and is not granted merely by this plan.
+- The explicit Vercel project Node runtime override remains uninspected; the previous PR Preview passed under the repository's Node 24 settings.
+- The exact Production deploy command and expected effect must be presented and separately approved before deployment.
 
 ## Sources
 

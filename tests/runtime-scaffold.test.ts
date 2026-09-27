@@ -10,7 +10,7 @@ describe("runtime scaffold", () => {
       dependencies: Record<string, string>;
     };
 
-    expect(packageJson.engines.node).toBe("22.x");
+    expect(packageJson.engines.node).toBe("24.x");
     expect(packageJson.dependencies.fzf).toBe("0.5.2");
   });
 

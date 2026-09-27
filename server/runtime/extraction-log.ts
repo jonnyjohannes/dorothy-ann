@@ -21,7 +21,7 @@ export function safeSourceLocation(value: string): { url: string; host: string }
     location.search = "";
     location.hash = "";
     if (location.pathname.length > 512 || location.pathname.split("/").some((segment) => {
-      let decoded = segment;
+      let decoded: string;
       try { decoded = decodeURIComponent(segment); } catch { return true; }
       return segment.length > 128 || /token|secret|password|session|api[_-]?key|bearer/i.test(decoded);
     })) location.pathname = "/[redacted]";
