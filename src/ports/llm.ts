@@ -72,6 +72,7 @@ export interface ResearchSynthesisInput {
   resolution: SufficientResearchResolution | BestEffortResearchResolution;
   allowedSourceIds: SourceId[];
   maxOutputTokens: number;
+  signal?: AbortSignal;
 }
 
 export interface LLMProvider {

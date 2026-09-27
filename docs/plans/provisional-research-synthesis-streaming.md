@@ -2,13 +2,13 @@
 
 ## Current State
 
-- Status: ready
-- Verification: not run (read-only reconnaissance and owner UX decision only)
+- Status: implementing
+- Verification: pending P1
 - Owner: Jonny
-- Executor: unassigned
+- Executor: worker (MUSCLE), sole writer on `release/v1.2.1`
 - Last updated: 2026-09-26
-- Current focus: plain-text provisional UX and implementation boundaries are settled; no streaming code exists yet.
-- Next action: await explicit implementation authorization; then claim the ledger on `release/v1.2.1` and begin P1. Readiness alone does not authorize streaming changes.
+- Current focus: implement P1 provider-neutral parsed text observation with unchanged terminal validation.
+- Next action: verify P1, then P2–P4 serially.
 - Branch / PR / session: `release/v1.2.1` / none; independent first-assessment-cap trial committed as `395b9ff`.
 
 ## Abstract
@@ -41,11 +41,11 @@ The provider owns model streaming and citation-marker parsing; the application o
 
 Status: `[ ]` not started, `[~]` in progress, `[x]` verified, `[!]` blocked.
 
-- [ ] P1 — Emit provisional text without weakening answer validation
+- [x] P1 — Emit provisional text without weakening answer validation
   - Deliverable: a provider-neutral async provisional-text callback/stream seam in `AnswerSynthesizer` invoked on parsed text parts as they arrive; preserve the one-call, two-source gate and full terminal validation, heading normalization, reachable-citation filtering, refusal/error behavior, and abort handling. Do not emit citation parts as draft links.
   - Verify: synthesizer fixtures for first yield before provider completion, split `[[cite:...]]` markers, leading heading across chunks, filtered citations, invalid/empty/refused output after a partial yield, and aborted iteration; no preliminary text in the returned terminal answer on failure.
-  - Evidence: —
-- [ ] P2 — Transport a bounded, backpressured draft
+  - Evidence: `npx vitest run tests/turn-executors-v3.test.ts tests/anthropic-v3.test.ts` (37 pass), `npm run typecheck` pass; deferred/heading/failure/abort fixtures.
+- [~] P2 — Transport a bounded, backpressured draft
   - Deliverable: `server/app.ts` forwards provisional text during synthesis through the existing typed `answer_delta` signal. Apply the per-turn preview policy (at most 64,000 JS code units total and 256 draft frames; each delta within the current 64,000-code-unit event limit), coalescing later tiny parts without delaying the *first* available safe text. Stop sending draft deltas at the budget without truncating or changing the final validated answer. Await writes; propagate disconnect cancellation to the provider synthesis request where supported. Do not emit duplicate final-answer deltas or leak draft text into logs.
   - Verify: stream-boundary/app tests using a deferred provider show an `answer_delta` **before** provider completion and terminal; final terminal still authoritative; many tiny/large parts, overflow, slow writer, disconnect and provider refusal never create an invalid frame, extra provider call or durable provisional answer. Assert bounded aggregate metadata only.
   - Evidence: —

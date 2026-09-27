@@ -250,9 +250,10 @@ export class AnthropicProvider implements LLMProvider {
         system: input.systemPrompt,
         messages: [{ role: "user", content: synthesisEnvelope(input) }],
         stream: true,
-      });
+      }, input.signal);
       if (!isStream(response)) throw new AnthropicProviderError("synthesis_invalid_response", true);
       for await (const event of response) {
+        if (input.signal?.aborted) throw new AnthropicProviderError("provider_interrupted", true);
         const text = event.type === "content_block_delta" && event.delta?.type === "text_delta"
           ? event.delta.text
           : event.type === "content_block_start" && event.content_block?.type === "text"
@@ -264,6 +265,7 @@ export class AnthropicProvider implements LLMProvider {
           yield part;
         }
       }
+      if (input.signal?.aborted) throw new AnthropicProviderError("provider_interrupted", true);
       for (const part of parser.finish()) {
         emitted = true;
         yield part;

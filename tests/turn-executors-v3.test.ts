@@ -50,6 +50,44 @@ function provider(parts: AssistantContent["parts"]): LLMProvider {
 function fixedClock() { return "2026-01-01T00:00:01.000Z" as IsoTimestamp; }
 
 describe("v3 answer and turn executors", () => {
+  it("observes parsed text before provider completion but returns only a validated terminal", async () => {
+    let release!: () => void;
+    const waiting = new Promise<void>((resolve) => { release = resolve; });
+    let observed!: () => void;
+    const first = new Promise<void>((resolve) => { observed = resolve; });
+    const draft: string[] = [];
+    const llm: LLMProvider = { assessResearch: async () => { throw new Error("unused"); }, async *synthesizeResearch() {
+      yield { type: "text", markdown: "First " }; await waiting;
+      yield { type: "citation", sourceId: source.sourceId };
+      yield { type: "text", markdown: "last." };
+    } };
+    const result = new AnswerSynthesizer(llm, "system").synthesize({ question: "What happened?", answerPosition: "initial", context, resolution, onProvisionalText: (text) => { draft.push(text); observed(); } });
+    await first;
+    expect(draft).toEqual(["First "]);
+    release();
+    expect((await result).parts).toEqual([{ type: "text", markdown: "First " }, { type: "citation", sourceId: source.sourceId }, { type: "text", markdown: "last." }]);
+    expect(draft).toEqual(["First ", "last."]);
+  });
+
+  it("holds a split heading until it can demote it; partial failure and abort never return an answer", async () => {
+    const drafts: string[] = [];
+    const heading = provider([{ type: "text", markdown: "#" }, { type: "text", markdown: " Opening" }, { type: "text", markdown: "\nBody" }, { type: "citation", sourceId: id("src_unreachable") }]);
+    const answer = await new AnswerSynthesizer(heading, "system").synthesize({ question: "What happened?", answerPosition: "initial", context, resolution, onProvisionalText: (text) => { drafts.push(text); } });
+    expect(drafts).toEqual(["Opening\nBody"]);
+    expect(answer.parts).toEqual([{ type: "text", markdown: "Opening\nBody" }]);
+    for (const end of ["invalid", "refused", "aborted"] as const) {
+      const abort = new AbortController();
+      const seen: string[] = [];
+      const llm: LLMProvider = { assessResearch: async () => { throw new Error("unused"); }, async *synthesizeResearch() {
+        yield { type: "text", markdown: "Partial" };
+        if (end === "refused") throw Object.assign(new Error("refused"), { code: "refused" });
+        if (end === "aborted") abort.abort();
+        else yield { type: "text", markdown: "x".repeat(64_001) };
+      } };
+      await expect(new AnswerSynthesizer(llm, "system").synthesize({ question: "What happened?", answerPosition: "initial", context, resolution, signal: abort.signal, onProvisionalText: (text) => { seen.push(text); } })).rejects.toMatchObject({ code: end === "refused" ? "refused" : end === "aborted" ? "unavailable" : "invalid_output" });
+      expect(seen[0]).toBe("Partial");
+    }
+  });
   it("demotes only a violating opening heading and drops unreachable citations", async () => {
     const answer = await new AnswerSynthesizer(provider([
       { type: "text", markdown: "# Opening\n\nInternal ## heading" },

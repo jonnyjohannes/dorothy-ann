@@ -43,7 +43,8 @@ export interface ResearchTurnExecutionInput {
   searchRef: string;
   finishedAt?: () => IsoTimestamp;
   signal?: AbortSignal;
-  interruptionReason?: TurnInterruption["reason"];
+  onProvisionalText?: (text: string) => void | Promise<void>;
+  interruptionReason?: TurnInterruption["reason"]; 
 }
 
 export interface ResearchTurnExecutionResult {
@@ -247,6 +248,7 @@ export async function executeResearchTurn(input: ResearchTurnExecutionInput): Pr
       context: input.context,
       resolution,
       signal: input.signal,
+      onProvisionalText: input.onProvisionalText,
     });
     if (input.signal?.aborted) {
       return { turn: interrupted(input, { kind: "resolution", resolution }, "Research was interrupted."), sources };
