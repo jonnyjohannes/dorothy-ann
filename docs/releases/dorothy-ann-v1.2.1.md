@@ -53,14 +53,14 @@ Plan-level fixture and live-provider limits are recorded in each linked plan. Ca
 
 - `npm ci` — passed; 560 packages installed, zero vulnerabilities; reproducible Zod comment patch applied.
 - `npm run lint` — passed.
-- `npm run typecheck` — passed.
+- `npm run typecheck` — passed; now checks the standalone root/API TypeScript config and the app/server project-reference solution.
 - `npm test` — 362 passed.
 - `npm run build` — passed; Zod/Rollup false annotation warnings are gone. ReactPlayer's provider-specific Mux (533.35 kB), HLS (591.58 kB), and DASH (858.98 kB) chunks remain dynamically loaded and trigger the >500 kB warning. The initial HTML preloads no such chunk; Jonny chose to retain playback and accept these provider-specific lazy-chunk warnings without raising the build threshold.
 - `CI=1 DOROTHY_E2E_VITE_PORT=5273 npm run test:e2e -- --workers=2` — 16 passed, 10 opt-in Analytics cases skipped.
 - `npm audit` — zero vulnerabilities.
 - `git diff --check` — passed after release-gate documentation updates.
 
-PR #15's Vercel Preview passed on prior remote candidate `ed1526f`; these local fixes need a fresh Preview run. The active [`vercel-build-node-runtime.md`](../plans/vercel-build-node-runtime.md) records the accepted provider-chunk warnings and Production command gate. Live Brave behavior and live provider timing are not claimed. No Production deployment authorization is granted by this file.
+Vercel Preview on `45838de` completed deployment but reported TypeScript errors in the function graph: strict null checking/discriminant narrowing and ES2022 `Error` cause types were not applied. The root TypeScript config has since been made standalone (no unsupported project references), with the local project-reference build moved to `tsconfig.build.json`; this correction passes local root/API typechecking and needs a fresh Preview. That Preview log also showed Vercel using package Node 24 while its project setting still read 22, plus npm install-script approval notices. Jonny reports updating the Node project setting. The package now approves only version-pinned `esbuild@0.28.2` and `unrs-resolver@1.12.2` lifecycle scripts and explicitly denies the no-op `msw@2.15.0` script; confirm the policy and Node setting on the next Preview. The active [`vercel-build-node-runtime.md`](../plans/vercel-build-node-runtime.md) records the accepted provider-chunk warnings and Production command gate. Live Brave behavior and live provider timing are not claimed. No Production deployment authorization is granted by this file.
 
 ## Release identity
 

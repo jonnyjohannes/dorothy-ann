@@ -6,13 +6,18 @@
   "engines": {
     "node": "24.x"
   },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "msw@2.15.0": false,
+    "unrs-resolver@1.12.2": true
+  },
   "scripts": {
     "postinstall": "patch-package",
     "dev": "vite",
     "dev:server": "tsx server/runtime/node.ts",
-    "build": "tsc -b && vite build",
+    "build": "tsc --noEmit --pretty false && tsc -b tsconfig.build.json && vite build",
     "lint": "eslint .",
-    "typecheck": "tsc -b --pretty false",
+    "typecheck": "tsc --noEmit --pretty false && tsc -b tsconfig.build.json --pretty false",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
