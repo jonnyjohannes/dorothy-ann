@@ -2,13 +2,13 @@
 
 ## Current State
 
-- Status: done, shipped in implementation commit (hash to follow)
+- Status: done, shipped in commit `ac2921c` on `release/v1.2.1` (no UI-specific tag)
 - Verification: typecheck, affected-file ESLint, focused UI-link tests, production build, full e2e, contrast/footer browser checks, and diff check passed
 - Owner: Jonny
 - Executor: assistant
 - Last updated: 2026-09-27
 - Current focus: screenshot-reported route/footer/swatch corrections are implemented and verified
-- Next action: record implementation commit and retain this shipped behavior in the archive
+- Next action: retain this shipped behavior record in the archive
 - Branch: `release/v1.2.1`
 
 ## Abstract
