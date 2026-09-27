@@ -62,7 +62,15 @@
 .ui-text-field__error { color: #b42318; font-size: 0.9em; }
 
 .ui-fuzzy-listbox,
-.ui-listbox-menu { display: flex; flex-direction: column; overflow: auto; }
+.ui-listbox-menu {
+  display: flex;
+  max-height: min(60dvh, 24rem);
+  flex-direction: column;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+}
 .ui-fuzzy-listbox__option,
 .ui-listbox-menu__option { padding: var(--space-sm) var(--space-md); cursor: pointer; }
 .ui-fuzzy-listbox__option.is-active,

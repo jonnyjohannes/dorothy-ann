@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { BrandBox } from "../boxes/BrandBox";
+import { StickyHeader } from "../boxes/StickyHeader";
 import { UnlockBox } from "../boxes/UnlockBox";
 import type { BoxIntent } from "../boxes/box-types";
 import styles from "../App.module.css";
@@ -21,7 +21,7 @@ export function UnlockRoute() {
       .catch(() => setMessage("That passphrase did not work."));
   };
   return <main className={styles.unlockShell}>
-    <header className={styles.header}><BrandBox onIntent={() => navigate("/", { replace: true })} /></header>
-    <UnlockBox message={message} onIntent={onIntent} />
+    <StickyHeader onIntent={() => navigate("/", { replace: true })} />
+    <section className={`${styles.routeLayout} app-route-scroll`}><UnlockBox message={message} onIntent={onIntent} /></section>
   </main>;
 }

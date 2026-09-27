@@ -1,12 +1,20 @@
-.shell {
+.shell,
+.unlockShell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
-  min-height: 100vh;
-  padding: 0 clamp(1rem, 3vw, 3rem);
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  padding: 0;
+  padding-left: max(clamp(1rem, 3vw, 3rem), env(safe-area-inset-left));
+  padding-right: max(clamp(1rem, 3vw, 3rem), env(safe-area-inset-right));
+  overflow: hidden;
   background: var(--paper);
   color: var(--ink);
 }
 .threadShell {
-  padding-bottom: clamp(12rem, 20vh, 18rem);
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 .header {
   position: sticky;
@@ -174,27 +182,39 @@
 .commandList p:nth-child(8n + 8) { --command-accent: var(--accent-8); }
 .commandList p > :first-child {
   --link-marker-color: var(--command-accent);
-  color: color-mix(in srgb, var(--command-accent) 35%, var(--ink));
+  color: var(--ink);
 }
 .commandList a {
   color: inherit;
+  background-color: color-mix(in srgb, var(--command-accent, var(--accent)) 20%, var(--paper));
+}
+.commandList a:hover,
+.commandList a:focus-visible {
+  background-color: color-mix(in srgb, var(--command-accent, var(--accent)) 28%, var(--paper));
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.commandList a:active {
+  background-color: color-mix(in srgb, var(--command-accent, var(--accent)) 34%, var(--paper));
 }
 .commandListAction {
   width: 100%;
   border: 0;
   padding: 0.16em 0.55em;
-  background: color-mix(in srgb, var(--command-accent, currentColor) 9%, transparent);
-  color: inherit;
+  background: color-mix(in srgb, var(--command-accent, currentColor) 20%, var(--paper));
+  color: var(--ink);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 .commandListAction:hover,
 .commandListAction:focus-visible {
-  background: color-mix(in srgb, var(--command-accent, currentColor) 18%, transparent);
+  background: color-mix(in srgb, var(--command-accent, currentColor) 28%, var(--paper));
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
 .commandListAction:active {
-  background: color-mix(in srgb, var(--command-accent, currentColor) 24%, transparent);
+  background: color-mix(in srgb, var(--command-accent, currentColor) 34%, var(--paper));
 }
 .center {
   display: grid;
@@ -222,23 +242,21 @@
   background: var(--paper);
   color: var(--ink);
 }
-.unlockShell {
-  min-height: 100vh;
-  padding: 0 2rem;
-  background: var(--paper);
-  color: var(--ink);
-}
 .unlockCard {
   width: min(100%, 110rem);
-  margin: 28vh auto 0;
+  margin: 0 auto;
+  padding: clamp(1.5rem, 5vw, 5rem) 0;
 }
+.unlockCard h1 { width: min(100%, 40rem); margin: 0 auto 1.5rem; font-size: 1.35rem; font-weight: 500; }
+.unlockCard form { width: 100%; }
+.unlockForm input::placeholder { color: var(--muted); opacity: 1; }
 .unlockCard > .kicker {
   width: min(100%, 40rem);
   margin-inline: auto;
 }
 .unlockForm {
   display: flex;
-  width: min(100%, 40rem);
+  width: 100%;
   margin-inline: auto;
   border: 1px solid var(--line);
 }
@@ -357,7 +375,7 @@
   grid-template-columns: minmax(10rem, 1fr) minmax(12rem, 16rem);
   align-items: center;
   gap: 1rem;
-  width: min(100%, 32rem);
+  width: 100%;
   margin-top: 1rem;
   color: var(--muted);
   font-size: 0.8rem;
@@ -541,9 +559,23 @@
 .answerMarkdown blockquote { max-width: 70ch; }
 .routeLayout {
   width: min(100%, 110rem);
-  min-height: calc(100vh - 5rem);
+  min-height: 0;
   margin: 0 auto;
-  padding: clamp(1.5rem, 5vw, 5rem) 0 8rem;
+  padding: clamp(1.5rem, 5vw, 5rem) 0 max(2rem, env(safe-area-inset-bottom));
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+}
+.threadContent {
+  width: min(100%, 110rem);
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 1rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
 }
 .settings {
   width: 100%;
@@ -649,6 +681,17 @@
   box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 12%);
   backdrop-filter: blur(10px);
 }
+.threadShell > .promptBox {
+  position: relative;
+  inset: auto;
+  margin: 0;
+  padding-bottom: max(0.4rem, env(safe-area-inset-bottom));
+}
+.routeLayout > .promptBox {
+  position: relative;
+  inset: auto;
+  margin: 2rem 0 0;
+}
 .promptBox:focus-within { border-color: var(--accent); }
 .promptBox > input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); padding: 0.65rem 0.7rem; }
 .promptHint { align-self: center; color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
@@ -707,17 +750,10 @@
   font: inherit;
 }
 .threadPicker ul {
-  max-height: 55vh;
-  overflow: auto;
   margin: 1rem 0;
   padding: 0;
   list-style: none;
-  scrollbar-width: thin;
-  scrollbar-color: var(--accent) transparent;
 }
-.threadPicker ul::-webkit-scrollbar { width: 0.5rem; }
-.threadPicker ul::-webkit-scrollbar-track { background: transparent; }
-.threadPicker ul::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 0; }
 .threadRow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -790,9 +826,10 @@
 @media (max-width: 760px) {
   .shell,
   .unlockShell {
-    padding: 0 1rem;
+    padding: 0;
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
   }
-  .unlockCard { margin-top: 22vh; }
   .unlockForm button { padding-inline: 0.8rem; }
   .queryForm {
     display: block;

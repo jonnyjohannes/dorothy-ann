@@ -26,11 +26,16 @@ describe("global link treatment", () => {
     expect(appStyles).toMatch(/\.evidence a\.sourceAccent\s*\{[^}]*padding:\s*0\.16em 0\.55em;/s);
   });
 
-  it("cycles homepage command links through all scheme accents", () => {
+  it("cycles homepage command swatches through all scheme accents with ink foregrounds", () => {
     for (let index = 1; index <= 8; index += 1) {
       expect(appStyles).toContain(`--command-accent: var(--accent-${index})`);
     }
-    expect(appStyles).toMatch(/\.commandList p > :first-child\s*\{[^}]*--link-marker-color:\s*var\(--command-accent\);[^}]*color:\s*color-mix\(in srgb, var\(--command-accent\) 35%, var\(--ink\)\)/s);
+    expect(appStyles).toMatch(/\.commandList p > :first-child\s*\{[^}]*--link-marker-color:\s*var\(--command-accent\);[^}]*color:\s*var\(--ink\)/s);
+    expect(appStyles).toMatch(/\.commandListAction\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--command-accent, currentColor\) 20%, var\(--paper\)\);[^}]*color:\s*var\(--ink\)/s);
+    expect(appStyles).toMatch(/\.commandListAction:hover,[\s\S]*?background:\s*color-mix\(in srgb, var\(--command-accent, currentColor\) 28%, var\(--paper\)\)/);
+    expect(appStyles).toContain("color-mix(in srgb, var(--command-accent, currentColor) 34%, var(--paper))");
+    expect(appStyles).toMatch(/\.commandList a\s*\{[^}]*background-color:\s*color-mix\(in srgb, var\(--command-accent, var\(--accent\)\) 20%, var\(--paper\)\)/s);
+    expect(appStyles).toContain("color-mix(in srgb, var(--command-accent, var(--accent)) 34%, var(--paper))");
   });
 
   it("uses one shared responsive three-to-two-to-one evidence grid", () => {
