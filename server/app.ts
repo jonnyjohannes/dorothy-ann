@@ -122,7 +122,7 @@ function createExecutor(
           maxFetchBytes: config.MAX_FETCH_BYTES, maxRedirects: config.MAX_REDIRECTS,
           userAgent: "dorothy-ann/1.1", minCharacters: 120,
         }, undefined, (sourceId, metadata) => { extractionMetadata.set(sourceId, metadata); },
-        (phase, elapsedMs) => timing?.markExtractionSubphase(phase, elapsedMs));
+        (phase, elapsedMs, succeeded) => timing?.markExtractionSubphase(phase, elapsedMs, succeeded));
         const timedExtractor = extractor && timing ? timing.decorateExtractor(extractor) : extractor;
         const timedLlm = timing?.decorateLlm(llm) ?? llm;
         const acquirer = new EvidenceAcquirer({ search: timedSearch, extractor: timedExtractor, fixture: config.DOROTHY_FIXTURE_MODE,

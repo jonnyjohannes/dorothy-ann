@@ -128,14 +128,16 @@ describe("research timing", () => {
     collector.markSearchSubphase("http", 14, true);
     collector.markSearchSubphase("json_normalization", 3, true);
     collector.markSearchSubphase("http", 10, false);
-    collector.markExtractionSubphase("safety", 5);
+    collector.markExtractionSubphase("safety", 5, true);
+    collector.markExtractionSubphase("safety", 7, false);
+    collector.markExtractionSubphase("http", 11, false);
     collector.markAssessmentAttempt({ attempt: 1, outcome: "rejected", outputShape: "incomplete_outer_json", reason: "missing_directive", elapsedMs: 11_000, parseMs: 2,
       inputChars: 400, maxOutputTokens: 1_200, stopReason: "max_tokens" });
     collector.markAssessmentAttempt({ attempt: 2, outcome: "accepted", acceptedObservations: 5, elapsedMs: 7_000, parseMs: 3,
       inputChars: 400, maxOutputTokens: 1_600, stopReason: "end_turn" });
     collector.emit({ terminalStatus: "completed" });
     expect(records[0]).toMatchObject({ search_subphases: { http: { calls: 2, succeeded: 1, failed: 1, cumulative_ms: 24 }, json_normalization: { calls: 1, cumulative_ms: 3 } },
-      extraction_subphases: { safety: { calls: 1, cumulative_ms: 5 } },
+      extraction_subphases: { safety: { calls: 2, succeeded: 1, failed: 1, cumulative_ms: 12 }, http: { calls: 1, succeeded: 0, failed: 1, cumulative_ms: 11 } },
       assessment_profile: { accepted_observations: 5, provider_attempts: 2, retried_calls: 1, provider_ms_total: 17_995 } });
     expect(records[0]?.extraction_subphases).not.toHaveProperty("body");
   });

@@ -55,11 +55,11 @@ describe("SafeContentExtractor", () => {
   });
 
   it("records only completed winner subphases, including redirect safety, not late timeout work", async () => {
-    const phases: string[] = [];
+    const phases: Array<{ phase: string; succeeded: boolean }> = [];
     const redirect = new SafeContentExtractor(config, async () => new Response(null, { status: 302, headers: { location: "http://127.0.0.1/private" } }), undefined,
-      (phase, elapsedMs) => { phases.push(phase); expect(elapsedMs).toBeGreaterThanOrEqual(0); });
+      (phase, elapsedMs, succeeded) => { phases.push({ phase, succeeded }); expect(elapsedMs).toBeGreaterThanOrEqual(0); });
     expect(await redirect.extract(source, limits)).toMatchObject({ status: "skipped", reason: "unsafe_url" });
-    expect(phases).toEqual(["safety", "http"]);
+    expect(phases).toEqual([{ phase: "safety", succeeded: false }, { phase: "http", succeeded: true }]);
     const late: string[] = [];
     const slow = new SafeContentExtractor(config, async () => {
       await new Promise((resolve) => setTimeout(resolve, 35));
@@ -73,6 +73,29 @@ describe("SafeContentExtractor", () => {
       (phase) => { success.push(phase); throw new Error("observer ignored"); });
     expect(await plain.extract(source, limits)).toMatchObject({ status: "viable" });
     expect(success).toEqual(["safety", "http", "body", "text"]);
+  });
+
+  it("marks completed DNS, fetch, and body subphase failures without promoting them to successes", async () => {
+    const dns = await import("node:dns/promises");
+    vi.mocked(dns.lookup).mockRejectedValueOnce(Object.assign(new Error("opaque"), { code: "ENOTFOUND" }));
+    const observe = async (fetcher: ConstructorParameters<typeof SafeContentExtractor>[1]) => {
+      const phases: Array<{ phase: string; succeeded: boolean }> = [];
+      const instance = new SafeContentExtractor(config, fetcher, undefined,
+        (phase, elapsedMs, succeeded) => { expect(elapsedMs).toBeGreaterThanOrEqual(0); phases.push({ phase, succeeded }); });
+      return { outcome: await instance.extract(source, limits), phases };
+    };
+    const dnsFailure = await observe(async () => { throw new Error("fetch must not run"); });
+    expect(dnsFailure.outcome).toMatchObject({ status: "skipped", reason: "unsafe_url" });
+    expect(dnsFailure.phases).toEqual([{ phase: "safety", succeeded: false }]);
+    const fetchFailure = await observe(async () => { throw new Error("opaque transport failure"); });
+    expect(fetchFailure.outcome).toMatchObject({ status: "failed", code: "fetch_failed" });
+    expect(fetchFailure.phases).toEqual([{ phase: "safety", succeeded: true }, { phase: "http", succeeded: false }]);
+    const bodyFailure = await observe(async () => new Response("x".repeat(20_001), { headers: { "content-type": "text/plain" } }));
+    expect(bodyFailure.outcome).toMatchObject({ status: "failed", code: "fetch_failed" });
+    expect(bodyFailure.phases).toEqual([{ phase: "safety", succeeded: true }, { phase: "http", succeeded: true }, { phase: "body", succeeded: false }]);
+    const shortText = await observe(async () => new Response("Short", { headers: { "content-type": "text/plain" } }));
+    expect(shortText.outcome).toMatchObject({ status: "skipped", reason: "empty_content" });
+    expect(shortText.phases).toEqual([{ phase: "safety", succeeded: true }, { phase: "http", succeeded: true }, { phase: "body", succeeded: true }, { phase: "text", succeeded: false }]);
   });
 
   it("validates every redirect target before fetching it", async () => {

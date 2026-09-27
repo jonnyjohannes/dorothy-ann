@@ -38,6 +38,29 @@ test("isolated production opt-in sends only coarse Analytics pageview payloads",
   expect(payloads.join(" ")).not.toMatch(/PRIVATE_PROMPT|PRIVATE_THREAD_ID|returnTo/u);
 });
 
+test("same-origin sensitive incoming referrer is omitted from Analytics beacon", async ({ page }) => {
+  const scriptFile = process.env.DOROTHY_E2E_ANALYTICS_SCRIPT;
+  test.skip(!scriptFile || process.env.VITE_TELEMETRY_PROVIDER !== "vercel" || process.env.DOROTHY_E2E_PREVIEW !== "1", "Requires locally captured SDK script and isolated opt-in preview");
+  const baseURL = test.info().project.use.baseURL;
+  if (!baseURL) throw new Error("isolated preview baseURL required");
+  const sensitiveReferrer = new URL("/threads/new?q=PRIVATE_REFERRER_PROMPT", baseURL).href;
+  const payloads: string[] = [];
+  await page.addInitScript(() => {
+    const userAgent = navigator.userAgent.replace("Headless", "");
+    Object.defineProperty(navigator, "webdriver", { get: () => false });
+    Object.defineProperty(navigator, "userAgent", { get: () => userAgent });
+  });
+  await page.route("**/_vercel/insights/script.js", (route) => route.fulfill({ contentType: "application/javascript", body: readFileSync(scriptFile!, "utf8") }));
+  await page.route("**/_vercel/insights/view", (route) => { payloads.push(route.request().postData() ?? ""); return route.fulfill({ status: 200, body: "" }); });
+  await page.goto("/", { referer: sensitiveReferrer });
+  expect(await page.evaluate(() => document.referrer)).toBe(sensitiveReferrer);
+  await expect.poll(() => payloads.length).toBe(1);
+  const pageview = JSON.parse(payloads[0]!) as { o: string; dp: string; r?: string };
+  expect(pageview).toMatchObject({ o: new URL("/", baseURL).href, dp: "/" });
+  expect(pageview.r).toBeUndefined();
+  expect(payloads[0]).not.toContain("PRIVATE_REFERRER_PROMPT");
+});
+
 test("default fixture build does not request Analytics scripts", async ({ page }) => {
   test.skip(process.env.VITE_TELEMETRY_PROVIDER === "vercel", "Covered by isolated opt-in case");
   const requests: string[] = [];

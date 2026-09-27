@@ -236,9 +236,9 @@ export class ResearchTimingCollector {
     profile.accepted_observations = boundedCount(profile.accepted_observations + boundedCount(observation.acceptedObservations ?? 0, 24), 432);
   }
 
-  markExtractionSubphase(phase: "safety" | "http" | "body" | "text", elapsedMs: number): void {
+  markExtractionSubphase(phase: "safety" | "http" | "body" | "text", elapsedMs: number, succeeded: boolean): void {
     if (this.emitted) return;
-    this.recordStage(this.extractionSubphases[phase], boundedCount(Math.round(elapsedMs), 300_000), true);
+    this.recordStage(this.extractionSubphases[phase], boundedCount(Math.round(elapsedMs), 300_000), succeeded);
   }
 
   markSearchSubphase(phase: "http" | "json_normalization", elapsedMs: number, succeeded: boolean): void {

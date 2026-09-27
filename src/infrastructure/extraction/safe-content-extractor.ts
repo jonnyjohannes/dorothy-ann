@@ -20,6 +20,9 @@ export interface ExtractorConfig {
 }
 
 type PublicAddress = { address: string; family: 4 | 6 };
+type ExtractionSubphase = "safety" | "http" | "body" | "text";
+type SubphaseTiming = { elapsedMs: number; succeeded: boolean };
+type ExtractionTimings = Partial<Record<ExtractionSubphase, SubphaseTiming>>;
 type FetchWithDispatcher = (input: string | URL, init?: RequestInit & { dispatcher?: Agent }) => Promise<Response>;
 const fetchWithDispatcher: FetchWithDispatcher = async (input, init) =>
   (await undiciFetch(input, init as Parameters<typeof undiciFetch>[1])) as unknown as Response;
@@ -146,17 +149,23 @@ export class SafeContentExtractor implements ContentExtractor {
     private readonly config: ExtractorConfig,
     private readonly fetcher: FetchWithDispatcher = fetchWithDispatcher,
     private readonly onFailure?: (sourceId: SearchResult["sourceId"], metadata: ExtractionFailureMetadata) => void,
-    private readonly onTiming?: (phase: "safety" | "http" | "body" | "text", elapsedMs: number) => void,
+    private readonly onTiming?: (phase: ExtractionSubphase, elapsedMs: number, succeeded: boolean) => void,
   ) {}
 
-  private async measure<T>(timings: Partial<Record<"safety" | "http" | "body" | "text", number>>, phase: "safety" | "http" | "body", run: () => Promise<T>): Promise<T> {
+  private recordTiming(timings: ExtractionTimings, phase: ExtractionSubphase, elapsedMs: number, succeeded: boolean): void {
+    const previous = timings[phase];
+    timings[phase] = { elapsedMs: (previous?.elapsedMs ?? 0) + elapsedMs, succeeded: (previous?.succeeded ?? true) && succeeded };
+  }
+
+  private async measure<T>(timings: ExtractionTimings, phase: "safety" | "http" | "body", run: () => Promise<T>): Promise<T> {
     const started = performance.now();
-    try { return await run(); }
-    finally { timings[phase] = (timings[phase] ?? 0) + performance.now() - started; }
+    let succeeded = false;
+    try { const result = await run(); succeeded = true; return result; }
+    finally { this.recordTiming(timings, phase, performance.now() - started, succeeded); }
   }
 
   async extract(source: SearchResult, limits: ExtractionLimits): Promise<ExtractionOutcome> {
-    const state: { phase: ExtractionFailureMetadata["failure_phase"]; detail: ExtractionFailureMetadata["failure_detail"]; bucket?: ExtractionFailureMetadata["http_status_bucket"]; timings: Partial<Record<"safety" | "http" | "body" | "text", number>> } = { phase: "url_check", detail: "other", timings: {} };
+    const state: { phase: ExtractionFailureMetadata["failure_phase"]; detail: ExtractionFailureMetadata["failure_detail"]; bucket?: ExtractionFailureMetadata["http_status_bucket"]; timings: ExtractionTimings } = { phase: "url_check", detail: "other", timings: {} };
     const observe = (outcome: ExtractionOutcome, metadata: ExtractionFailureMetadata) => {
       if (outcome.status !== "viable") {
         try { this.onFailure?.(source.sourceId, metadata); } catch { /* Diagnostics cannot change extraction. */ }
@@ -177,16 +186,16 @@ export class SafeContentExtractor implements ContentExtractor {
         timeout,
       ]);
       if (!winner.timedOut) for (const phase of ["safety", "http", "body", "text"] as const) {
-        const elapsed = state.timings[phase];
-        if (elapsed !== undefined) {
-          try { this.onTiming?.(phase, elapsed); } catch { /* Observers cannot change extraction. */ }
+        const timing = state.timings[phase];
+        if (timing) {
+          try { this.onTiming?.(phase, timing.elapsedMs, timing.succeeded); } catch { /* Observers cannot change extraction. */ }
         }
       }
       return observe(winner.outcome, winner.metadata);
     } finally { if (timer) clearTimeout(timer); }
   }
 
-  private async extractInternal(source: SearchResult, limits: ExtractionLimits, state: { phase: ExtractionFailureMetadata["failure_phase"]; detail: ExtractionFailureMetadata["failure_detail"]; bucket?: ExtractionFailureMetadata["http_status_bucket"]; timings: Partial<Record<"safety" | "http" | "body" | "text", number>> }): Promise<ExtractionOutcome> {
+  private async extractInternal(source: SearchResult, limits: ExtractionLimits, state: { phase: ExtractionFailureMetadata["failure_phase"]; detail: ExtractionFailureMetadata["failure_detail"]; bucket?: ExtractionFailureMetadata["http_status_bucket"]; timings: ExtractionTimings }): Promise<ExtractionOutcome> {
     let current: URL;
     try { current = await this.measure(state.timings, "safety", () => assertSafeUrl(source.url, () => { state.phase = "dns"; })); }
     catch (error) {
@@ -234,11 +243,13 @@ export class SafeContentExtractor implements ContentExtractor {
         const textStarted = performance.now();
         let text: string;
         let characterCount: number;
+        let textSucceeded = false;
         try {
           const raw = new TextDecoder().decode(body);
           text = boundedText(contentType === "text/html" ? readableText(raw) : raw, limits.maxCharacters);
           characterCount = [...text].length;
-        } finally { state.timings.text = (state.timings.text ?? 0) + performance.now() - textStarted; }
+          textSucceeded = characterCount >= this.config.minCharacters;
+        } finally { this.recordTiming(state.timings, "text", performance.now() - textStarted, textSucceeded); }
         if (characterCount < this.config.minCharacters) {
           state.detail = characterCount === 0 ? "no_readable_text" : "short_text";
           return { sourceId: source.sourceId, status: "skipped", reason: "empty_content" };
