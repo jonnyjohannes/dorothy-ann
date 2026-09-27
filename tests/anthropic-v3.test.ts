@@ -61,6 +61,38 @@ describe("AnthropicProvider v3", () => {
     expect(fake.requests.every((request) => request.max_tokens === 800)).toBe(true);
   });
 
+  it("uses 1,200 on the first attempt without widening ordinary correction or 400 fallback", async () => {
+    const input = { ...baseAssessment, maxOutputTokens: 1_200 };
+    const valid = JSON.stringify({ directive: { kind: "search", query: "flamingo color", purpose: "answer", successCriterion: "supported", priority: 1 } });
+    const first = client([{ content: [{ type: "text", text: valid }] }]);
+    await new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: first }).assessResearch(input);
+    expect(first.requests.map((request) => request.max_tokens)).toEqual([1_200]);
+
+    const corrected = client([
+      { content: [{ type: "text", text: "not json" }], stop_reason: "end_turn" },
+      { content: [{ type: "text", text: valid }] },
+    ]);
+    await new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: corrected }).assessResearch(input);
+    expect(corrected.requests.map((request) => request.max_tokens)).toEqual([1_200, 800]);
+
+    const truncated = client([
+      { content: [{ type: "text", text: '{"directive":' }], stop_reason: "max_tokens" },
+      { content: [{ type: "text", text: valid }] },
+    ]);
+    await new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: truncated }).assessResearch(input);
+    expect(truncated.requests.map((request) => request.max_tokens)).toEqual([1_200, 1_600]);
+
+    const requests: Array<Record<string, unknown>> = [];
+    const fallback = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: { messages: { create: async (request) => {
+      requests.push(request);
+      if (requests.length === 1) throw { status: 400 };
+      return { content: [{ type: "text", text: valid }] };
+    } } } });
+    await fallback.assessResearch(input);
+    expect(requests.map((request) => request.max_tokens)).toEqual([1_200, 800]);
+    expect(requests[1].output_config).toBeUndefined();
+  });
+
   it("raises only the existing second assessment attempt after max_tokens truncation", async () => {
     const valid = JSON.stringify({ directive: { kind: "search", query: "flamingo color", purpose: "answer", successCriterion: "supported", priority: 1 } });
     const diagnostics: unknown[] = [];

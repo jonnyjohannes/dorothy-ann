@@ -16,7 +16,7 @@ describe("runtime configuration", () => {
       MAX_EVIDENCE_CHARS_TOTAL: 48_000,
       MAX_THREAD_CONTEXT_TURNS: 8,
       MAX_THREAD_CONTEXT_CHARS: 24_000,
-      MAX_ASSESSMENT_OUTPUT_TOKENS: 800,
+      MAX_ASSESSMENT_OUTPUT_TOKENS: 1_200,
       MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS: 1_600,
       MAX_OUTPUT_TOKENS: 4_096,
       MAX_TURN_REQUEST_BYTES: 128_000,
@@ -35,12 +35,14 @@ describe("runtime configuration", () => {
       MAX_EVIDENCE_CHARS_PER_SOURCE: "1000",
       MAX_EVIDENCE_CHARS_TOTAL: "2000",
       MAX_TURN_REQUEST_BYTES: "8000",
+      MAX_ASSESSMENT_OUTPUT_TOKENS: "900",
       MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS: "1200",
     }, { onDeprecation: vi.fn() });
 
     expect(config.MAX_CONCURRENT_SEARCHES).toBe(2);
     expect(config.MAX_CONCURRENT_EXTRACTIONS).toBe(1);
     expect(config.MAX_TURN_REQUEST_BYTES).toBe(8_000);
+    expect(config.MAX_ASSESSMENT_OUTPUT_TOKENS).toBe(900);
     expect(config.MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS).toBe(1_200);
   });
 
@@ -49,6 +51,7 @@ describe("runtime configuration", () => {
     ["MAX_CONCURRENT_EXTRACTIONS", "0"],
     ["MAX_THREAD_CONTEXT_TURNS", "1.5"],
     ["MAX_OUTPUT_TOKENS", "4097"],
+    ["MAX_ASSESSMENT_OUTPUT_TOKENS", "1201"],
     ["MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS", "799"],
     ["MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS", "1601"],
     ["MAX_TURN_REQUEST_BYTES", "7999"],

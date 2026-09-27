@@ -176,7 +176,7 @@ export class AnthropicProvider implements LLMProvider {
     let correction: string | undefined;
     let structuredOutput = true;
     let invalidReason: AssessmentInvalidReason = "empty_response";
-    let requestTokens = Math.min(800, input.maxOutputTokens);
+    let requestTokens = Math.min(1_200, input.maxOutputTokens);
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const envelope = assessmentEnvelope(input, correction);
       const inputChars = Math.min(2_000_000, input.systemPrompt.length + envelope.length);
@@ -222,11 +222,14 @@ export class AnthropicProvider implements LLMProvider {
             text_chars: Math.min(16_000, [...text].length),
           });
         } catch { /* Diagnostics must never alter provider behavior. */ }
-        if (attempt === 0 && stopReason === "max_tokens") requestTokens = this.assessmentRetryMaxOutputTokens;
+        if (attempt === 0) requestTokens = stopReason === "max_tokens"
+          ? this.assessmentRetryMaxOutputTokens
+          : Math.min(800, input.maxOutputTokens);
       } catch (error) {
         if (!reported) observe({ parseMs: 0, stopReason: "unknown", outcome: "failed", reason: "provider_error" });
         if (error instanceof AnthropicProviderError && error.code === "provider_bad_request" && structuredOutput) {
           structuredOutput = false;
+          requestTokens = Math.min(800, input.maxOutputTokens);
           try { this.onDiagnostic?.({ event: "assessment_structured_output_fallback", stage: "assessing", reason: "provider_bad_request" }); } catch { /* Diagnostics must never alter provider behavior. */ }
           continue;
         }
