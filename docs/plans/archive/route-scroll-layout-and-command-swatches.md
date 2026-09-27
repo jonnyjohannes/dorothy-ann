@@ -2,11 +2,11 @@
 
 ## Current State
 
-- Status: done
+- Status: done, shipped in commit `2d9d8f0` on `release/v1.2.1` (no UI-specific tag)
 - Verification: typecheck, affected-file ESLint, production build, full e2e, focused contrast/browser checks, and diff check recorded below
 - Owner: Jonny
 - Executor: implementation worker
-- Last updated: 2026-06-18
+- Last updated: 2026-09-27
 - Current focus: unified scrolling, width framing, `/unlock`, and command swatches are implemented and verified
 - Next action: retain this shipped behavior record in the archive
 - Branch: `release/v1.2.1`
@@ -56,7 +56,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` verified, `[!]` blocked.
 - [x] R6 — verify layout, all scrolling modes, widths, and accessibility.
   - Deliverable: browser coverage validates route scrolling, local overlay scrolling, horizontal content, viewport resizing, widths, and swatch appearance.
   - Verify: focused component/browser checks, `npm run typecheck`, affected-file ESLint, `npm run build`, `CI=1 npm run test:e2e -- --workers=2`, and `git diff --check`; exercise Chromium and narrow/mobile WebKit. Assert shared near-full-width bounds at phone/tablet/desktop sizes plus readable text measure. Record existing full-lint/unit blockers from `docs/plans/vercel-build-node-runtime.md` separately. Physical iOS verification remains external if unavailable.
-  - Evidence: `npm run typecheck`, affected-file ESLint, `npm run build`, and `git diff --check` passed. `CI=1 npm run test:e2e -- --workers=2` passed 22 tests with 10 conditional telemetry skips on Chromium and mobile WebKit. Axe home check passed. Full `npm run lint` retains four known unrelated ESLint 10 errors; `npm test` retains two known unrelated baseline failures (Node 22 assertion vs approved 24.x pin and jsdom RGB-vs-hex expectation). Build passed with the already documented Zod/Rollup annotation and HLS/DASH chunk warnings. Physical iOS keyboard behavior remains unverified.
+  - Evidence: `npm run typecheck`, affected-file ESLint, `npm run build`, and `git diff --check` passed. `CI=1 npm run test:e2e -- --workers=2` passed 22 tests with 10 conditional telemetry skips on Chromium and mobile WebKit. Axe home check passed. Full `npm run lint` retains four known unrelated ESLint 10 errors; `npm test` retains two known unrelated baseline failures (Node 22 assertion vs approved 24.x pin and jsdom RGB-vs-hex expectation). Build passed with the already documented Zod/Rollup annotation and HLS/DASH chunk warnings (591.58 kB HLS and 859.00 kB DASH). The separate Vercel build plan remains blocked: `vercel build` previously returned `project_settings_required`; no Vercel command or remote setup ran for this work. Physical iOS keyboard behavior remains unverified.
 
 ## Desired Outcome
 
