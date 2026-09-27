@@ -3,7 +3,7 @@
 ## Current State
 
 - Status: done
-- Verification: `npm ci`, lint, typecheck, 348 unit/integration tests, build, and 14 isolated Chromium/mobile-WebKit fixture e2e tests passed; `git diff --check` passed. Live provider and production/browser-network timing were not measured.
+- Verification: `npm ci`, lint, typecheck, 350 unit/integration tests, build, and 14 isolated Chromium/mobile-WebKit fixture e2e tests passed; `git diff --check` passed. Live provider and production/browser-network timing were not measured.
 - Owner: Jonny
 - Executor: worker (MUSCLE), sole writer on `release/v1.2.1`
 - Last updated: 2026-09-27
@@ -44,7 +44,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` verified, `[!]` blocked.
 - [x] P1 — Emit provisional text without weakening answer validation
   - Deliverable: a provider-neutral async provisional-text callback/stream seam in `AnswerSynthesizer` invoked on parsed text parts as they arrive; preserve the one-call, two-source gate and full terminal validation, heading normalization, reachable-citation filtering, refusal/error behavior, and abort handling. Do not emit citation parts as draft links.
   - Verify: synthesizer fixtures for first yield before provider completion, split `[[cite:...]]` markers, leading heading across chunks, filtered citations, invalid/empty/refused output after a partial yield, and aborted iteration; no preliminary text in the returned terminal answer on failure.
-  - Evidence: `npx vitest run tests/turn-executors-v3.test.ts tests/anthropic-v3.test.ts` (37 pass), typecheck pass; deferred/heading/failure/abort fixtures. P4 split-citation regression exposed and fixed an incomplete marker-prefix buffering bug; full suite then passed (348).
+  - Evidence: `npx vitest run tests/turn-executors-v3.test.ts tests/anthropic-v3.test.ts` (37 pass), typecheck pass; deferred/heading/failure/abort fixtures. P4 split-citation regression exposed and fixed an incomplete marker-prefix buffering bug; full suite then passed (350), including awaited slow-observer and malformed-terminal cleanup cases.
 - [x] P2 — Transport a bounded, backpressured draft
   - Deliverable: `server/app.ts` forwards provisional text during synthesis through the existing typed `answer_delta` signal. Apply the per-turn preview policy (at most 64,000 JS code units total and 256 draft frames; each delta within the current 64,000-code-unit event limit), coalescing later tiny parts without delaying the *first* available safe text. Stop sending draft deltas at the budget without truncating or changing the final validated answer. Await writes; propagate disconnect cancellation to the provider synthesis request where supported. Do not emit duplicate final-answer deltas or leak draft text into logs.
   - Verify: stream-boundary/app tests using a deferred provider show an `answer_delta` **before** provider completion and terminal; final terminal still authoritative; many tiny/large parts, overflow, slow writer, disconnect and provider refusal never create an invalid frame, extra provider call or durable provisional answer. Assert bounded aggregate metadata only.
@@ -56,7 +56,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` verified, `[!]` blocked.
 - [x] P4 — Regression, browser flush and rollout checks
   - Deliverable: update README operational/product description and relevant tests. Run focused checks then lint, typecheck, test, build, `git diff --check`, status and isolated fixture e2e; compare provider first-yield → server emission → browser display on a deferred fixture. Any live-provider or Vercel deployment/setting/log mutation requires separate operator approval per command and must not be inferred from fixture speed.
   - Verify: real browser sees a preview before terminal with a delayed fixture; failure/cancel clears it; keyboard, screen reader, responsive and terminal citation behavior preserved. If browser/Vercel buffers frames, report the observed behavior without claiming streaming latency success.
-  - Evidence: `npm ci`, `npm run lint`, `npm run typecheck`, `npm test` (348 pass/37 files), `npm run build`, `CI=1 npm run test:e2e` (14 pass/Chromium and mobile WebKit), `git diff --check`, `git status --short --branch` passed. Deferred fixture first text is written before its delayed citation/terminal, and both browsers displayed preview before final cited answer; interrupted navigation and simulated disconnect clear it. No live provider, intermediary, or Vercel flush timing claimed. npm ci reported 2 moderate dependency audit advisories; build reported existing chunk-size warnings.
+  - Evidence: `npm ci`, `npm run lint`, `npm run typecheck`, `npm test` (350 pass/37 files), `npm run build`, `CI=1 npm run test:e2e` (14 pass/Chromium and mobile WebKit), `git diff --check`, `git status --short --branch` passed. Deferred fixture first text is written before its delayed citation/terminal, and both browsers displayed preview before final cited answer; interrupted navigation and simulated disconnect clear it. No live provider, intermediary, or Vercel flush timing claimed. npm ci reported 2 moderate dependency audit advisories; build reported existing chunk-size warnings.
 
 ## Handoff
 

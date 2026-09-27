@@ -69,6 +69,25 @@ describe("v3 answer and turn executors", () => {
     expect(draft).toEqual(["First ", "last."]);
   });
 
+  it("awaits a slow preview observer before advancing provider iteration", async () => {
+    let release!: () => void;
+    const wait = new Promise<void>((resolve) => { release = resolve; });
+    let first!: () => void;
+    const observed = new Promise<void>((resolve) => { first = resolve; });
+    let advanced = false;
+    const llm: LLMProvider = { assessResearch: async () => { throw new Error("unused"); }, async *synthesizeResearch() {
+      yield { type: "text", markdown: "First" };
+      advanced = true;
+      yield { type: "text", markdown: " last" };
+    } };
+    const result = new AnswerSynthesizer(llm, "system").synthesize({ question: "What happened?", answerPosition: "initial", context, resolution, onProvisionalText: async () => { first(); await wait; } });
+    await observed;
+    expect(advanced).toBe(false);
+    release();
+    expect((await result).parts).toEqual([{ type: "text", markdown: "First last" }]);
+    expect(advanced).toBe(true);
+  });
+
   it("holds a split heading until it can demote it; partial failure and abort never return an answer", async () => {
     const drafts: string[] = [];
     const heading = provider([{ type: "text", markdown: "#" }, { type: "text", markdown: " Opening" }, { type: "text", markdown: "\nBody" }, { type: "citation", sourceId: id("src_unreachable") }]);

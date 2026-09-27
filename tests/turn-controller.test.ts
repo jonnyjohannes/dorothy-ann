@@ -37,6 +37,13 @@ describe("TurnController", () => {
     expect(JSON.stringify(committed)).not.toContain("Provisional");
   });
 
+  it("clears a visible draft when terminal validation fails", async () => {
+    const malformed: TurnGatewayEvent = { ...failedTerminal, terminal: { ...failedTerminal.terminal, outcome: {} } };
+    const controller = new TurnController(gatewayFor([researchAccepted, draft(2, "unverified"), malformed]), storeWith(async () => { throw new Error("must not commit"); }));
+    expect(await controller.run(researchInput())).toMatchObject({ ok: false, error: "invalid_terminal" });
+    expect(controller.snapshot).toMatchObject({ active: false, answerDraft: "", events: [] });
+  });
+
   it("rejects oversized, excessive or out-of-sequence previews without saving partial content", async () => {
     const store = storeWith(async () => { throw new Error("must not commit"); });
     for (const events of [[researchAccepted, draft(2, "a".repeat(64_001))], [researchAccepted, ...Array.from({ length: 512 }, (_, index) => draft(index + 2, ""))], [researchAccepted, draft(3, "wrong sequence")]]) {
