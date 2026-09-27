@@ -61,10 +61,11 @@ describe("EvidenceAcquirer", () => {
       requests: [request("observe", 1, 0)], knownSources: [], availableEvidenceSourceIds: [],
       budget: budget({ sourcesRemaining: 3 }), limits: {},
     });
-    expect(observed).toEqual([
-      { url: candidates[0]!.url, rank: 1, status: "skipped", reason: "empty_content" },
-      { url: candidates[1]!.url, rank: 2, status: "failed", reason: "fetch_failed" },
+    expect(observed).toMatchObject([
+      { url: candidates[0]!.url, rank: 1, status: "skipped", reason: "empty_content", sourceId: "empty" },
+      { url: candidates[1]!.url, rank: 2, status: "failed", reason: "fetch_failed", sourceId: "failed" },
     ]);
+    expect(observed.every((entry) => entry.elapsed_ms >= 0 && entry.elapsed_ms <= 300_000)).toBe(true);
     expect(result.selectedSources.map((candidate) => candidate.rank)).toEqual([1, 2, 3]);
     expect(result.evidence.flatMap((pack) => pack.sources.map((item) => item.sourceId))).toEqual(["viable"]);
   });

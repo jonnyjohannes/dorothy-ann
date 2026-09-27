@@ -11,7 +11,7 @@ import type { AssistantContentPart, CanonicalSource, GapLedger, KnowledgeUnit, R
 import { IdentityPolicy } from "../src/application/identity-policy.js";
 import { WebCryptoIdentityHasher } from "../src/infrastructure/identity/web-crypto-hasher.js";
 import { BraveSearchProvider } from "../src/infrastructure/providers/brave.js";
-import { SafeContentExtractor } from "../src/infrastructure/extraction/safe-content-extractor.js";
+import { SafeContentExtractor, type ExtractionFailureMetadata } from "../src/infrastructure/extraction/safe-content-extractor.js";
 import { AnthropicProvider } from "../src/infrastructure/providers/anthropic.js";
 import { EvidenceAcquirer } from "../src/application/evidence-acquirer.js";
 import { ResearchAssessor } from "../src/application/research-assessor.js";
@@ -112,14 +112,19 @@ function createExecutor(
         await emitResearchPhase("resolving");
 
         const timedSearch = timing?.decorateSearch(search) ?? search;
+        const extractionMetadata = new Map<string, ExtractionFailureMetadata>();
         const extractor = config.DOROTHY_FIXTURE_MODE ? undefined : new SafeContentExtractor({
           maxFetchBytes: config.MAX_FETCH_BYTES, maxRedirects: config.MAX_REDIRECTS,
           userAgent: "dorothy-ann/1.1", minCharacters: 120,
-        });
+        }, undefined, (sourceId, metadata) => { extractionMetadata.set(sourceId, metadata); });
         const timedExtractor = extractor && timing ? timing.decorateExtractor(extractor) : extractor;
         const timedLlm = timing?.decorateLlm(llm) ?? llm;
         const acquirer = new EvidenceAcquirer({ search: timedSearch, extractor: timedExtractor, fixture: config.DOROTHY_FIXTURE_MODE,
-          ...(!config.DOROTHY_FIXTURE_MODE ? { onSelectedExtractionFailure: (entry: Parameters<typeof logSelectedExtractionFailure>[1]) => logSelectedExtractionFailure(logger, entry) } : {}),
+          ...(!config.DOROTHY_FIXTURE_MODE ? { onSelectedExtractionFailure: (entry) => {
+            const metadata = extractionMetadata.get(entry.sourceId);
+            extractionMetadata.delete(entry.sourceId);
+            logSelectedExtractionFailure(logger, { ...entry, metadata });
+          } } : {}),
         });
         const resolver = new ResearchResolver({
           identities,

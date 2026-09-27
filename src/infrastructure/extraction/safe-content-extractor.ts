@@ -6,6 +6,12 @@ import { parseHTML } from "linkedom";
 import type { ExtractionOutcome, SearchResult } from "../../domain/types.js";
 import type { ContentExtractor, ExtractionLimits } from "../../ports/extraction.js";
 
+export type ExtractionFailureMetadata = {
+  failure_phase: "url_check" | "dns" | "fetch" | "redirect" | "body" | "text" | "unknown";
+  failure_detail: "unsafe_url" | "dns_failure" | "transport_other" | "deadline" | "http_rejected" | "redirect_blocked" | "body_limit" | "unsupported_content" | "zero_byte_body" | "no_readable_text" | "short_text" | "other";
+  http_status_bucket?: "403" | "429" | "other_4xx" | "5xx" | "other";
+};
+
 export interface ExtractorConfig {
   maxFetchBytes: number;
   maxRedirects: number;
@@ -63,10 +69,11 @@ async function resolvePublicAddresses(url: URL): Promise<PublicAddress[]> {
   return publicAddresses;
 }
 
-export async function assertSafeUrl(value: string): Promise<URL> {
+export async function assertSafeUrl(value: string, onDns?: () => void): Promise<URL> {
   const url = new URL(value);
   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password ||
     (url.port && !["80", "443"].includes(url.port))) throw new Error("unsafe_url");
+  onDns?.();
   await resolvePublicAddresses(url);
   return url;
 }
@@ -129,65 +136,110 @@ function pinnedAgent(addresses: PublicAddress[]): Agent {
   } } });
 }
 
+function isDnsFailure(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error &&
+    (error.code === "ENOTFOUND" || error.code === "EAI_AGAIN" || error.code === "ENODATA");
+}
+
 export class SafeContentExtractor implements ContentExtractor {
   constructor(
     private readonly config: ExtractorConfig,
     private readonly fetcher: FetchWithDispatcher = fetchWithDispatcher,
+    private readonly onFailure?: (sourceId: SearchResult["sourceId"], metadata: ExtractionFailureMetadata) => void,
   ) {}
 
   async extract(source: SearchResult, limits: ExtractionLimits): Promise<ExtractionOutcome> {
-    if (source.kind !== "link") return { sourceId: source.sourceId, status: "skipped", reason: "unsupported_content" };
+    const state: { phase: ExtractionFailureMetadata["failure_phase"]; detail: ExtractionFailureMetadata["failure_detail"]; bucket?: ExtractionFailureMetadata["http_status_bucket"] } = { phase: "url_check", detail: "other" };
+    const observe = (outcome: ExtractionOutcome, metadata: ExtractionFailureMetadata) => {
+      if (outcome.status !== "viable") {
+        try { this.onFailure?.(source.sourceId, metadata); } catch { /* Diagnostics cannot change extraction. */ }
+      }
+      return outcome;
+    };
+    if (source.kind !== "link") return observe({ sourceId: source.sourceId, status: "skipped", reason: "unsupported_content" }, { failure_phase: "url_check", failure_detail: "unsupported_content" });
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<ExtractionOutcome>((resolve) => {
-      timer = setTimeout(() => resolve({ sourceId: source.sourceId, status: "failed", code: "timeout", retryable: true }), limits.timeoutMs);
+    const timeout = new Promise<{ outcome: ExtractionOutcome; metadata: ExtractionFailureMetadata }>((resolve) => {
+      timer = setTimeout(() => resolve({ outcome: { sourceId: source.sourceId, status: "failed", code: "timeout", retryable: true },
+        metadata: { failure_phase: state.phase, failure_detail: "deadline" } }), limits.timeoutMs);
     });
-    try { return await Promise.race([this.extractInternal(source, limits), timeout]); }
-    finally { if (timer) clearTimeout(timer); }
+    try {
+      const winner = await Promise.race([
+        this.extractInternal(source, limits, state).then((outcome) => ({ outcome, metadata: {
+          failure_phase: state.phase, failure_detail: state.detail, ...(state.bucket ? { http_status_bucket: state.bucket } : {}),
+        } })),
+        timeout,
+      ]);
+      return observe(winner.outcome, winner.metadata);
+    } finally { if (timer) clearTimeout(timer); }
   }
 
-  private async extractInternal(source: SearchResult, limits: ExtractionLimits): Promise<ExtractionOutcome> {
+  private async extractInternal(source: SearchResult, limits: ExtractionLimits, state: { phase: ExtractionFailureMetadata["failure_phase"]; detail: ExtractionFailureMetadata["failure_detail"]; bucket?: ExtractionFailureMetadata["http_status_bucket"] }): Promise<ExtractionOutcome> {
     let current: URL;
-    try { current = await assertSafeUrl(source.url); }
-    catch { return { sourceId: source.sourceId, status: "skipped", reason: "unsafe_url" }; }
+    try { current = await assertSafeUrl(source.url, () => { state.phase = "dns"; }); }
+    catch (error) {
+      state.detail = state.phase === "dns" && isDnsFailure(error) ? "dns_failure" : "unsafe_url"; return { sourceId: source.sourceId, status: "skipped", reason: "unsafe_url" }; }
 
+    let followingRedirect = false;
     for (let redirects = 0; redirects <= this.config.maxRedirects; redirects++) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), limits.timeoutMs);
       let dispatcher: Agent | undefined;
       try {
+        state.phase = "dns";
         dispatcher = pinnedAgent(await resolvePublicAddresses(current));
+        state.phase = "fetch";
         const response = await this.fetcher(current, {
           redirect: "manual", signal: controller.signal,
           headers: { "user-agent": this.config.userAgent, accept: "text/html,text/plain;q=0.9" },
           dispatcher,
         });
         if (response.status >= 300 && response.status < 400) {
+          state.phase = "redirect"; state.detail = "redirect_blocked";
           const location = response.headers.get("location");
           if (!location || redirects === this.config.maxRedirects)
             return { sourceId: source.sourceId, status: "skipped", reason: "blocked" };
-          current = await assertSafeUrl(new URL(location, current).toString());
+          followingRedirect = true;
+          current = await assertSafeUrl(new URL(location, current).toString(), () => { state.phase = "dns"; });
+          followingRedirect = false;
           continue;
         }
-        if (!response.ok) return { sourceId: source.sourceId, status: "failed", code: "fetch_failed", retryable: response.status >= 500 };
+        if (!response.ok) {
+          state.detail = "http_rejected";
+          state.bucket = response.status === 403 ? "403" : response.status === 429 ? "429" : response.status >= 400 && response.status < 500 ? "other_4xx" : response.status >= 500 && response.status < 600 ? "5xx" : "other";
+          return { sourceId: source.sourceId, status: "failed", code: "fetch_failed", retryable: response.status >= 500 };
+        }
+        state.phase = "body";
         const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
-        if (contentType !== "text/html" && contentType !== "text/plain")
+        if (contentType !== "text/html" && contentType !== "text/plain") {
+          state.detail = "unsupported_content";
           return { sourceId: source.sourceId, status: "skipped", reason: "unsupported_content" };
+        }
         const body = await readBoundedBody(response, this.config.maxFetchBytes, controller.signal);
+        if (!body.byteLength) state.detail = "zero_byte_body";
         if (!body.byteLength) return { sourceId: source.sourceId, status: "skipped", reason: "empty_content" };
+        state.phase = "text";
         const raw = new TextDecoder().decode(body);
         const text = boundedText(contentType === "text/html" ? readableText(raw) : raw, limits.maxCharacters);
         const characterCount = [...text].length;
-        if (characterCount < this.config.minCharacters)
+        if (characterCount < this.config.minCharacters) {
+          state.detail = characterCount === 0 ? "no_readable_text" : "short_text";
           return { sourceId: source.sourceId, status: "skipped", reason: "empty_content" };
+        }
         return { sourceId: source.sourceId, status: "viable", page: {
           sourceId: source.sourceId, canonicalUrl: current.toString(), title: source.title,
           text, extractedAt: new Date().toISOString() as never, characterCount,
         } };
       } catch (error) {
-        if (error instanceof Error && error.message === "unsafe_url")
+        if (error instanceof Error && error.message === "unsafe_url") {
+          state.detail = followingRedirect || redirects > 0 ? "redirect_blocked" : "unsafe_url";
           return { sourceId: source.sourceId, status: "skipped", reason: "unsafe_url" };
-        if (error instanceof Error && error.message === "body_limit")
+        }
+        if (error instanceof Error && error.message === "body_limit") {
+          state.detail = "body_limit";
           return { sourceId: source.sourceId, status: "failed", code: "fetch_failed", retryable: false };
+        }
+        state.detail = error instanceof DOMException && error.name === "AbortError" ? "deadline"
+          : state.phase === "dns" && isDnsFailure(error) ? "dns_failure" : "transport_other";
         return { sourceId: source.sourceId, status: "failed",
           code: error instanceof DOMException && error.name === "AbortError" ? "timeout" : "fetch_failed", retryable: true };
       } finally {
@@ -195,6 +247,7 @@ export class SafeContentExtractor implements ContentExtractor {
         await dispatcher?.close().catch(() => undefined);
       }
     }
+    state.phase = "redirect"; state.detail = "redirect_blocked";
     return { sourceId: source.sourceId, status: "skipped", reason: "blocked" };
   }
 }

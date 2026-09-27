@@ -15,6 +15,25 @@ describe("selected extraction logging", () => {
     expect(JSON.stringify(records)).not.toMatch(/PRIVATE_QUERY|PRIVATE_FRAGMENT|token=|PRIVATE_PATH/);
   });
 
+  it("allows only bounded fixed diagnostics and an HTTP bucket for actual HTTP rejection", () => {
+    const records: LogRecord[] = [];
+    const logger = createLogger({ level: "info", sink: (record) => { records.push(record); } });
+    logSelectedExtractionFailure(logger, { url: "https://example.org/private?key=PRIVATE_QUERY", rank: 1, status: "failed", reason: "fetch_failed", elapsed_ms: 999_999,
+      metadata: { failure_phase: "fetch", failure_detail: "http_rejected", http_status_bucket: "429" } });
+    logSelectedExtractionFailure(logger, { url: "https://example.org/private", rank: 2, status: "failed", reason: "timeout", elapsed_ms: Number.POSITIVE_INFINITY,
+      metadata: { failure_phase: "fetch", failure_detail: "deadline", http_status_bucket: "403" } });
+    logSelectedExtractionFailure(logger, { url: "https://example.org/private", rank: 3, status: "skipped", reason: "empty_content", elapsed_ms: -99,
+      metadata: { failure_phase: "PRIVATE_PHASE" as never, failure_detail: "PRIVATE_DETAIL" as never, http_status_bucket: "PRIVATE_BUCKET" as never } });
+    expect(records).toMatchObject([
+      { failure_phase: "fetch", failure_detail: "http_rejected", http_status_bucket: "429", elapsed_ms: 300_000 },
+      { failure_phase: "fetch", failure_detail: "deadline", elapsed_ms: 0 },
+      { failure_phase: "unknown", failure_detail: "other", elapsed_ms: 0 },
+    ]);
+    expect(JSON.stringify(records)).not.toMatch(/PRIVATE_|PRIVATE_PHASE|PRIVATE_DETAIL|PRIVATE_BUCKET/);
+    expect(records[1]).not.toHaveProperty("http_status_bucket");
+    expect(records[2]).not.toHaveProperty("http_status_bucket");
+  });
+
   it("debug level includes the info yield events without introducing another flag", () => {
     const records: LogRecord[] = [];
     const logger = createLogger({ level: "debug", sink: (record) => { records.push(record); } });

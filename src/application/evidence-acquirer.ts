@@ -99,7 +99,7 @@ export interface EvidenceAcquirerDependencies {
   extractor?: ContentExtractor;
   fixture?: boolean;
   /** Optional host-owned, non-durable observation of a settled selected failure. */
-  onSelectedExtractionFailure?: (entry: { url: string; rank: number; status: "skipped" | "failed"; reason: string }) => void;
+  onSelectedExtractionFailure?: (entry: { url: string; rank: number; status: "skipped" | "failed"; reason: string; elapsed_ms: number; sourceId: SearchResult["sourceId"] }) => void;
 }
 
 const DEFAULT_LIMITS = {
@@ -358,6 +358,7 @@ export class EvidenceAcquirer {
           const source = batch[next++];
           if (!source) return;
           let outcome: ExtractionOutcome;
+          const started = performance.now();
           try {
             outcome = this.dependencies.extractor
               ? await this.dependencies.extractor.extract(source, extractionLimits(limits))
@@ -374,7 +375,8 @@ export class EvidenceAcquirer {
           extractionByKey.set(key, outcome);
           if (outcome.status === "skipped" || outcome.status === "failed") {
             try { this.dependencies.onSelectedExtractionFailure?.({ url: source.url, rank: source.rank,
-              status: outcome.status, reason: outcome.status === "skipped" ? outcome.reason : outcome.code }); }
+              status: outcome.status, reason: outcome.status === "skipped" ? outcome.reason : outcome.code,
+              sourceId: source.sourceId, elapsed_ms: Math.max(0, Math.min(300_000, Math.round(performance.now() - started))) }); }
             catch { /* Local observation cannot change acquisition. */ }
           }
           if (outcome.status === "viable" && normalizedPageText(outcome.page.text, maxEvidenceCharacters).text.trim()) {
