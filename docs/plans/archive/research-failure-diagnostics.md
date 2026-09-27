@@ -3,15 +3,15 @@
 ## Current State
 
 - Status: done
-- Verification: P1 focused tests (44), P2 timing/app tests (16), lint/typecheck, 337 tests, build, bundle privacy scan and diff check passed; browser suite blocked by reused non-fixture local server (2/8 passed)
+- Verification: P1 focused tests (44), P2 timing/app tests (16), lint/typecheck, 337 tests, build, bundle privacy scan and diff check passed (worker); parent reran isolated fixture browser suite on ports 5273/8877: 8/8 passed
 - Owner: Jonny
 - Executor: MUSCLE worker on `release/v1.2.1`
 - Shipping commit: `3707388` (diagnostics implementation and runbook); tag: none
 - Last updated: 2026-09-27
 - Current focus: implementation and documentation complete; production deployment and operator validation remain external.
-- Next action: Jonny verifies Vercel Request ID grouping and fresh sparse/slow turns after deployment; retry fixture e2e on an isolated local port when available. No remediation is authorized.
+- Next action: Jonny verifies Vercel Request ID grouping and fresh sparse/slow turns after deployment. No remediation is authorized.
 - Branch / PR / session: `release/v1.2.1` / none
-- Local verification: 44 focused tests, 16 timing/app tests, 337 full tests, lint, typecheck, build, client bundle privacy scan and diff check passed. Browser e2e 2/8 passed; 6 prompt tests blocked by reused non-fixture local server (Unlock screen).
+- Local verification: 44 focused tests, 16 timing/app tests, 337 full tests, lint, typecheck, build, client bundle privacy scan and diff check passed. Initial default-port e2e run reused a nonfixture server (2/8 passed); a separate isolated fixture run on 5273/8877 passed all 8 tests. No production deployment/smoke.
 
 ## Abstract
 
@@ -47,7 +47,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` verified, `[!]` blocked.
 - [x] P3 — Vercel lookup and verification
   - Deliverable: README procedure for production deployment/time window, `POST /api/turn` and `research_timing` filter, Vercel Request ID grouping, inspection of selected failures in the same invocation, and temporary `LOG_LEVEL=debug` redeploy/reproduction/return to `info` if assessment details are needed. No new log store, auto-alert, flag, or app correlation ID.
   - Verify: fixture log-format/privacy checks; lint, typecheck, full tests, build, applicable isolated browser suite, client bundle privacy check, `git diff --check`, git status. Jonny verifies dashboard lookup on a new deployment; if inaccessible, record external pending rather than block local checks.
-  - Evidence: README Vercel procedure; 337 tests, lint, typecheck, build, bundle privacy scan, `git diff --check` passed. `npm run test:e2e`: 2/8 passed, 6 failed on Unlock rather than prompt because Playwright reused an existing non-fixture server on port 8787 (`/api/health` lacked fixtureMode); isolated fixture browser suite not feasible without changing the running server. External production Request ID grouping pending Jonny.
+  - Evidence: README Vercel procedure; worker reported 337 tests, lint, typecheck, build, bundle privacy scan, `git diff --check` passed. Default-port `npm run test:e2e` reused a nonfixture server (2/8); parent reran with temporary isolated Playwright/Vite configs, ports 5273/8877, fresh fixture servers and no server conflict: 8/8 passed. Temporary config files removed. External production Request ID grouping pending Jonny.
 
 ## Desired Outcome
 
@@ -115,12 +115,12 @@ In Vercel Logs select the production deployment and a narrow UTC time window; fi
 
 ### Not verified / external pending
 
-- Schema-v6 and v7 slow-turn summaries were supplied, but no same-invocation debug records or dashboard grouping confirmation. Status/classification of CNN/NYT and Reddit failures remains unknown. Browser e2e remains unverified in fixture mode because port 8787 was occupied by a non-fixture server; 2 accessibility checks passed and 6 prompt-dependent checks failed on its Unlock screen. Production lookup and fresh-turn classification await Jonny.
+- Schema-v6 and v7 slow-turn summaries were supplied, but no same-invocation debug records or dashboard grouping confirmation. Status/classification of CNN/NYT and Reddit failures remains unknown. Production lookup and fresh-turn classification await Jonny; isolated fixture browser e2e now passes 8/8.
 
 ## Handoff
 
 - Implemented selected nonviability classification on the existing server log path, with winner-only extractor metadata and provider-neutral outcomes. README now includes existing assessment triage and the Vercel Request ID lookup.
-- Local checks passed except browser e2e, which reused an unrelated non-fixture listener on port 8787. Re-run in an isolated fixture environment when that listener is no longer needed. Jonny's post-deployment dashboard smoke (one sparse and one slow turn) remains external.
+- Local checks passed. The first default-port browser run reused an unrelated nonfixture listener on 8787; parent reran all 8 browser cases successfully on isolated fresh fixture servers (5273/8877). Jonny's post-deployment dashboard smoke (one sparse and one slow turn) remains external.
 - No deployment, production variable changes, provider/prompt changes, or remediation were performed.
 
 ## Open Questions
