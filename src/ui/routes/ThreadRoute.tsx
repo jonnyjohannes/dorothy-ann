@@ -96,7 +96,7 @@ export function ThreadRoute() {
   const started = useRef(false);
 
   useEffect(() => () => { if (feedbackTimer.current !== undefined) window.clearTimeout(feedbackTimer.current); }, []);
-  useEffect(() => () => { runGeneration.current += 1; controller.current?.cancel("navigation"); }, [threadId]);
+  useEffect(() => () => { runGeneration.current += 1; started.current = false; controller.current?.cancel("navigation"); }, [threadId]);
 
   useEffect(() => {
     let cancelled = false;

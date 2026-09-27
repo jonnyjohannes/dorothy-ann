@@ -23,6 +23,19 @@ function appFor(executor: TurnExecutor, options: { authenticate?: () => boolean;
 }
 
 describe("portable turn stream boundary", () => {
+  it("stops chattery preview at 256 frames while retaining a valid terminal", async () => {
+    const resolution = { status: "sufficient", stopReason: "sufficient", knowledge: { problemId: `problem_${"B".repeat(43)}`, findings: [], evidence: [], unresolvedGapIds: [] }, ledger: { gaps: [], assessmentsUsed: 1, searchesUsed: 0, sourcesConsumed: 0 }, tasks: [] };
+    const app = appFor({ async execute(_request, onSignal) {
+      for (let index = 0; index < 300; index++) await onSignal({ type: "answer_delta", delta: "x" });
+      return { kind: "research", outcome: { status: "failed", failure: { kind: "synthesis_failure", code: "refused", message: "Refused.", retryable: false }, researchState: { kind: "resolution", resolution }, execution: { kind: "recorded", assessmentModelRef: "a", synthesisModelRef: "b", searchRef: "c" } }, sourceRecords: [] } as never;
+    } });
+    const response = await app.request("http://localhost/", { method: "POST", body: JSON.stringify({ executionId, turnId, kind: "research", question: "hello", answerPosition: "initial", context: { threadId: "123e4567-e89b-12d3-a456-426614174002", turns: [], knownSources: [], availableEvidence: [] } }) });
+    const body = await response.text();
+    expect(body.match(/event: turn\.answer_delta/g)).toHaveLength(256);
+    expect(body).toContain("event: turn.terminal");
+    expect(body).not.toContain("event: turn.error");
+  });
+
   it("flushes a provisional delta before the deferred provider completes, then rejects overflow without a terminal", async () => {
     let release!: () => void;
     const wait = new Promise<void>((resolve) => { release = resolve; });

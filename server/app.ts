@@ -55,6 +55,7 @@ class FixtureSearchProvider implements SearchProvider {
 }
 
 class FixtureLlmProvider implements LLMProvider {
+  constructor(private readonly synthesisDelayMs = 0) {}
   async assessResearch(input: ResearchAssessmentInput): Promise<ResearchAssessmentProposal> {
     const source = input.knowledge.evidence[0]?.sources[0] ?? input.problem.context.availableEvidence[0]?.sources[0];
     if (!source) return { directive: { kind: "search", query: input.problem.question, purpose: input.problem.purpose, successCriterion: input.problem.successCriterion, priority: 1 } };
@@ -63,6 +64,8 @@ class FixtureLlmProvider implements LLMProvider {
   async *synthesizeResearch(input: ResearchSynthesisInput): AsyncIterable<AssistantContentPart> {
     const source = input.allowedSourceIds[0];
     yield { type: "text", markdown: "This is a bounded fixture answer grounded in the available evidence." };
+    if (this.synthesisDelayMs) await new Promise((resolve) => setTimeout(resolve, this.synthesisDelayMs));
+    if (input.signal?.aborted) return;
     if (source) yield { type: "citation", sourceId: source };
   }
 }
@@ -248,8 +251,9 @@ export function createApp({ config, systemPrompts, threadStoreV3: injectedStore,
     : config.BRAVE_SEARCH_API_KEY
       ? new BraveSearchProvider(config.BRAVE_SEARCH_API_KEY, fetch, identities)
       : new UnavailableSearchProvider();
+  const fixtureDelay = Number(process.env.DOROTHY_FIXTURE_SYNTHESIS_DELAY_MS ?? 0);
   const llm: LLMProvider = config.DOROTHY_FIXTURE_MODE
-    ? new FixtureLlmProvider()
+    ? new FixtureLlmProvider(Number.isInteger(fixtureDelay) && fixtureDelay >= 0 && fixtureDelay <= 2_000 ? fixtureDelay : 0)
     : config.ANTHROPIC_API_KEY && config.ANTHROPIC_ASSESSMENT_MODEL && config.ANTHROPIC_SYNTHESIS_MODEL
       ? new AnthropicProvider({
         apiKey: config.ANTHROPIC_API_KEY,

@@ -549,10 +549,12 @@ class CitationParser {
       const start = this.buffer.indexOf("[[cite:");
       if (start < 0) {
         if (!final) {
-          const keep = this.buffer.lastIndexOf("[");
-          if (keep >= 0 && this.buffer.length - keep < 8) {
-            if (keep) parts.push({ type: "text", markdown: this.buffer.slice(0, keep) });
-            this.buffer = this.buffer.slice(keep);
+          const markerPrefix = "[[cite:";
+          for (let length = Math.min(markerPrefix.length - 1, this.buffer.length); length > 0; length--) {
+            if (!this.buffer.endsWith(markerPrefix.slice(0, length))) continue;
+            const before = this.buffer.slice(0, -length);
+            if (before) parts.push({ type: "text", markdown: before });
+            this.buffer = this.buffer.slice(-length);
             return parts;
           }
         }

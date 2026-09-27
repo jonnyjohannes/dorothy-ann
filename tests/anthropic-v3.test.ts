@@ -296,6 +296,20 @@ describe("AnthropicProvider v3", () => {
     expect(fake.requests.map((request) => request.max_tokens)).toEqual([800, 800]);
   });
 
+  it("buffers citation markers split across provider chunks instead of yielding draft marker fragments", async () => {
+    const fake = client([{ [Symbol.asyncIterator]: async function* () {
+      yield { type: "content_block_delta", delta: { type: "text_delta", text: "Early [[ci" } };
+      yield { type: "content_block_delta", delta: { type: "text_delta", text: "te:src_test" } };
+      yield { type: "content_block_delta", delta: { type: "text_delta", text: "]] later" } };
+    } } as MessageStream]);
+    const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: fake });
+    await expect(collect(provider.synthesizeResearch(baseSynthesis))).resolves.toEqual([
+      { type: "text", markdown: "Early " },
+      { type: "citation", sourceId: source },
+      { type: "text", markdown: " later" },
+    ]);
+  });
+
   it("streams citations only when they are reachable through allowed source IDs", async () => {
     const fake = client([{ [Symbol.asyncIterator]: async function* () {
       yield { type: "content_block_delta", delta: { type: "text_delta", text: "Answer [[cite:src_test]] and [[cite:other]]." } };
