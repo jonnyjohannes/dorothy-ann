@@ -37,7 +37,7 @@ export interface ObservationProposal {
 
 export type ResearchDirectiveProposal =
   | { kind: "resolved"; observations: ObservationProposal[] }
-  | { kind: "search"; surface?: "web"; query: string; purpose: string; successCriterion: string; priority: 1 | 2 | 3 }
+  | { kind: "search"; query: string; purpose: string; successCriterion: string; priority: 1 | 2 | 3 }
   | { kind: "decompose"; operator: "all" | "any"; problems: ResearchProblemProposal[] };
 
 export interface ResearchAssessmentProposal {
@@ -46,7 +46,7 @@ export interface ResearchAssessmentProposal {
 
 export type ResearchDirective =
   | { kind: "resolved"; knowledge: KnowledgeUnit }
-  | { kind: "search"; surface?: "web"; query: string; purpose: string; successCriterion: string; priority: 1 | 2 | 3 }
+  | { kind: "search"; query: string; purpose: string; successCriterion: string; priority: 1 | 2 | 3 }
   | { kind: "decompose"; operator: "all" | "any"; problems: ResearchProblemProposal[] };
 
 export interface ResearchAssessment {
@@ -193,20 +193,18 @@ export class ResearchAssessor {
     const allowedDirectiveKeys = directive.kind === "resolved"
       ? ["kind", "observations"]
       : directive.kind === "search"
-        ? ["kind", "surface", "query", "purpose", "successCriterion", "priority"]
+        ? ["kind", "query", "purpose", "successCriterion", "priority"]
         : ["kind", "operator", "problems"];
     if (Object.keys(directive).some((key) => !allowedDirectiveKeys.includes(key))) {
       throw new ResearchAssessmentValidationError("directive_invalid");
     }
 
     if (directive.kind === "search") {
-      if (directive.surface !== undefined && directive.surface !== "web") throw new ResearchAssessmentValidationError("surface_invalid");
       const query = text(directive.query, "query", 500);
       return {
         problemId: input.problem.id,
         directive: {
           kind: "search",
-          ...(directive.surface === undefined ? {} : { surface: directive.surface }),
           query,
           purpose: text(directive.purpose, "purpose", 240),
           successCriterion: text(directive.successCriterion, "success_criterion", 500),

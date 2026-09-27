@@ -256,7 +256,7 @@ export class ResearchResolver {
           gap.status = "blocked";
           return { kind: "resolution", knowledge: before, stopReason: "source_budget_exhausted" };
         }
-        if (state.tasks.some((task) => (task.surface ?? "web") === (directive.surface ?? "web") && normalized(task.query) === normalized(directive.query))) {
+        if (state.tasks.some((task) => normalized(task.query) === normalized(directive.query))) {
           gap.status = "blocked";
           return { kind: "resolution", knowledge: before, stopReason: "no_new_knowledge" };
         }
@@ -275,7 +275,6 @@ export class ResearchResolver {
         )).slice(0, 3); // Keep reused hits within the existing durable per-task bound.
         const task: ResearchTaskRecord = {
           problemId: problem.id,
-          ...(directive.surface ? { surface: directive.surface } : {}),
           query: directive.query,
           purpose: directive.purpose,
           priority: directive.priority,
@@ -397,7 +396,6 @@ export class ResearchResolver {
   private async acquire(problem: ResearchProblem, directive: Extract<ResearchAssessment["directive"], { kind: "search" }>, state: { budget: ResearchBudget; ledger: GapLedger; knowledge: KnowledgeUnit; admittedSources: CanonicalSource[]; signal?: AbortSignal; onPhase?: ResearchProgressObserver }): Promise<EvidenceAcquisitionResult> {
     const request: EvidenceRequest = {
       problemId: problem.id,
-      ...(directive.surface ? { surface: directive.surface } : {}),
       query: directive.query,
       purpose: directive.purpose,
       successCriterion: directive.successCriterion,

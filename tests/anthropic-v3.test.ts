@@ -224,14 +224,28 @@ describe("AnthropicProvider v3", () => {
     expect(result.directive).toMatchObject({ kind: "search", query: "independent reporting", priority: 1 });
   });
 
-  it("offers web-only search to the model and rejects news or unknown surfaces from untrusted responses", async () => {
-    const web = client([{ content: [{ type: "text", text: JSON.stringify({ directive: { kind: "search", surface: "web", query: "latest", purpose: "report", successCriterion: "supported", priority: 1 } }) }] }]);
-    await expect(new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: web }).assessResearch(baseAssessment)).resolves.toMatchObject({ directive: { kind: "search", surface: "web" } });
-    expect(JSON.stringify(web.requests[0].output_config)).not.toContain('"news"');
-    for (const surface of ["news", "images"]) {
-      const invalid = client(Array.from({ length: 2 }, () => ({ content: [{ type: "text", text: JSON.stringify({ directive: { kind: "search", surface, query: "latest", purpose: "report", successCriterion: "supported", priority: 1 } }) }] })));
-      await expect(new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: invalid }).assessResearch(baseAssessment)).rejects.toMatchObject({ code: "assessment_invalid_response", reason: "invalid_search_query" });
+  it("offers a surface-free search and normalizes extraneous provider surface hints to web", async () => {
+    const web = client([{ content: [{ type: "text", text: JSON.stringify({ directive: { kind: "search", query: "latest", purpose: "report", successCriterion: "supported", priority: 1 } }) }] }]);
+    await expect(new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: web }).assessResearch(baseAssessment)).resolves.toEqual({ directive: { kind: "search", query: "latest", purpose: "report", successCriterion: "supported", priority: 1 } });
+    expect(JSON.stringify(web.requests[0].output_config)).not.toContain('"surface"');
+    for (const surface of ["web", "news", "images"]) {
+      const response = { content: [{ type: "text" as const, text: JSON.stringify({ directive: { kind: "search", surface, query: "latest", purpose: "report", successCriterion: "supported", priority: 1 } }) }] };
+      const fallback = client([response]);
+      await expect(new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: fallback }).assessResearch(baseAssessment)).resolves.toEqual({ directive: { kind: "search", query: "latest", purpose: "report", successCriterion: "supported", priority: 1 } });
+      expect(fallback.requests).toHaveLength(1);
     }
+  });
+
+  it("does not spend a corrective attempt on a fallback search surface hint", async () => {
+    const requests: Array<Record<string, unknown>> = [];
+    const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: { messages: { create: async (request: Record<string, unknown>) => {
+      requests.push(request);
+      if (requests.length === 1) throw { status: 400 };
+      return { content: [{ type: "text", text: JSON.stringify({ directive: { kind: "search", surface: "news", query: "current reporting" } }) }] };
+    } } } });
+    await expect(provider.assessResearch(baseAssessment)).resolves.toEqual({ directive: { kind: "search", query: "current reporting", purpose: "answer", successCriterion: "supported", priority: 1 } });
+    expect(requests).toHaveLength(2);
+    expect(requests[1].output_config).toBeUndefined();
   });
 
   it("fills trusted search metadata when unstructured output supplies only a query", async () => {
