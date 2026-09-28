@@ -89,8 +89,8 @@
   font-synthesis: none;
 }
 ::selection {
-  color: var(--paper);
-  background: var(--ink);
+  color: var(--focus-foreground, var(--ink));
+  background: var(--focus-accent);
 }
 :root[data-theme="dark"] {
   --paper: #1e1e1e;
@@ -301,8 +301,9 @@
   }
 }
 :root {
-  --focus-accent: var(--accent-1);
-  --scroll-focus-color: color-mix(in srgb, var(--focus-accent) 55%, var(--ink));
+  --focus-accent: color-mix(in srgb, var(--accent-1) 55%, var(--ink));
+  --focus-foreground: var(--thread-foreground-1, var(--ink));
+  --scroll-focus-color: var(--focus-accent);
 }
 @keyframes caret-accent-cycle {
   0%, 12.49% { caret-color: var(--accent-1); }

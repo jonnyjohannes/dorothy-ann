@@ -68,21 +68,42 @@ test("legacy accent stays inert; native caret cycles and scroll focus uses the r
   expect(await input.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
 });
 
-test("one random focus accent stays shared across SPA routes and redraws on reload", async ({ page }) => {
+test("one random accent colors global selection and focus controls per screen", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("dorothy-ann-color-scheme", "catppuccin");
-    Math.random = () => location.search.includes("second") ? 0.99 : 0;
+    Math.random = () => location.search.includes("second") ? 0.99 : location.pathname === "/threads" ? 0.5 : 0;
   });
   await page.goto("/new?first");
   const prompt = page.getByLabel("Search query");
   await expect(prompt).toBeFocused();
   const first = await prompt.locator("xpath=..").evaluate((element) => getComputedStyle(element).borderTopColor);
+  const selection = () => page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.textContent = "selection color probe";
+    document.body.append(probe);
+    const color = getComputedStyle(probe, "::selection").backgroundColor;
+    probe.remove();
+    return color;
+  });
+  expect(await selection()).toBe(first);
+  await prompt.fill("same screen retains its color");
+  expect(await prompt.locator("xpath=..").evaluate((element) => getComputedStyle(element).borderTopColor)).toBe(first);
   await page.keyboard.press("Alt+S");
   const fuzzySearch = page.getByLabel("Find threads");
   await expect(fuzzySearch).toBeVisible();
   await fuzzySearch.focus();
-  const sameLoad = await fuzzySearch.evaluate((element) => getComputedStyle(element).borderTopColor);
-  expect(sameLoad).toBe(first);
+  const screenFocus = await fuzzySearch.evaluate((element) => getComputedStyle(element).borderTopColor);
+  expect(screenFocus).not.toBe(first);
+  expect(await selection()).toBe(screenFocus);
+  const fuzzyListboxFocus = await page.evaluate(() => {
+    const listbox = document.createElement("div");
+    listbox.className = "ui-fuzzy-listbox";
+    listbox.tabIndex = 0;
+    document.body.append(listbox);
+    listbox.focus();
+    return getComputedStyle(listbox).outlineColor;
+  });
+  expect(fuzzyListboxFocus).toBe(screenFocus);
   await page.goto("/new?second");
   const nextLoad = await page.getByLabel("Search query").locator("xpath=..").evaluate((element) => getComputedStyle(element).borderTopColor);
   expect(nextLoad).not.toBe(first);
@@ -361,7 +382,8 @@ test("thread search and row selection keep distinct focus and hue cues", async (
           return 0.2126 * red! + 0.7152 * green! + 0.0722 * blue!;
         };
         const foreground = getComputedStyle(element.querySelector("button")!).color;
-        const preview = getComputedStyle(element.querySelector("small")!).color;
+        const previewNode = element.querySelector("small");
+        const preview = previewNode ? getComputedStyle(previewNode).color : foreground;
         const ratio = (foregroundColor: string, backgroundColor: string) => {
           const text = luminance(foregroundColor), fill = luminance(backgroundColor);
           return (Math.max(text, fill) + 0.05) / (Math.min(text, fill) + 0.05);

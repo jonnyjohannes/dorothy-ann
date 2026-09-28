@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { readColorScheme } from "./color-scheme";
 
 // Draw once per loaded document; slots are assigned to surfaces in discovery order.
@@ -7,7 +8,6 @@ for (let index = scrollSlotOrder.length - 1; index > 0; index--) {
   const draw = Math.floor(Math.random() * (index + 1));
   [scrollSlotOrder[index], scrollSlotOrder[draw]] = [scrollSlotOrder[draw]!, scrollSlotOrder[index]!];
 }
-const focusAccentSlot = Math.floor(Math.random() * scrollSlotOrder.length);
 
 interface ScrollSurface {
   element: HTMLElement;
@@ -24,8 +24,17 @@ const KEYBOARD_SURFACES = `${ROUTE_SURFACES}, .app-scroll-surface, .ui-markdown 
 
 /** Adds accessible visual controls while leaving all movement to native overflow. */
 export function ScrollIndicators() {
+  const { pathname } = useLocation();
   useEffect(() => {
-    document.documentElement.style.setProperty("--focus-accent", `var(--accent-${focusAccentSlot + 1})`);
+    const focusAccentSlot = Math.floor(Math.random() * scrollSlotOrder.length);
+    document.documentElement.style.setProperty("--focus-accent", `color-mix(in srgb, var(--accent-${focusAccentSlot + 1}) 55%, var(--ink))`);
+    document.documentElement.style.setProperty("--focus-foreground", `var(--thread-foreground-${focusAccentSlot + 1}, var(--ink))`);
+    return () => {
+      document.documentElement.style.removeProperty("--focus-accent");
+      document.documentElement.style.removeProperty("--focus-foreground");
+    };
+  }, [pathname]);
+  useEffect(() => {
     const surfaces = new Map<HTMLElement, ScrollSurface>();
     const slots = new Map<HTMLElement, number>();
     let nextSlot = 0;
@@ -216,7 +225,6 @@ export function ScrollIndicators() {
     window.addEventListener("resize", updateSurfaces, { passive: true });
     return () => {
       disposed = true;
-      document.documentElement.style.removeProperty("--focus-accent");
       window.removeEventListener("dorothy-ann-preference-change", applySlots);
       mutation.disconnect();
       resize.disconnect();

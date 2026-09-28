@@ -37,6 +37,13 @@ describe("v3 product boxes", () => {
     expect(rows[1]!.className).toBe(initialClasses[1]);
     expect(onIntent).not.toHaveBeenCalled();
   });
+  it("hides a thread preview that duplicates its title but keeps distinct previews", () => {
+    const same = { ...summaries[0]!, title: "Normal question", lastRequestPreview: " normal   QUESTION " };
+    const distinct = { ...summaries[0]!, id: "thread_2" as never, title: "Another topic", lastRequestPreview: "A useful detail" };
+    render(<ThreadsBox state={{ threads: [same, distinct] }} onIntent={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Normal question" }).querySelector("small")).toBeNull();
+    expect(screen.getAllByRole("listitem")[1]?.querySelector("small")).toHaveTextContent("A useful detail");
+  });
   it("advances thread hue only on effective moves, wraps rows and hues, and keeps filtering inert", () => {
     document.documentElement.dataset.colorScheme = "catppuccin";
     const second = { ...summaries[0]!, id: "thread_2" as never, title: "Another topic" };
