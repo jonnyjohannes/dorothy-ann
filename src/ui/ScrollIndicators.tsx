@@ -59,7 +59,10 @@ export function ScrollIndicators() {
           surfaces.delete(element);
         }
       }
-      for (const element of slots.keys()) if (!targets.has(element) || !element.isConnected) slots.delete(element);
+      // A menu locks the route and hides its indicator, but the mounted route keeps its hue.
+      for (const element of slots.keys()) {
+        if (!element.isConnected || (!targets.has(element) && !(hasOpenMenu && element.matches(ROUTE_SURFACES)))) slots.delete(element);
+      }
       for (const [element, axis] of targets) {
         const scrollSize = axis === "vertical" ? element.scrollHeight : element.scrollWidth;
         const clientSize = axis === "vertical" ? element.clientHeight : element.clientWidth;

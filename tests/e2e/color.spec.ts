@@ -104,6 +104,36 @@ test("a page draw assigns stable distinct scroll slots and matches the native fa
   expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--accent"))).toBe("");
 });
 
+test("a locked route keeps its scroll hue while a menu and another surface mount", async ({ page }) => {
+  await page.addInitScript(() => {
+    Math.random = () => 0;
+    localStorage.setItem("dorothy-ann-color-scheme", "catppuccin");
+  });
+  await page.goto("/new");
+  await page.locator(".app-route-scroll").evaluate((element) => element.insertAdjacentHTML("beforeend", "<p>Long content</p>".repeat(100)));
+  const route = page.locator(".app-route-scroll");
+  const indicator = page.getByRole("scrollbar", { name: "Route content scroll position" });
+  await expect(indicator).toBeVisible();
+  const originalSlot = await route.evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"));
+  await page.getByLabel("Search query").fill("/");
+  await expect(page.getByRole("listbox", { name: "Commands" })).toBeVisible();
+  await expect(indicator).toHaveCount(0);
+  await page.evaluate(() => {
+    const surface = document.createElement("div");
+    surface.className = "app-scroll-surface";
+    surface.style.cssText = "height:70px;overflow:auto;width:180px";
+    surface.textContent = "overflow ".repeat(100);
+    document.body.append(surface);
+  });
+  const added = page.locator(".app-scroll-surface");
+  await expect(page.getByRole("scrollbar", { name: "Page scroll position" })).toBeVisible();
+  expect(await added.evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"))).not.toBe(originalSlot);
+  await page.getByLabel("Search query").press("Escape");
+  await expect(indicator).toBeVisible();
+  expect(await route.evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"))).toBe(originalSlot);
+  expect(await indicator.evaluate((element) => element.style.getPropertyValue("--scroll-thumb-color"))).toBe(originalSlot);
+});
+
 test("thread search and row selection keep distinct focus and hue cues", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("dorothy-ann-color-scheme", "catppuccin"));
   for (const title of ["first fixture topic", "second fixture topic"]) {
