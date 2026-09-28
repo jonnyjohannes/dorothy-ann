@@ -682,8 +682,8 @@
   box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 12%);
   backdrop-filter: blur(10px);
 }
-.promptBox:focus-within { border-color: var(--accent); }
-.promptBox > input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); padding: 0.45rem 0.7rem; }
+.promptBox:focus-within { border-color: var(--ink); }
+.promptBox > input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); caret-color: var(--ink); padding: 0.45rem 0.7rem; }
 .promptHint { align-self: center; color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
 .commandMessage { width: 100%; margin: 1rem 0; color: var(--muted); }
 .researchPlanLive {
@@ -744,6 +744,7 @@
   border-radius: 0;
   background: var(--paper);
   color: var(--ink);
+  caret-color: var(--ink);
   padding: 0.75rem 0.8rem;
   font: inherit;
 }
@@ -777,9 +778,12 @@
 :global(:root[data-theme="dark"]) .threadPicker li .threadDelete { color: #f38ba8; }
 :global(:root[data-theme="dark"]) .threadPicker li .threadDelete:hover { color: #f5a3b8; }
 .threadPicker li button small { color: var(--muted); margin-top: 0.25rem; }
-.threadPicker .threadSelected { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.threadPicker .threadSelected { background: color-mix(in srgb, var(--thread-active-accent, var(--accent-1)) 18%, var(--paper)); }
+@media (forced-colors: active) {
+  .threadPicker .threadSelected { outline: 2px solid Highlight; outline-offset: -2px; }
+}
 .threadPicker li button:focus-visible { outline: none; }
-.threadPicker .threadSearch:focus-visible { border-color: var(--accent); outline: 0; }
+.threadPicker .threadSearch:focus { border-color: var(--ink); outline: 0; }
 .chatForm {
   position: sticky;
   bottom: 0;

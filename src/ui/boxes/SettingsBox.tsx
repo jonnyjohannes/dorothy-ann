@@ -3,7 +3,7 @@ import styles from "../App.module.css";
 import { ListboxMenu } from "../primitives/ListboxMenu";
 import type { BoxIntent } from "./box-types";
 
-type SettingKey = "theme" | "colorScheme" | "primaryAccent";
+type SettingKey = "theme" | "colorScheme";
 interface SettingOption { value: string; label: string }
 
 function SettingsSelect({ label, value, options, onChange }: { label: string; value: string; options: readonly SettingOption[]; onChange: (value: string) => void }) {
@@ -57,11 +57,10 @@ function SettingsSelect({ label, value, options, onChange }: { label: string; va
 }
 
 export function SettingsBox({ values, persistence, onIntent }: { values: Record<string, string>; persistence?: "saved" | "session_only"; onIntent: (intent: BoxIntent) => void }) {
-  const labels: Record<SettingKey, string> = { theme: "Appearance", colorScheme: "Color scheme", primaryAccent: "Primary accent" };
+  const labels: Record<SettingKey, string> = { theme: "Appearance", colorScheme: "Color scheme" };
   const options: Record<SettingKey, readonly SettingOption[]> = {
     theme: [{ value: "auto", label: "auto" }, { value: "light", label: "light" }, { value: "dark", label: "dark" }],
     colorScheme: [{ value: "mono", label: "mono" }, { value: "catppuccin", label: "catppuccin" }, { value: "rose-pine", label: "rose pine" }],
-    primaryAccent: [{ value: "default", label: "scheme default" }, { value: "fbf719", label: "#fbf719" }, { value: "e068a5", label: "#e068a5" }],
   };
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key !== "Escape") return;

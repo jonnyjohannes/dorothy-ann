@@ -12,13 +12,12 @@ export function SettingsRoute() {
   const [values, setValues] = useState<Record<string, string>>(() => ({
     theme: localStorage.getItem("dorothy-ann-theme") ?? "auto",
     colorScheme: localStorage.getItem("dorothy-ann-color-scheme") ?? "mono",
-    primaryAccent: localStorage.getItem("dorothy-ann-primary-accent") ?? "default",
   }));
   const onIntent = (intent: BoxIntent) => {
     if (intent.type === "route_escape_requested") { navigate("/", { replace: true }); return; }
-    if (intent.type === "preference_changed") {
+    if (intent.type === "preference_changed" && (intent.key === "theme" || intent.key === "colorScheme")) {
       setValues((current) => ({ ...current, [intent.key]: intent.value }));
-      const storageKey = intent.key === "colorScheme" ? "dorothy-ann-color-scheme" : intent.key === "primaryAccent" ? "dorothy-ann-primary-accent" : "dorothy-ann-theme";
+      const storageKey = intent.key === "colorScheme" ? "dorothy-ann-color-scheme" : "dorothy-ann-theme";
       localStorage.setItem(storageKey, intent.value);
       if (intent.key === "theme") document.documentElement.dataset.theme = intent.value;
       if (intent.key === "colorScheme") document.documentElement.dataset.colorScheme = intent.value;

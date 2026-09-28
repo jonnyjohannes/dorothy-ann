@@ -1,4 +1,12 @@
 import { useEffect } from "react";
+import { readColorScheme } from "./color-scheme";
+
+// Draw once per loaded document; slots are assigned to surfaces in discovery order.
+const scrollSlotOrder = Array.from({ length: 8 }, (_, index) => index);
+for (let index = scrollSlotOrder.length - 1; index > 0; index--) {
+  const draw = Math.floor(Math.random() * (index + 1));
+  [scrollSlotOrder[index], scrollSlotOrder[draw]] = [scrollSlotOrder[draw]!, scrollSlotOrder[index]!];
+}
 
 interface ScrollSurface {
   element: HTMLElement;
@@ -17,7 +25,19 @@ const KEYBOARD_SURFACES = `${ROUTE_SURFACES}, .app-scroll-surface, .ui-markdown 
 export function ScrollIndicators() {
   useEffect(() => {
     const surfaces = new Map<HTMLElement, ScrollSurface>();
+    const slots = new Map<HTMLElement, number>();
+    let nextSlot = 0;
     let disposed = false;
+    const applySlots = () => {
+      const mono = readColorScheme(document.documentElement.dataset.colorScheme) === "mono";
+      for (const [element, assignedSlot] of slots) {
+        const slot = mono ? 0 : assignedSlot;
+        const color = `var(--accent-${slot + 1})`;
+        element.style.setProperty("--scroll-thumb-color", color);
+        surfaces.get(element)?.indicator.style.setProperty("--scroll-thumb-color", color);
+      }
+    };
+    window.addEventListener("dorothy-ann-preference-change", applySlots);
 
     const refresh = () => {
       if (disposed) return;
@@ -39,15 +59,21 @@ export function ScrollIndicators() {
           surfaces.delete(element);
         }
       }
+      for (const element of slots.keys()) if (!targets.has(element) || !element.isConnected) slots.delete(element);
       for (const [element, axis] of targets) {
         const scrollSize = axis === "vertical" ? element.scrollHeight : element.scrollWidth;
         const clientSize = axis === "vertical" ? element.clientHeight : element.clientWidth;
         if (scrollSize <= clientSize || clientSize <= 0) {
+          slots.delete(element);
           element.classList.remove("has-custom-scroll-indicator");
           surfaces.get(element)?.cleanup();
           surfaces.get(element)?.indicator.remove();
           surfaces.delete(element);
           continue;
+        }
+        if (!slots.has(element)) {
+          const available = scrollSlotOrder.find((slot) => ![...slots.values()].includes(slot));
+          slots.set(element, available ?? scrollSlotOrder[nextSlot++ % scrollSlotOrder.length]!);
         }
         let surface = surfaces.get(element);
         if (!surface) {
@@ -74,6 +100,7 @@ export function ScrollIndicators() {
             indicator.setAttribute("aria-valuemin", "0");
             indicator.setAttribute("aria-valuemax", String(scrollSize - clientSize));
             indicator.tabIndex = 0;
+            indicator.style.setProperty("--scroll-thumb-color", element.style.getPropertyValue("--scroll-thumb-color"));
             indicator.append(thumb);
             document.body.append(indicator);
             const update = () => {
@@ -97,6 +124,11 @@ export function ScrollIndicators() {
               thumb.style.setProperty("--scroll-thumb-size", `${ratio * 100}%`);
               thumb.style.setProperty("--scroll-thumb-start", `${start * 100}%`);
             };
+            const onFocus = () => indicator.classList.add("app-scroll-indicator--surface-focused");
+            const onBlur = () => indicator.classList.remove("app-scroll-indicator--surface-focused");
+            element.addEventListener("focus", onFocus);
+            element.addEventListener("blur", onBlur);
+            if (document.activeElement === element) onFocus();
             element.addEventListener("scroll", update, { passive: true });
             window.addEventListener("scroll", update, { passive: true });
             const observer = new ResizeObserver(update);
@@ -145,7 +177,7 @@ export function ScrollIndicators() {
               const viewport = axis === "vertical" ? element.clientHeight : element.clientWidth;
               element.scrollTo(axis === "vertical" ? { top: scrollStart + delta * max / Math.max(1, track - viewport * viewport / (axis === "vertical" ? element.scrollHeight : element.scrollWidth)) } : { left: scrollStart + delta * max / Math.max(1, track - viewport * viewport / (axis === "horizontal" ? element.scrollWidth : element.scrollHeight)) });
             });
-            const cleanup = () => { element.removeEventListener("scroll", update); window.removeEventListener("scroll", update); observer.disconnect(); mutation.disconnect(); indicator.removeEventListener("keydown", onKeyDown); if (keyboardSurface) { element.removeEventListener("keydown", onSurfaceKeyDown); if (originalTabIndex === null) element.removeAttribute("tabindex"); } };
+            const cleanup = () => { element.removeEventListener("focus", onFocus); element.removeEventListener("blur", onBlur); element.removeEventListener("scroll", update); window.removeEventListener("scroll", update); observer.disconnect(); mutation.disconnect(); indicator.removeEventListener("keydown", onKeyDown); if (keyboardSurface) { element.removeEventListener("keydown", onSurfaceKeyDown); if (originalTabIndex === null) element.removeAttribute("tabindex"); } };
             surface = { element, axis, indicator, thumb, cleanup };
             surfaces.set(element, surface);
             element.classList.add("has-custom-scroll-indicator");
@@ -162,17 +194,19 @@ export function ScrollIndicators() {
       }
     };
 
-    refresh();
-    const mutation = new MutationObserver(refresh);
+    const updateSurfaces = () => { refresh(); applySlots(); };
+    updateSurfaces();
+    const mutation = new MutationObserver(updateSurfaces);
     mutation.observe(document.documentElement, { childList: true, subtree: true });
-    const resize = new ResizeObserver(refresh);
+    const resize = new ResizeObserver(updateSurfaces);
     resize.observe(document.documentElement);
-    window.addEventListener("resize", refresh, { passive: true });
+    window.addEventListener("resize", updateSurfaces, { passive: true });
     return () => {
       disposed = true;
+      window.removeEventListener("dorothy-ann-preference-change", applySlots);
       mutation.disconnect();
       resize.disconnect();
-      window.removeEventListener("resize", refresh);
+      window.removeEventListener("resize", updateSurfaces);
       for (const [element, surface] of surfaces) {
         element.classList.remove("has-custom-scroll-indicator");
         surface.cleanup();

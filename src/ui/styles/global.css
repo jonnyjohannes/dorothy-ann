@@ -205,6 +205,19 @@ body {
   overflow: hidden;
 }
 .route-scroll-locked { overflow: hidden !important; }
+:is(.app-route-scroll, .app-thread-list-scroll, .app-scroll-surface, .ui-listbox-menu, .ui-fuzzy-listbox, .ui-markdown pre) {
+  scrollbar-color: var(--scroll-thumb-color, var(--accent-1)) transparent;
+}
+:is(.app-route-scroll, .app-thread-list-scroll, .app-scroll-surface, .ui-listbox-menu, .ui-fuzzy-listbox, .ui-markdown pre)::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb-color, var(--accent-1));
+}
+:is(.app-route-scroll, .app-thread-list-scroll, .app-scroll-surface, .ui-markdown pre):focus:not(.has-custom-scroll-indicator) {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+:is(.app-route-scroll, .app-thread-list-scroll, .app-scroll-surface, .ui-markdown pre):focus.has-custom-scroll-indicator {
+  outline: none;
+}
 .has-custom-scroll-indicator {
   scrollbar-width: none !important;
 }
@@ -220,13 +233,17 @@ body {
   touch-action: none;
   outline-offset: 2px;
 }
-.app-scroll-indicator:focus-visible {
-  outline: 2px solid var(--accent);
+.app-scroll-indicator:is(:focus, .app-scroll-indicator--surface-focused) {
+  outline: 2px solid var(--ink);
 }
 .app-scroll-indicator > div {
   position: absolute;
   display: block;
-  background: var(--accent);
+  background: var(--scroll-thumb-color, var(--accent-1));
+}
+@media (forced-colors: active) {
+  .app-scroll-indicator > div { background: CanvasText; }
+  .app-scroll-indicator:is(:focus, .app-scroll-indicator--surface-focused) { outline-color: CanvasText; }
 }
 .app-scroll-indicator--vertical {
   top: var(--scroll-track-start);
