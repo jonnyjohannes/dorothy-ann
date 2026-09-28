@@ -8,8 +8,10 @@ interface ScrollSurface {
   cleanup: () => void;
 }
 
-const SCROLL_SURFACES = [".app-route-scroll", ".app-thread-list-scroll", ".ui-listbox-menu", ".ui-fuzzy-listbox", ".ui-markdown pre"] as const;
+// New layout scrollers can opt into the same indicator and keyboard behavior with .app-scroll-surface.
+const SCROLL_SURFACES = [".app-route-scroll", ".app-thread-list-scroll", ".app-scroll-surface", ".ui-listbox-menu", ".ui-fuzzy-listbox", ".ui-markdown pre"] as const;
 const ROUTE_SURFACES = ".app-route-scroll, .app-thread-list-scroll";
+const KEYBOARD_SURFACES = `${ROUTE_SURFACES}, .app-scroll-surface, .ui-markdown pre`;
 
 /** Adds accessible visual controls while leaving all movement to native overflow. */
 export function ScrollIndicators() {
@@ -23,7 +25,7 @@ export function ScrollIndicators() {
       const hasOpenMenu = document.querySelector(".ui-listbox-menu, .ui-fuzzy-listbox") !== null;
       document.querySelectorAll<HTMLElement>(SCROLL_SURFACES.join(",")).forEach((element) => {
         if (hasOpenMenu && element.matches(ROUTE_SURFACES)) return;
-        const horizontal = element.matches("pre");
+        const horizontal = element.matches(".ui-markdown pre, [data-scroll-axis='horizontal']");
         targets.set(element, horizontal ? "horizontal" : "vertical");
       });
       document.querySelectorAll<HTMLElement>(ROUTE_SURFACES).forEach((element) => {
@@ -118,6 +120,15 @@ export function ScrollIndicators() {
               }
             };
             indicator.addEventListener("keydown", onKeyDown);
+            // Only an overflowing layout/code surface joins the tab order. Menus own their arrow keys.
+            const keyboardSurface = element.matches(KEYBOARD_SURFACES) && !element.matches(".ui-listbox-menu, .ui-fuzzy-listbox");
+            const originalTabIndex = element.getAttribute("tabindex");
+            if (keyboardSurface && originalTabIndex === null) element.tabIndex = 0;
+            const onSurfaceKeyDown = (event: KeyboardEvent) => {
+              if (event.target !== element || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || element.classList.contains("route-scroll-locked")) return;
+              onKeyDown(event);
+            };
+            if (keyboardSurface) element.addEventListener("keydown", onSurfaceKeyDown);
             let dragStart = 0;
             let scrollStart = 0;
             indicator.addEventListener("pointerdown", (event) => {
@@ -134,7 +145,7 @@ export function ScrollIndicators() {
               const viewport = axis === "vertical" ? element.clientHeight : element.clientWidth;
               element.scrollTo(axis === "vertical" ? { top: scrollStart + delta * max / Math.max(1, track - viewport * viewport / (axis === "vertical" ? element.scrollHeight : element.scrollWidth)) } : { left: scrollStart + delta * max / Math.max(1, track - viewport * viewport / (axis === "horizontal" ? element.scrollWidth : element.scrollHeight)) });
             });
-            const cleanup = () => { element.removeEventListener("scroll", update); window.removeEventListener("scroll", update); observer.disconnect(); mutation.disconnect(); indicator.removeEventListener("keydown", onKeyDown); };
+            const cleanup = () => { element.removeEventListener("scroll", update); window.removeEventListener("scroll", update); observer.disconnect(); mutation.disconnect(); indicator.removeEventListener("keydown", onKeyDown); if (keyboardSurface) { element.removeEventListener("keydown", onSurfaceKeyDown); if (originalTabIndex === null) element.removeAttribute("tabindex"); } };
             surface = { element, axis, indicator, thumb, cleanup };
             surfaces.set(element, surface);
             element.classList.add("has-custom-scroll-indicator");
