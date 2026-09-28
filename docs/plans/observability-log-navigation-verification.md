@@ -4,6 +4,7 @@
 
 - Status: active, deferred verification from [`client-observability.md`](archive/client-observability.md). Analytics-only instrumentation and the server timing implementation shipped in Production from `d95923a`. One authenticated `/settings` Analytics beacon was observed with a normalized URL and empty referrer; this does not identify a server invocation.
 - Fixture tests verified that a turn-local collector emits sanitized `assessment_anomaly` and `research_timing` records. A bounded read-only Vercel CLI lookup found no matching research-timing request in the available recent serverless results. The project's Observability Plus entitlement, dashboard function view, and platform Request ID grouping have not been verified. The CLI can list bounded requests, but it is not evidence of a per-invocation UI link.
+- Owner reports the separately shipped fixed-name research stage metrics are flowing in Vercel; treat their delivery check as complete. This does not verify chart unit controls, function logs, or Request ID grouping, so this plan remains open.
 
 ## Decision
 
