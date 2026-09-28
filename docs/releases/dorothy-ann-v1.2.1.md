@@ -1,11 +1,11 @@
-# Dorothy Ann v1.2.1 release inventory (candidate)
+# Dorothy Ann v1.2.1 release inventory
 
-- Status: candidate prepared; not merged, tagged, or deployment-verified
-- Candidate branch: `release/v1.2.1-candidate`
-- Candidate commit: `4d1fa26` (reverts app-wide accent scroll indicators)
+- Status: candidate closed; PR merged and tag pushed. Post-merge Production deployment status is not verified in this record.
+- Candidate branch: `release/v1.2.1` (merged; remote branch retired)
+- Candidate PR head: `d91c8ff` (squash-merged as `936c047`)
 - Base: `main` at `bb106fb` (`v1.2.0`)
 - Package version: `1.2.1`
-- Release tag/date: pending
+- Release tag/date: annotated `v1.2.1` on `2026-09-28`, targeting merge commit `936c047`
 - Scope: completed v1.2.1 work through `bc965d7`, with that app-wide scrollbar feature removed by revert. Excludes the subsequent route-layout series (`2d9d8f0`, `2a57d0b`, `ac2921c`, `f3118e5`), reserved with `wip/v1.2.2-route-layout` for v1.2.2.
 
 ## Release summary
@@ -60,8 +60,11 @@ Plan-level fixture and live-provider limits are recorded in each linked plan. Ca
 - `npm audit` — zero vulnerabilities.
 - `git diff --check` — passed after release-gate documentation updates.
 
-Vercel Preview on `45838de` completed deployment but reported TypeScript errors in the function graph: strict null checking/discriminant narrowing and ES2022 `Error` cause types were not applied. The root TypeScript config has since been made standalone (no unsupported project references), with the local project-reference build moved to `tsconfig.build.json`; this correction passes local root/API typechecking and needs a fresh Preview. That Preview log also showed Vercel using package Node 24 while its project setting still read 22, plus npm install-script approval notices. Jonny reports updating the Node project setting. The package now approves only version-pinned `esbuild@0.28.2` and `unrs-resolver@1.12.2` lifecycle scripts and explicitly denies the no-op `msw@2.15.0` script; confirm the policy and Node setting on the next Preview. The active [`vercel-build-node-runtime.md`](../plans/vercel-build-node-runtime.md) records the accepted provider-chunk warnings and Production command gate. Live Brave behavior and live provider timing are not claimed. No Production deployment authorization is granted by this file.
+Vercel Preview on `62e0546` completed with no function TypeScript errors, install-script warnings, or Node-version mismatch warning; the only build warning is the accepted lazy Mux/HLS/DASH chunk sizes. The Vercel and Preview Comments checks passed on the merged PR head. The active [`vercel-build-node-runtime.md`](../plans/vercel-build-node-runtime.md) records the verification and remaining Production status gate. Live Brave behavior and live provider timing are not claimed. The post-merge Production deployment outcome has not been checked.
 
 ## Release identity
 
-After release blockers are resolved and final checks run, record the merge commit, annotated tag, release date, PR URL, and deployment outcome here. <|°_°|>
+- PR: [#15](https://github.com/jonnyjohannes/dorothy-ann/pull/15) — merged to `main` on 2026-09-28.
+- Merge commit: `936c0475debb57defc4f656a10ad6534da6f0cbf`.
+- Annotated tag: [`v1.2.1`](https://github.com/jonnyjohannes/dorothy-ann/releases/tag/v1.2.1), targeting the merge commit.
+- Production outcome: not verified here; no Production deploy command was run by this agent. <|°_°|>
