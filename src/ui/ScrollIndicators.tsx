@@ -75,7 +75,11 @@ export function ScrollIndicators() {
           continue;
         }
         if (!slots.has(element)) {
-          const available = scrollSlotOrder.find((slot) => ![...slots.values()].includes(slot));
+          const reserved = new Set(slots.values());
+          const visible = new Set([...surfaces.keys()].map((mounted) => slots.get(mounted)));
+          // Dormant mounts keep their reservation, but visible thumbs take priority when slots run out.
+          const available = scrollSlotOrder.find((slot) => !reserved.has(slot))
+            ?? scrollSlotOrder.find((slot) => !visible.has(slot));
           slots.set(element, available ?? scrollSlotOrder[nextSlot++ % scrollSlotOrder.length]!);
         }
         let surface = surfaces.get(element);

@@ -167,6 +167,43 @@ test("a mounted surface keeps its hue across temporary overflow changes", async 
   expect(await surfaces.first().evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"))).toBe(originalSlot);
 });
 
+test("dormant reservations do not duplicate simultaneous visible scroll hues", async ({ page }) => {
+  await page.addInitScript(() => {
+    Math.random = () => 0;
+    localStorage.setItem("dorothy-ann-color-scheme", "catppuccin");
+  });
+  await page.goto("/new");
+  await page.evaluate(() => {
+    for (let index = 0; index < 8; index++) {
+      const surface = document.createElement("div");
+      surface.className = "app-scroll-surface";
+      surface.style.cssText = "height:70px;overflow:auto;width:180px";
+      surface.textContent = "overflow ".repeat(100);
+      document.body.append(surface);
+    }
+  });
+  const surfaces = page.locator(".app-scroll-surface");
+  const indicators = page.getByRole("scrollbar", { name: "Page scroll position" });
+  await expect(indicators).toHaveCount(8);
+  const firstSlot = await surfaces.first().evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"));
+  await surfaces.evaluateAll((elements) => {
+    for (const element of elements.slice(1)) (element as HTMLElement).style.height = "100000px";
+    window.dispatchEvent(new Event("resize"));
+  });
+  await expect(indicators).toHaveCount(1);
+  await page.evaluate(() => {
+    const surface = document.createElement("div");
+    surface.className = "app-scroll-surface";
+    surface.style.cssText = "height:70px;overflow:auto;width:180px";
+    surface.textContent = "overflow ".repeat(100);
+    document.body.append(surface);
+  });
+  await expect(indicators).toHaveCount(2);
+  const ninthSlot = await surfaces.last().evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"));
+  expect(ninthSlot).not.toBe(firstSlot);
+  expect(await surfaces.first().evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"))).toBe(firstSlot);
+});
+
 test("thread search and row selection keep distinct focus and hue cues", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("dorothy-ann-color-scheme", "catppuccin"));
   for (const title of ["first fixture topic", "second fixture topic"]) {
