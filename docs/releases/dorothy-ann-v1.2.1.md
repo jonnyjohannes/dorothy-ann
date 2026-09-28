@@ -1,6 +1,6 @@
 # Dorothy Ann v1.2.1 release inventory
 
-- Status: candidate closed; PR merged and tag pushed. Post-merge Production deployment status is not verified in this record.
+- Status: candidate closed; PR merged and tag pushed. A later read-only plan audit found a successful GitHub Production deployment status for a subsequent commit containing these changes and a responsive Production health endpoint; direct active alias-to-commit mapping was not inspected.
 - Candidate branch: `release/v1.2.1` (merged; remote branch retired)
 - Candidate PR head: `d91c8ff` (squash-merged as `936c047`)
 - Base: `main` at `bb106fb` (`v1.2.0`)
@@ -60,11 +60,11 @@ Plan-level fixture and live-provider limits are recorded in each linked plan. Ca
 - `npm audit` — zero vulnerabilities.
 - `git diff --check` — passed after release-gate documentation updates.
 
-Vercel Preview on `62e0546` completed with no function TypeScript errors, install-script warnings, or Node-version mismatch warning; the only build warning is the accepted lazy Mux/HLS/DASH chunk sizes. The Vercel and Preview Comments checks passed on the merged PR head. The active [`vercel-build-node-runtime.md`](../plans/vercel-build-node-runtime.md) records the verification and remaining Production status gate. Live Brave behavior and live provider timing are not claimed. The post-merge Production deployment outcome has not been checked.
+Vercel Preview on `62e0546` completed with no function TypeScript errors, install-script warnings, or Node-version mismatch warning; the only build warning is the accepted lazy Mux/HLS/DASH chunk sizes. The Vercel and Preview Comments checks passed on the merged PR head. The archived [Vercel build and Node runtime plan](../plans/archive/vercel-build-node-runtime.md) records these gates and the later read-only Production check: GitHub reports a successful deployment of subsequent commit `1b68496`, and the Production alias health endpoint returned HTTP 200. That does not directly prove the alias's exact commit or Node runtime. Live Brave behavior and live provider timing are not claimed.
 
 ## Release identity
 
 - PR: [#15](https://github.com/jonnyjohannes/dorothy-ann/pull/15) — merged to `main` on 2026-09-28.
 - Merge commit: `936c0475debb57defc4f656a10ad6534da6f0cbf`.
 - Annotated tag: [`v1.2.1`](https://github.com/jonnyjohannes/dorothy-ann/releases/tag/v1.2.1), targeting the merge commit.
-- Production outcome: not verified here; no Production deploy command was run by this agent. <|°_°|>
+- Production outcome: later GitHub deployment success and alias health verified read-only as described above; no Production deploy command was run by this agent, and no direct alias-to-commit mapping is claimed. <|°_°|>
