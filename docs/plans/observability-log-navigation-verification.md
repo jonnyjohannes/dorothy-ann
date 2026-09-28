@@ -4,7 +4,7 @@
 
 - Status: active, deferred verification from [`client-observability.md`](archive/client-observability.md). Analytics-only instrumentation and the server timing implementation shipped in Production from `d95923a`. One authenticated `/settings` Analytics beacon was observed with a normalized URL and empty referrer; this does not identify a server invocation.
 - Fixture tests verified that a turn-local collector emits sanitized `assessment_anomaly` and `research_timing` records. A bounded read-only Vercel CLI lookup found no matching research-timing request in the available recent serverless results. The project's Observability Plus entitlement, dashboard function view, and platform Request ID grouping have not been verified. The CLI can list bounded requests, but it is not evidence of a per-invocation UI link.
-- Owner reports the separately shipped fixed-name research stage metrics are flowing in Vercel; treat their delivery check as complete. This does not verify chart unit controls, function logs, or Request ID grouping, so this plan remains open.
+- Owner reports the separately shipped fixed-name research stage metrics are flowing in Vercel; treat their delivery check as complete. A later owner-supplied console excerpt shows a completed research turn with an info-level `research_timing` schema-v8 summary, two info-level `assessment_anomaly` records for a bounded rejected/truncated assessment and accepted retry, and matching debug attempt/call records. The excerpt omits platform Request ID, function-invocation navigation, and dashboard entitlement context; shared timestamps alone cannot prove Request ID grouping. No source URLs or request content from the excerpt are retained in this plan. Chart unit controls also remain unverified.
 
 ## Decision
 
@@ -18,7 +18,7 @@
 
 ## Plan Ledger
 
-- [ ] L1 — read-only verification of dashboard entitlement and a real research invocation's `research_timing`/conditional `assessment_anomaly` visibility and platform Request ID grouping; record the observed fallback when unavailable, without capturing sensitive data. Close this plan after the result is documented.
+- [~] L1 — read-only verification of dashboard entitlement and a real research invocation's `research_timing`/conditional `assessment_anomaly` visibility and platform Request ID grouping; record the observed fallback when unavailable, without capturing sensitive data. Owner-supplied excerpt verifies visibility of the sanitized info-level records, but not the dashboard's invocation link or shared platform Request ID. Close only after that distinction is documented from the actual UI or bounded Logs fallback.
 
 ## Open Questions
 
