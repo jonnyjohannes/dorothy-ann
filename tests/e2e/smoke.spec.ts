@@ -151,7 +151,16 @@ test("thread transcript scrolls with arrow and page keys without stealing prompt
   await page.keyboard.press("ArrowDown");
   await expect(prompt).toBeFocused();
   expect(await transcript.evaluate((element) => element.scrollTop)).toBe(beforePromptKey);
-  await expect(transcript).not.toBeFocused();
+  await prompt.press("Escape");
+  await expect(transcript).toBeFocused();
+  await page.keyboard.press("PageDown");
+  await expect.poll(() => transcript.evaluate((element) => element.scrollTop)).toBeGreaterThan(beforePromptKey);
+  await page.waitForTimeout(550);
+  await prompt.focus();
+  await prompt.press("Escape");
+  await expect(transcript).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(/\/$/);
 });
 
 test("shared keyboard scrolling works on routes, saved threads, and future layout surfaces", async ({ page }) => {
@@ -367,7 +376,7 @@ test("route shells keep document fixed and unlock uses the shared passphrase lay
       await page.goto("/new");
       await page.getByLabel("Search query").fill("thread width check");
       await page.getByLabel("Search query").press("Enter");
-      await expect(page).toHaveURL(/\/threads\/[^/]+$/);
+      await expect(page).toHaveURL(/\/threads\/(?!new$)[^/?]+$/);
     } else await page.goto(path);
     const shell = page.locator("main").first();
     await expect(shell).toBeVisible();
@@ -377,8 +386,11 @@ test("route shells keep document fixed and unlock uses the shared passphrase lay
     if (isThreadsPage) {
       await expect(page.getByRole("heading", { name: "/threads" })).toBeVisible();
       await expect(page.getByLabel("Find threads")).toBeVisible();
-      await expect(page.locator(".app-thread-list-scroll")).toHaveCount(1);
-      await expect(page.getByRole("scrollbar", { name: "Saved threads scroll position" })).toHaveCount(0);
+      const threadList = page.locator(".app-thread-list-scroll");
+      await expect(threadList).toHaveCount(1);
+      await expect(page.getByText("Loading threads…")).toHaveCount(0);
+      const listOverflows = await threadList.evaluate((element) => element.scrollHeight > element.clientHeight);
+      await expect(page.getByRole("scrollbar", { name: "Saved threads scroll position" })).toHaveCount(listOverflows ? 1 : 0);
       await expect.poll(() => page.locator(".app-threads-layout").evaluate((element) => element.getBoundingClientRect().width / window.innerWidth)).toBeGreaterThan(0.88);
     } else {
       await expect(routeScroll).toBeVisible();

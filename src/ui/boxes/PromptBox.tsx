@@ -9,7 +9,6 @@ export function PromptBox({ value, disabled = false, onChange, onIntent }: { val
   const input = useRef<HTMLInputElement>(null);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [active, setActive] = useState(0);
-  const [escapeArmed, setEscapeArmed] = useState(false);
   const caret = useRotatingCaretColor();
 
   useEffect(() => { if (!value.startsWith("/")) setSuggestionsOpen(false); else setSuggestionsOpen(true); }, [value]);
@@ -21,9 +20,9 @@ export function PromptBox({ value, disabled = false, onChange, onIntent }: { val
     else if (event.key === "ArrowUp" && suggestionsOpen) { event.preventDefault(); setActive((current) => Math.max(0, current - 1)); }
     else if (event.key === "Tab" && suggestionsOpen && suggestions.length) { event.preventDefault(); onChange(`${suggestions[active]} `); setSuggestionsOpen(false); }
     else if (event.key === "Escape" && !event.nativeEvent.isComposing && !event.altKey && !event.ctrlKey && !event.metaKey) {
-      event.preventDefault(); setSuggestionsOpen(false); if (escapeArmed) onIntent({ type: "new_thread_requested" }); else { setEscapeArmed(true); input.current?.blur(); window.setTimeout(() => setEscapeArmed(false), 500); }
+      if (suggestionsOpen) { event.preventDefault(); event.stopPropagation(); setSuggestionsOpen(false); }
     }
     else if (event.key === "c" && (event.ctrlKey || event.metaKey) && input.current && input.current === document.activeElement && input.current.selectionStart === input.current.selectionEnd) { event.preventDefault(); onChange(""); }
   };
-  return <form className={styles.promptBox} onSubmit={submit}><input ref={input} autoFocus className={styles.promptInput} aria-label="Search query" value={value} disabled={disabled} placeholder="???" style={caret.style} onChange={(event) => { onChange(event.target.value); setActive(0); }} onKeyDown={onKeyDown} onFocus={(event) => { caret.onFocus(event); setEscapeArmed(false); }} onBlur={caret.onBlur} />{suggestionsOpen && suggestions.length > 0 && <ListboxMenu items={suggestions} activeIndex={active} ariaLabel="Commands" onActiveIndexChange={setActive} onSelect={(command) => { onChange(`${command} `); setSuggestionsOpen(false); }} className="ui-listbox-menu--overlay prompt-command-menu" renderItem={(command) => renderSuggestion(command)} />}</form>;
+  return <form className={styles.promptBox} onSubmit={submit}><input ref={input} autoFocus className={styles.promptInput} aria-label="Search query" value={value} disabled={disabled} placeholder="???" style={caret.style} onChange={(event) => { onChange(event.target.value); setActive(0); }} onKeyDown={onKeyDown} onFocus={caret.onFocus} onBlur={caret.onBlur} />{suggestionsOpen && suggestions.length > 0 && <ListboxMenu items={suggestions} activeIndex={active} ariaLabel="Commands" onActiveIndexChange={setActive} onSelect={(command) => { onChange(`${command} `); setSuggestionsOpen(false); }} className="ui-listbox-menu--overlay prompt-command-menu" renderItem={(command) => renderSuggestion(command)} />}</form>;
 }

@@ -2,12 +2,13 @@
 
 ## Current State
 
-- Status: active; shared keyboard scrolling is the first component fix, typography remains queued.
+- Status: active; shared keyboard scrolling and prompt Escape focus handoff are complete. Typography is queued; constellation accents need a mapping decision.
 - Owner: Jonny
 - Branch/worktree: `work/v1.2.2/post-facelift-facelift` in `../dorothy-ann-v1.2.2-post-facelift-facelift`, branched from `release/v1.2.2` at `b38a3a6`. This local work branch targets the v1.2.2 candidate, not Production; no push or deployment has been authorized.
 - Related completed work: [UI facelift: scroll ownership, threads, spacing, and swatches](archive/ui-facelift-scroll-and-threads.md). That plan stays closed and unchanged.
 - Verification: `npm ci --no-audit --no-fund`, `npm run lint`, `npm run typecheck`, `npm test` (39 files, 366 passed), `npm run build`, `CI=1 npm run test:e2e -- --workers=2` (26 passed, 10 conditional skips), `git diff --check`. Browser coverage includes Chromium and mobile WebKit; physical-device keyboard testing remains open. Build has the existing large-chunk warning.
-- Next action: collect further component tweaks or implement the already-approved typography items in ledger order. No other UI changes are implied.
+- Verification (Escape follow-up): `npm run lint`, `npm run typecheck`, `npm test` (39 files, 368 passed), `npm run build`, `CI=1 npm run test:e2e -- --workers=2` (26 passed, 10 conditional skips), `git diff --check`. The first full e2e run exposed a fixture-dependent route-shell test assumption and a URL wait that also matched `/threads/new?q=...`; both were tightened and the focused and full suites then passed. Physical-device keyboard testing remains open.
+- Next action: agree on removal of the Primary accent setting and stable constellation color allocation before changing it; typography remains approved and queued.
 
 ## Abstract
 
@@ -27,9 +28,12 @@ completed facelift (unchanged) → post-facelift component pass
 - [x] P1 — scope the first component tweak: ArrowUp/ArrowDown and PageUp/PageDown should scroll any focused unified layout/code surface that overflows, including future registered areas. Inputs, menus, and nested controls retain their own key behavior. Keep native overflow and existing indicators.
 - [x] P2 — overflowing shared scroll surfaces now receive a tab stop and local arrow/page-key fallback. Route and list regions are named; `.app-scroll-surface` registers future layout scrollers (with optional `data-scroll-axis="horizontal"`). Listbox/menu keys remain their own; no global key interception or focus stealing.
 - [x] P3 — Playwright verified focused transcript, home, settings, saved-thread list, and newly registered nested layout surface in Chromium and mobile WebKit. Code scrolls horizontally by arrow/page keys; the prompt retains ArrowDown; existing indicator focus/drag and menu locking tests passed. Lint, typecheck, unit tests (366), build, e2e (26 passed, 10 conditional skips), and diff check passed. No physical-device keyboard test was run.
-- [ ] P4 — establish a reusable monospace font token and load Source Code Pro for browser use with an appropriate license and fallback. Preserve the existing Helvetica-first stack for the interface and answer prose.
-- [ ] P5 — apply the mono token to fenced and inline Markdown code, `/commands`, keyboard shortcuts, route-title code, and genuinely technical identifiers. Keep navigation, prompts, headings, answers, ordinary labels, and citations in the sans stack; do not turn whole boxes or answers monospace.
-- [ ] P6 — verify loaded-font and fallback rendering, long Markdown answers with inline/fenced code and tables, command swatches, narrow screens, and light/dark themes. Run applicable UI tests, lint, typecheck, build, and `git diff --check`; record what actually ran. Extend verification as further component tweaks are scoped.
+- [x] P4 — an open prompt suggester now consumes Escape locally without arming navigation. Otherwise the first eligible prompt Escape focuses the available route scroller (or blurs if none overflows) and arms the 500 ms pair; a second returns home/new. Modified/composing/repeated Escapes do not count. `/threads` and `/settings` route closes remain unchanged.
+- [x] P5 — unit tests cover suggester precedence, second Escape, expiry, modifiers, and repeat. Chromium and mobile WebKit fixture tests verify prompt Escape → transcript focus → page scrolling and paired Escape → home. Existing route Escape and prompt/listbox checks pass; full checks recorded in Current State.
+- [~] P6 — decide and scope removal of the Primary accent setting and scheme-role color allocation. `--accent` currently controls prompt focus, scrollbars/indicators, thread selection, focus outlines, blockquotes, and status, while command/evidence/Markdown accents have separate slot policies. Do not change preference/storage behavior or relationship slots until Jonny chooses static roles versus time cycling, contrast handling, and mono behavior.
+- [ ] P7 — establish a reusable monospace font token and load Source Code Pro for browser use with an appropriate license and fallback. Preserve the existing Helvetica-first stack for the interface and answer prose.
+- [ ] P8 — apply the mono token to fenced and inline Markdown code, `/commands`, keyboard shortcuts, route-title code, and genuinely technical identifiers. Keep navigation, prompts, headings, answers, ordinary labels, and citations in the sans stack; do not turn whole boxes or answers monospace.
+- [ ] P9 — verify loaded-font and fallback rendering, long Markdown answers with inline/fenced code and tables, command swatches, narrow screens, and light/dark themes. Run applicable UI tests, lint, typecheck, build, and `git diff --check`; record what actually ran. Extend verification as further component tweaks are scoped.
 
 ## Desired Outcome
 
@@ -37,19 +41,21 @@ The completed facelift behavior remains intact. Readers can focus any overflowin
 
 ## Current Reality
 
-`src/ui/styles/global.css` defines `--display` and the root font as `"Helvetica Neue", Helvetica, Arial, sans-serif`. `src/ui/App.module.css` gives the signature and route-title code a system monospace stack. `src/ui/styles/primitives.css` styles Markdown code blocks but does not choose a font family for Markdown code; browser defaults apply. No font files are currently bundled. The earlier facelift's scroll, thread-list, spacing, and swatch decisions are complete and documented in its archived plan. Overflow remains native. The shared controller now makes overflowing layout/code surfaces focusable and handles arrow/page keys locally on the surface (mobile WebKit did not scroll the focused transcript natively in the initial fixture test). Listboxes retain their own selection keys and custom indicators remain keyboard-accessible. The prompt still autofocuses and keeps its key behavior.
+`src/ui/styles/global.css` defines `--display` and the root font as `"Helvetica Neue", Helvetica, Arial, sans-serif`. `src/ui/App.module.css` gives the signature and route-title code a system monospace stack. `src/ui/styles/primitives.css` styles Markdown code blocks but does not choose a font family for Markdown code; browser defaults apply. No font files are currently bundled. The earlier facelift's scroll, thread-list, spacing, and swatch decisions are complete and documented in its archived plan. Overflow remains native. The shared controller now makes overflowing layout/code surfaces focusable and handles arrow/page keys locally on the surface (mobile WebKit did not scroll the focused transcript natively in the initial fixture test). Listboxes retain their own selection keys and custom indicators remain keyboard-accessible. The prompt still autofocuses and keeps its key behavior. Before this follow-up, PromptBox blurred on Escape without focusing the scroll region, and the global handler did not count that editable Escape; the second did not complete the intended pair. Now prompt Escape transfers focus to an overflowing route scroller and counts toward the same 500 ms pair; a command suggester consumes its own Escape first.
 
 ## Scope
 
 ### Approved goals
 
 - Let focused unified overflow areas scroll with arrow and page keys: routes, saved-thread list, Markdown code, and future `.app-scroll-surface` layout areas. Retain keyboard access to prompts, menus, links, and custom scrollbars.
+- From an idle prompt, an eligible Escape should focus the overflowing route scroller (when available), so arrow and page keys work without a pointer click; keep the second Escape/new-thread and local-menu precedence.
 - Keep the existing sans-serif stack for UI and prose; do not introduce another display or body family.
 - Give code-like text a consistent Source Code Pro face, with a reliable fallback if the font has not loaded.
 - Preserve Markdown legibility, syntax distinction, responsive behavior, and the completed facelift contracts.
 
 ### Awaiting scope
 
+- Remove Primary accent from settings and distribute scheme colors across unrelated UI roles using a stable, non-random allocation. Jonny has not yet chosen the mapping/contrast policy; amend this plan and implement only after that decision.
 - Additional UI component tweaks Jonny plans to describe. Amend this plan's ledger, boundaries, and verification before implementing any of them.
 
 ### Non-goals
@@ -61,6 +67,7 @@ The completed facelift behavior remains intact. Readers can focus any overflowin
 ## Decisions
 
 - Keep native overflow and the existing custom visual scrollbar. Register overflowing layout/code surfaces as focusable, with local keyboard fallback because mobile WebKit did not scroll a focused thread region with arrow keys in fixture tests. Menus retain their own selection keys and accessible indicator; no global keyboard interception, prompt-autofocus change, or route-shortcut change. Future layout scroll surfaces opt into the shared controller with `.app-scroll-surface`, optionally `data-scroll-axis="horizontal"`.
+- An open prompt suggester owns and consumes Escape. Otherwise the idle prompt's first Escape hands focus to the route scroller and counts toward the existing 500 ms pair; the second returns home/new. If no route region overflows, the first Escape simply blurs the prompt but still arms the pair. Modified/composing Escape does not count. Do not change `/threads` or `/settings` route-close behavior.
 - Jonny chose Helvetica + Source Code Pro over a replacement sans-serif. Keep Helvetica for navigation, prompts, headings, and all answer prose.
 - Use Source Code Pro for fenced and inline code, `/commands`, shortcuts, and technical identifiers only where they are actually rendered as code-like content. Avoid classifying ordinary text as code merely because it contains a number or label.
 - Prefer a self-hosted licensed web-font asset for predictable browser rendering; retain a system monospace fallback. Do not assume a locally installed font is available to every user.
@@ -83,9 +90,11 @@ The completed facelift behavior remains intact. Readers can focus any overflowin
 
 ## Open Questions
 
+- For the proposed constellation, should unrelated roles get stable hue slots (recommended) or change hue over time? Actual DOM-order indexing can shift after dynamic content and is not recommended; a semantic route/role order stays stable. Keep related descendants sharing an inherited role token, and maintain contrast when accent colors are used as text/focus against light/dark backgrounds.
+- `mono` has only one accent hue, so unrelated roles cannot receive distinct colors without changing that scheme. Should it remain intentionally monochrome?
 - Which other UI components and behaviors does Jonny want to adjust in this pass?
 - Which existing technical identifier surfaces, if any, need mono beyond the explicit code/command/shortcut locations? Decide from actual rendered UI, not a blanket selector.
 
 ## Handoff
 
-- Shared keyboard scrolling is implemented and fixture-verified; typography is approved but not started. Physical-device keyboard behavior is unverified. Do not implement unspecific UI tweaks. The archived facelift is not reopened. Keep work and commits on `work/v1.2.2/post-facelift-facelift`, then integrate through the release workflow once scoped and verified.
+- Shared keyboard scrolling and prompt Escape handoff are implemented and fixture-verified; typography is approved but not started. Primary-accent removal needs a mapping decision before code. Physical-device keyboard behavior is unverified. Physical-device keyboard behavior is unverified. Do not implement unspecific UI tweaks. The archived facelift is not reopened. Keep work and commits on `work/v1.2.2/post-facelift-facelift`, then integrate through the release workflow once scoped and verified.
