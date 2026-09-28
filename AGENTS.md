@@ -16,7 +16,7 @@ When a plan's last item closes, move it to `archive/` and set its `Status` to `d
 
 ## architecture and boundaries
 
-This is one strict-TypeScript npm package targeting Node 22.
+This is one strict-TypeScript npm package targeting Node 24.x.
 
 - `src/domain/` contains framework-free v3 types, schemas, identity, migration, knowledge, and context policies.
 - `src/application/` contains use cases and orchestration against domain and ports only.
@@ -34,6 +34,29 @@ Ordinary non-command input and `/threads/new?q=...` create a `ResearchTurn` rega
 The visible product boxes are `PromptBox`, `TranscriptBox`, `EvidenceBox`, `BrandBox`, `StickyHeader`, `SettingsBox`, `ThreadsBox`, `UnlockBox`, and `SystemStatusBox`, all under `src/ui/boxes/`. Keyboard control is real and must be preserved: `GlobalShortcuts` (`src/ui/App.tsx`) owns `Alt+S` → `/threads`, `Alt+C` → `/settings`, `i` → focus prompt, `Escape` to leave `/threads` and `/settings`, and double-`Escape` → home, with `Alt+A` intentionally unassigned. Individual boxes own their own list, confirm, and activation keys. The v1.1.0 plan called this a `Hotkeys` box; no such component was built, so describe the behavior by its real locations. The application owns transcript separators. Synthesized answers may use emphasized labels, lists, tables, code, quotes, and whitespace, but must not generate headings or horizontal rules.
 
 The search-result-kind amendment is tracked in [`docs/plans/archive/dorothy-ann-search-result-kinds.md`](docs/plans/archive/dorothy-ann-search-result-kinds.md). Its prompt-input URL is `/threads/new?q=<prompt input>`, with a shared classifier for bare research plus `/link`, `/image`, and `/video` `SearchTurn` result kinds. Media results remain durable bounded source records but never enter extraction or factual research evidence. Supported video cards mount paused provider playback when they enter the viewport, retain linked-thumbnail fallback while offscreen or after failure, and keep titles as external source-page links. That amendment is `done` and shipped in v1.2.0; `/search` no longer exists anywhere in `src/`.
+
+## release and plan workflow
+
+A release branch is the integration line for one release candidate, not the shared workspace for every agent. Jonny chooses `release/vX.Y.Z` from current `main` and may designate it as Vercel's Production Branch during rapid prototyping. This is intentionally high risk: pushes and merges to the active Production Branch can deploy to Production. Always state which branch/project/environment a Git action targets; the existing exact-command approval rule applies to any agent action that can trigger a Production deployment. Jonny may test locally and push himself.
+
+Use a durable plan for multi-step, decision-heavy, cross-boundary, or likely-to-span-session work; skip plan/flow ceremony for small, obvious, single-session changes. Flow-specer is opt-in unless Jonny invokes it; when active, follow its BRAINS/readiness/explicit-handoff contract.
+
+Give each scoped plan an isolated branch and worktree so plans and agents do not contend on one branch:
+
+- Create the plan under `docs/plans/<slug>.md` and record its branch/worktree and related PR in `Current State` when known.
+- Branch from the current release integration branch using `work/vX.Y.Z/<slug>`; use a sibling worktree such as `../dorothy-ann-vX.Y.Z-<slug>` rather than nesting worktrees in the repository.
+- Keep each work branch limited to its plan. Pushes/PRs from work branches should use Vercel Preview; a merge or push to the active release/Production branch may deploy Production.
+- Integrate completed plan branches into `release/vX.Y.Z` one plan at a time, preferably by squash-merging each plan PR into one readable plan-sized commit. Rebase/retest when the release branch advances; do not have multiple agents commit directly to the shared release branch.
+- The active plan and `Plan Ledger` remain authoritative. Follow the flow-specer plan shape (`Current State`, `Abstract`, `Flow`, `Plan Ledger`, `Desired Outcome`, `Current Reality`, `Scope`, `Decisions`, `Detailed Plan`, `Verification`, `Open Questions`) without requiring flow-specer for every task. If flow-specer is invoked, honor its BRAINS/MUSCLE boundary: planning or a ready spec alone does not authorize execution or delegation.
+
+Jonny explicitly calls release freeze/closure when the candidate is ready; do not infer it from a quiet branch or completed individual plans. At closure:
+
+1. Confirm all intended plan work is integrated into the release branch; verify the complete candidate and update/archive plans according to their ledger state.
+2. Update the release inventory with scope, verification, accepted gaps, PR, and release identity.
+3. Open the release PR from `release/vX.Y.Z` to `main`. Squash-merge it as one release-level commit titled `vX.Y.Z — <release story>` so `main` reads as one clear commit per release; keep per-plan detail in the release PR, plan records, and release branch history.
+4. Create an annotated `vX.Y.Z` tag on the resulting merge/squash commit and push that exact tag. Verify the tag target and remote ref; never tag the candidate head before merge.
+5. Close the candidate record and clean up plan worktrees/branches only after confirming they are clean and their final trees are represented in the merged release. Squash merges do not make the source tip an ancestor, so verify the PR's merged state and tree equivalence before deleting a local branch. Keep the release branch until Vercel no longer uses it as Production Branch.
+6. Create the next `release/vX.Y.Z` from updated `main`. Jonny manually switches Vercel's Production Branch to the new release branch when ready; confirm the target and expected effect before any agent-initiated setting change. Retire the previous release branch/worktree only after that switch and after preserving the tag.
 
 ## implementation workflow
 
