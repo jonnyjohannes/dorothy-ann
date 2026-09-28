@@ -134,6 +134,39 @@ test("a locked route keeps its scroll hue while a menu and another surface mount
   expect(await indicator.evaluate((element) => element.style.getPropertyValue("--scroll-thumb-color"))).toBe(originalSlot);
 });
 
+test("a mounted surface keeps its hue across temporary overflow changes", async ({ page }) => {
+  await page.addInitScript(() => {
+    Math.random = () => 0;
+    localStorage.setItem("dorothy-ann-color-scheme", "catppuccin");
+  });
+  await page.goto("/new");
+  await page.evaluate(() => {
+    const first = document.createElement("div");
+    first.className = "app-scroll-surface";
+    first.style.cssText = "height:70px;overflow:auto;width:180px";
+    first.textContent = "overflow ".repeat(100);
+    document.body.append(first);
+  });
+  const surfaces = page.locator(".app-scroll-surface");
+  const indicators = page.getByRole("scrollbar", { name: "Page scroll position" });
+  await expect(indicators).toHaveCount(1);
+  const originalSlot = await surfaces.first().evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"));
+  await surfaces.first().evaluate((element) => { element.style.height = "100000px"; window.dispatchEvent(new Event("resize")); });
+  await expect(indicators).toHaveCount(0);
+  await page.evaluate(() => {
+    const second = document.createElement("div");
+    second.className = "app-scroll-surface";
+    second.style.cssText = "height:70px;overflow:auto;width:180px";
+    second.textContent = "overflow ".repeat(100);
+    document.body.append(second);
+  });
+  await expect(indicators).toHaveCount(1);
+  expect(await surfaces.nth(1).evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"))).not.toBe(originalSlot);
+  await surfaces.first().evaluate((element) => { element.style.height = "70px"; window.dispatchEvent(new Event("resize")); });
+  await expect(indicators).toHaveCount(2);
+  expect(await surfaces.first().evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"))).toBe(originalSlot);
+});
+
 test("thread search and row selection keep distinct focus and hue cues", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("dorothy-ann-color-scheme", "catppuccin"));
   for (const title of ["first fixture topic", "second fixture topic"]) {

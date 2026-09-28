@@ -67,7 +67,7 @@ export function ScrollIndicators() {
         const scrollSize = axis === "vertical" ? element.scrollHeight : element.scrollWidth;
         const clientSize = axis === "vertical" ? element.clientHeight : element.clientWidth;
         if (scrollSize <= clientSize || clientSize <= 0) {
-          slots.delete(element);
+          // Temporary loss of overflow removes the control, not this mounted element's slot.
           element.classList.remove("has-custom-scroll-indicator");
           surfaces.get(element)?.cleanup();
           surfaces.get(element)?.indicator.remove();
