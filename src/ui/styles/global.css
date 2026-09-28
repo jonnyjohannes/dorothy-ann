@@ -1,4 +1,27 @@
+/* Source Code Pro Latin, SIL OFL 1.1; see ../fonts/OFL.txt. */
+@font-face {
+  font-family: "Source Code Pro";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/source-code-pro-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Source Code Pro";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../fonts/source-code-pro-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Source Code Pro";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../fonts/source-code-pro-latin-700-normal.woff2") format("woff2");
+}
 :root {
+  --mono: "Source Code Pro", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --paper: #e0e0e0;
   --command-accent-1: var(--accent-1);
   --command-accent-2: var(--accent-2);

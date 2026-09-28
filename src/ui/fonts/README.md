@@ -1,0 +1,1 @@
+Source Code Pro Latin web fonts (regular 400, medium 500, bold 700), from `@fontsource/source-code-pro@5.3.0` (`files/source-code-pro-latin-{400,500,700}-normal.woff2`). Copyright Google Inc. Licensed under SIL Open Font License 1.1; see `OFL.txt`. Only these weights are used by the code-like UI and Markdown styles. Helvetica UI/prose remains system-provided.
