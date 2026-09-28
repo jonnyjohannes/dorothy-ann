@@ -230,7 +230,7 @@ body {
 }
 .app-scroll-indicator--vertical {
   top: var(--scroll-track-start);
-  right: var(--scroll-track-edge);
+  right: max(var(--scroll-track-edge), env(safe-area-inset-right, 0px));
   width: var(--scroll-track-width);
   height: var(--scroll-track-size);
 }

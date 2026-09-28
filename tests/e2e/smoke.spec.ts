@@ -143,6 +143,7 @@ test("native scroll surfaces gain accessible square accent indicators on desktop
   expect(trackBounds && contentBounds && headerBounds && promptBounds).toBeTruthy();
   expect(trackBounds!.y).toBeGreaterThanOrEqual(headerBounds!.y + headerBounds!.height);
   expect(trackBounds!.y + trackBounds!.height).toBeLessThanOrEqual(promptBounds!.y);
+  expect(trackBounds!.x + trackBounds!.width).toBeCloseTo(await page.evaluate(() => window.innerWidth), 0);
   await routeScrollbar.focus();
   await page.keyboard.press("End");
   await expect(routeScrollbar).toHaveAttribute("aria-valuenow", /[1-9]/);
@@ -286,10 +287,14 @@ test("route shells keep document fixed and unlock uses the shared passphrase lay
     const promptFooter = page.locator(".app-prompt-footer");
     await expect(promptFooter).toHaveCount(expectedPromptFooter ? 1 : 0);
     if (expectedPromptFooter) {
-      const [routeBounds, footerBounds, shellBounds] = await Promise.all([
+      const promptBox = promptFooter.locator("form");
+      const promptInput = promptFooter.getByLabel("Search query");
+      const [routeBounds, footerBounds, shellBounds, promptBoxBounds, inputPadding] = await Promise.all([
         routeScroll.boundingBox(),
         promptFooter.boundingBox(),
         page.locator("main").first().boundingBox(),
+        promptBox.boundingBox(),
+        promptInput.evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingTop) + Number.parseFloat(getComputedStyle(element).paddingBottom)),
       ]);
       expect(routeBounds, `${path} route bounds at ${viewport.width}x${viewport.height}`).not.toBeNull();
       expect(footerBounds, `${path} footer bounds`).not.toBeNull();
@@ -298,6 +303,8 @@ test("route shells keep document fixed and unlock uses the shared passphrase lay
       expect(footerBounds!.width).toBeCloseTo(routeBounds!.width, 0);
       expect(footerBounds!.y).toBeGreaterThan(routeBounds!.y);
       expect(footerBounds!.y + footerBounds!.height).toBeCloseTo(shellBounds!.y + shellBounds!.height, 0);
+      expect(shellBounds!.y + shellBounds!.height - promptBoxBounds!.y - promptBoxBounds!.height).toBeGreaterThanOrEqual(16);
+      expect(inputPadding).toBeLessThanOrEqual(15);
     }
     if (path === "/settings" && viewport.width >= 2000) {
       const [settingsBounds, routeBounds, controlBounds] = await Promise.all([

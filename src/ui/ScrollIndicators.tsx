@@ -85,7 +85,10 @@ export function ScrollIndicators() {
               indicator.style.setProperty("--scroll-thumb-start", `${start * 100}%`);
               indicator.style.setProperty("--scroll-track-start", `${axis === "vertical" ? rect.top : rect.left}px`);
               indicator.style.setProperty("--scroll-track-size", `${axis === "vertical" ? rect.bottom - rect.top : rect.right - rect.left}px`);
-              indicator.style.setProperty("--scroll-track-edge", `${axis === "vertical" ? window.innerWidth - rect.right : window.innerHeight - rect.bottom}px`);
+              const edge = axis === "vertical"
+                ? element.matches(ROUTE_SURFACES) ? 0 : window.innerWidth - rect.right
+                : window.innerHeight - rect.bottom;
+              indicator.style.setProperty("--scroll-track-edge", `${edge}px`);
               indicator.setAttribute("aria-valuemax", String(size - viewport));
               indicator.setAttribute("aria-valuenow", String(Math.round(offset)));
               indicator.setAttribute("aria-valuetext", `${Math.round(offset)} of ${size - viewport}`);
