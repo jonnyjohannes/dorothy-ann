@@ -1,5 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { metric } from "@vercel/functions";
 import { createApp } from "../server/app.js";
+import { createResearchMetricsSink } from "./research-metrics.js";
 import { loadConfig } from "../server/runtime/config.js";
 import { FileSystemPromptSource } from "../server/runtime/system-prompts.js";
 import { IdentityPolicy } from "../src/application/identity-policy.js";
@@ -14,7 +16,7 @@ const appPromise = new FileSystemPromptSource().load().then((systemPrompts) => {
   const threadStoreV3 = !config.DOROTHY_FIXTURE_MODE && config.UPSTASH_REDIS_REST_URL && config.UPSTASH_REDIS_REST_TOKEN
     ? RedisThreadStore.fromUpstash(config.UPSTASH_REDIS_REST_URL, config.UPSTASH_REDIS_REST_TOKEN, identities)
     : undefined;
-  return createApp({ config, systemPrompts, threadStoreV3, logger });
+  return createApp({ config, systemPrompts, threadStoreV3, logger, researchTimingSink: createResearchMetricsSink(logger, metric) });
 });
 
 type VercelRequest = IncomingMessage & { body?: unknown };
