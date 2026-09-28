@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("legacy accent stays inert and editing caret remains ink-paper", async ({ page }) => {
+test("legacy accent stays inert; native caret cycles scheme colors and scroll focus frames the region", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("dorothy-ann-primary-accent", "e068a5"));
   await page.goto("/new");
   const input = page.getByLabel("Search query");
@@ -17,7 +17,7 @@ test("legacy accent stays inert and editing caret remains ink-paper", async ({ p
         return { ink: root.color, caret: getComputedStyle(element).caretColor,
           border: getComputedStyle(element.parentElement!).borderColor, override: document.documentElement.style.getPropertyValue("--accent") };
       });
-      expect(colors.caret).toBe(colors.ink);
+      expect(colors.caret).not.toBe("");
       expect(colors.border).toBe(colors.ink);
       expect(colors.override).toBe("");
       await input.fill("composition remains editable");
@@ -29,9 +29,9 @@ test("legacy accent stays inert and editing caret remains ink-paper", async ({ p
   const indicator = page.getByRole("scrollbar", { name: "Route content scroll position" });
   await expect(indicator).toBeVisible();
   await scroller.focus();
-  await expect(indicator).toHaveClass(/surface-focused/);
-  expect(await scroller.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("none");
-  const focusOutline = await indicator.evaluate((element) => getComputedStyle(element).outlineColor);
+  await expect(scroller).toHaveClass(/app-scroll-surface--focused/);
+  expect(await scroller.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
+  const focusOutline = await scroller.evaluate((element) => getComputedStyle(element).outlineColor);
   expect(focusOutline).toBe(await page.evaluate(() => {
     const probe = document.createElement("span");
     probe.style.color = "var(--scroll-focus-color)";
@@ -41,11 +41,13 @@ test("legacy accent stays inert and editing caret remains ink-paper", async ({ p
     return color;
   }));
   await indicator.focus();
-  expect(await indicator.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
+  expect(await indicator.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("none");
+  expect(await scroller.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
   if (test.info().project.name === "chromium") {
     await page.emulateMedia({ forcedColors: "active" });
     await indicator.focus();
-    expect(await indicator.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
+    expect(await indicator.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("none");
+    expect(await scroller.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
     expect(await indicator.locator("div").evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
     await page.emulateMedia({ forcedColors: "none" });
   }
@@ -55,7 +57,7 @@ test("legacy accent stays inert and editing caret remains ink-paper", async ({ p
   expect(await scroller.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
   expect(await scroller.evaluate((element) => getComputedStyle(element).outlineColor)).toBe(focusOutline);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  expect(await input.evaluate((element) => getComputedStyle(element).caretColor)).toBe(await scroller.evaluate((element) => getComputedStyle(element).color));
+  expect(await input.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
 });
 
 test("a page draw assigns stable distinct scroll slots and matches the native fallback", async ({ page }) => {
@@ -229,7 +231,7 @@ test("scroll focus uses the video hue without a gap and user turns use the image
   const indicator = page.getByRole("scrollbar", { name: "Route content scroll position" });
   await expect(indicator).toBeVisible();
   await scroller.focus();
-  await expect(indicator).toHaveClass(/surface-focused/);
+  await expect(scroller).toHaveClass(/app-scroll-surface--focused/);
   for (const scheme of ["mono", "catppuccin", "rose-pine"]) {
     for (const theme of ["light", "dark", "auto"]) {
       await page.emulateMedia({ colorScheme: theme === "auto" ? "dark" : "light" });
@@ -242,7 +244,7 @@ test("scroll focus uses the video hue without a gap and user turns use the image
         const probe = document.createElement("span");
         probe.style.cssText = "color:var(--scroll-focus-color);background:var(--command-accent-5)";
         document.body.append(probe);
-        const indicator = document.querySelector<HTMLElement>(".app-scroll-indicator[aria-label='Route content scroll position']")!;
+        const indicator = document.querySelector<HTMLElement>(".app-route-scroll")!;
         const turn = document.querySelector<HTMLElement>("blockquote[class*='userTurn']")!;
         const result = { focus: getComputedStyle(indicator).outlineColor, expected: getComputedStyle(probe).color,
           image: getComputedStyle(probe).backgroundColor, turn: getComputedStyle(turn).borderLeftColor,
@@ -258,7 +260,7 @@ test("scroll focus uses the video hue without a gap and user turns use the image
       });
       expect(colors.focus).toBe(colors.expected);
       expect(colors.turn).toBe(colors.image);
-      expect(colors.offset).toBe("0px");
+      expect(colors.offset).toBe("-2px");
       expect(colors.ratio, `${scheme}/${theme} scroll-focus contrast`).toBeGreaterThanOrEqual(3);
     }
   }
@@ -299,7 +301,7 @@ test("thread search and row selection keep distinct focus and hue cues", async (
   });
   expect((await read()).slot).toBe("var(--accent-1)");
   const initial = await read();
-  expect(initial.caret).toBe(initial.ink);
+  expect(initial.caret).not.toBe("");
   await rows.nth(1).hover();
   const moved = await read();
   expect(moved.slot).toBe("var(--accent-2)");

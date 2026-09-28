@@ -131,10 +131,14 @@ export function ScrollIndicators() {
               thumb.style.setProperty("--scroll-thumb-size", `${ratio * 100}%`);
               thumb.style.setProperty("--scroll-thumb-start", `${start * 100}%`);
             };
-            const onFocus = () => indicator.classList.add("app-scroll-indicator--surface-focused");
-            const onBlur = () => indicator.classList.remove("app-scroll-indicator--surface-focused");
+            const onFocus = () => element.classList.add("app-scroll-surface--focused");
+            const onBlur = () => element.classList.remove("app-scroll-surface--focused");
+            const onIndicatorFocus = () => { indicator.classList.add("app-scroll-indicator--surface-focused"); onFocus(); };
+            const onIndicatorBlur = () => { indicator.classList.remove("app-scroll-indicator--surface-focused"); onBlur(); };
             element.addEventListener("focus", onFocus);
             element.addEventListener("blur", onBlur);
+            indicator.addEventListener("focus", onIndicatorFocus);
+            indicator.addEventListener("blur", onIndicatorBlur);
             if (document.activeElement === element) onFocus();
             element.addEventListener("scroll", update, { passive: true });
             window.addEventListener("scroll", update, { passive: true });
@@ -184,7 +188,7 @@ export function ScrollIndicators() {
               const viewport = axis === "vertical" ? element.clientHeight : element.clientWidth;
               element.scrollTo(axis === "vertical" ? { top: scrollStart + delta * max / Math.max(1, track - viewport * viewport / (axis === "vertical" ? element.scrollHeight : element.scrollWidth)) } : { left: scrollStart + delta * max / Math.max(1, track - viewport * viewport / (axis === "horizontal" ? element.scrollWidth : element.scrollHeight)) });
             });
-            const cleanup = () => { element.removeEventListener("focus", onFocus); element.removeEventListener("blur", onBlur); element.removeEventListener("scroll", update); window.removeEventListener("scroll", update); observer.disconnect(); mutation.disconnect(); indicator.removeEventListener("keydown", onKeyDown); if (keyboardSurface) { element.removeEventListener("keydown", onSurfaceKeyDown); if (originalTabIndex === null) element.removeAttribute("tabindex"); } };
+            const cleanup = () => { element.removeEventListener("focus", onFocus); element.removeEventListener("blur", onBlur); indicator.removeEventListener("focus", onIndicatorFocus); indicator.removeEventListener("blur", onIndicatorBlur); element.classList.remove("app-scroll-surface--focused"); element.removeEventListener("scroll", update); window.removeEventListener("scroll", update); observer.disconnect(); mutation.disconnect(); indicator.removeEventListener("keydown", onKeyDown); if (keyboardSurface) { element.removeEventListener("keydown", onSurfaceKeyDown); if (originalTabIndex === null) element.removeAttribute("tabindex"); } };
             surface = { element, axis, indicator, thumb, cleanup };
             surfaces.set(element, surface);
             element.classList.add("has-custom-scroll-indicator");

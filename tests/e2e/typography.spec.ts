@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const sans = "Helvetica Neue, Helvetica, Arial, sans-serif";
+const sans = "Source Sans 3, Helvetica Neue, Helvetica, Arial, sans-serif";
 const mono = "Source Code Pro, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
 const normalized = (family: string) => family.replaceAll('"', "").replaceAll("'", "");
 
@@ -9,7 +9,10 @@ for (const theme of ["light", "dark"] as const) {
     await page.addInitScript((value) => localStorage.setItem("dorothy-ann-theme", value), theme);
     await page.goto("/new");
     await expect(page.getByRole("heading", { name: "/new" })).toBeVisible();
-    await page.evaluate(() => document.fonts.ready);
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+      await Promise.all([400, 500, 600, 700].map((weight) => document.fonts.load(`${weight} 16px "Source Sans 3"`)));
+    });
     expect(await page.evaluate(() => ({
       theme: document.documentElement.dataset.theme,
       loadedWeights: [...document.fonts].filter((face) => face.family === "Source Code Pro" && face.status === "loaded").map((face) => face.weight).sort(),
@@ -28,9 +31,9 @@ for (const theme of ["light", "dark"] as const) {
   });
 }
 
-test("a failed web font falls back without changing the Helvetica UI stack or focus", async ({ page }) => {
+test("failed web fonts fall back without changing the UI stack or focus", async ({ page }) => {
   let blockedFonts = 0;
-  await page.route(/source-code-pro-latin-.*\.woff2/, (route) => { blockedFonts++; return route.abort(); });
+  await page.route(/source-(code-pro|sans-3)-latin-.*\.woff2/, (route) => { blockedFonts++; return route.abort(); });
   await page.goto("/new");
   await expect(page.getByRole("heading", { name: "/new" })).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
