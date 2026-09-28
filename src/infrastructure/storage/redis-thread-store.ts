@@ -1,4 +1,4 @@
-import { Redis } from "@upstash/redis";
+import { Redis, errors } from "@upstash/redis";
 import type { ThreadId } from "../../domain/types.js";
 import type { LegacyMigrationIdentities } from "../../domain/migrations.js";
 import type { StoredThreadRecord, ThreadRevision } from "../../ports/storage-v3.js";
@@ -7,6 +7,7 @@ import type { TerminalCommitIdentity } from "../../application/commit-terminal-t
 
 export interface V3Redis {
   get<T>(key: string): Promise<T | null>;
+  mget<T extends unknown[]>(...keys: string[]): Promise<T>;
   zrange<T extends unknown[]>(key: string, min: number, max: number): Promise<T>;
   zrem(key: string, ...members: string[]): Promise<number>;
   del(...keys: string[]): Promise<number>;
@@ -47,6 +48,9 @@ redis.call("SET", KEYS[2], ARGV[2], "PXAT", ARGV[3])
 redis.call("ZADD", KEYS[3], ARGV[4], ARGV[5])
 return 1`;
 
+const LIST_BATCH_SIZE = 8;
+const isSizeError = (error: unknown) => error instanceof errors.UpstashError && error.message.startsWith("ERR max request size exceeded");
+
 export class RedisThreadStore extends ThreadStoreBase {
   private readonly prefix: string;
   constructor(
@@ -85,8 +89,44 @@ export class RedisThreadStore extends ThreadStoreBase {
     for (const id of await this.redis.zrange<ThreadId[]>(this.legacyIndexKey(), 0, -1)) await this.migrateLegacy(id);
     return await this.redis.zrange<ThreadId[]>(this.indexKey(), 0, -1);
   }
-  private async migrateLegacy(threadId: ThreadId): Promise<boolean> {
-    const raw = await this.redis.get<unknown>(this.legacyRecordKey(threadId));
+  private async readGroups(groups: string[][]): Promise<unknown[][]> {
+    if (!groups.length) return [];
+    const keys = groups.flat();
+    try {
+      const values = await this.redis.mget<unknown[]>(...keys);
+      if (!Array.isArray(values) || values.length !== keys.length || values.some((value) => value === undefined)) throw new Error("invalid_mget_response");
+      let offset = 0;
+      return groups.map((group) => { const slice = values.slice(offset, offset + group.length); offset += group.length; return slice; });
+    } catch (error) {
+      if (!isSizeError(error)) throw error;
+      if (groups.length === 1) return [await Promise.all(groups[0].map((key) => this.redis.get<unknown>(key)))];
+      const middle = Math.floor(groups.length / 2);
+      return [...await this.readGroups(groups.slice(0, middle)), ...await this.readGroups(groups.slice(middle))];
+    }
+  }
+  protected async *listStates(ids: ThreadId[]): AsyncGenerator<{ id: ThreadId; state: PersistedThreadState; readMs: number; batched: boolean }> {
+    for (let offset = 0; offset < ids.length; offset += LIST_BATCH_SIZE) {
+      const chunk = ids.slice(offset, offset + LIST_BATCH_SIZE);
+      const started = performance.now();
+      const pairs = await this.readGroups(chunk.map((id) => [this.recordKey(id), this.tombstoneKey(id)]));
+      const missing = chunk.flatMap((id, index) => pairs[index][0] === null && pairs[index][1] === null ? [id] : []);
+      const legacy = await this.readGroups(missing.map((id) => [this.legacyRecordKey(id)]));
+      const legacyById = new Map(missing.map((id, index) => [id, legacy[index][0]]));
+      const fetchMs = performance.now() - started;
+      for (const [index, id] of chunk.entries()) {
+        const itemStarted = performance.now();
+        let [record, tombstone] = pairs[index] as [StoredThreadRecord | null, ThreadTombstone | null];
+        const raw = legacyById.get(id);
+        if (raw && await this.migrateLegacy(id, raw)) {
+          const [reread] = await this.readGroups([[this.recordKey(id), this.tombstoneKey(id)]]);
+          [record, tombstone] = reread as [StoredThreadRecord | null, ThreadTombstone | null];
+        }
+        yield { id, state: { record, tombstone }, readMs: fetchMs + performance.now() - itemStarted, batched: true };
+      }
+    }
+  }
+  private async migrateLegacy(threadId: ThreadId, prefetched?: unknown): Promise<boolean> {
+    const raw = prefetched === undefined ? await this.redis.get<unknown>(this.legacyRecordKey(threadId)) : prefetched;
     if (!raw) return false;
     const converted = await this.convertLegacyStoredRecord(raw);
     if (!converted) return false;

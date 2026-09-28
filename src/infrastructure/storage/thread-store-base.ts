@@ -52,6 +52,13 @@ export abstract class ThreadStoreBase implements ThreadStore {
 
   protected abstract readState(threadId: ThreadId): Promise<PersistedThreadState>;
   protected abstract listIds(): Promise<ThreadId[]>;
+  protected async *listStates(ids: ThreadId[]): AsyncGenerator<{ id: ThreadId; state: PersistedThreadState; readMs: number; batched?: boolean }> {
+    for (const id of ids) {
+      const started = performance.now();
+      const state = await this.readState(id);
+      yield { id, state, readMs: performance.now() - started };
+    }
+  }
   protected abstract writeRecord(threadId: ThreadId, expectedRevision: ThreadRevision | null, record: StoredThreadRecord, clearTombstone: boolean): Promise<boolean>;
   protected abstract writeTombstone(threadId: ThreadId, expectedRevision: ThreadRevision, tombstone: ThreadTombstone): Promise<boolean>;
   protected abstract purge(threadId: ThreadId): Promise<void>;
@@ -69,8 +76,10 @@ export abstract class ThreadStoreBase implements ThreadStore {
     return { recordVersion: 1, revision: this.revisions(), expiresAt: sourceExpiry as IsoTimestamp, thread: migrated.thread };
   }
 
-  private async liveState(threadId: ThreadId): Promise<PersistedThreadState> {
-    const state = await this.readState(threadId);
+  private async liveState(threadId: ThreadId, prefetched?: PersistedThreadState, batched = false): Promise<PersistedThreadState> {
+    // A batched snapshot may be older than a later commit. Recheck before expiry cleanup.
+    const state = batched && prefetched && ((prefetched.record && isExpired(prefetched.record, this.clock())) || (prefetched.tombstone && isExpired(prefetched.tombstone, this.clock())))
+      ? await this.readState(threadId) : prefetched ?? await this.readState(threadId);
     if (state.record && state.tombstone) throw new StoredStateIntegrityError();
     if (state.record && (state.record.recordVersion !== 1 || !state.record.revision || !Number.isFinite(Date.parse(state.record.expiresAt)) || !threadV3Schema.safeParse(state.record.thread).success || !await this.validSourceIdentities(state.record.thread))) throw new StoredStateIntegrityError();
     if (state.tombstone && (!Number.isFinite(Date.parse(state.tombstone.deletedAt)) || !Number.isFinite(Date.parse(state.tombstone.expiresAt)) || state.tombstone.expiresAt < state.tombstone.deletedAt)) throw new StoredStateIntegrityError();
@@ -92,14 +101,15 @@ export abstract class ThreadStoreBase implements ThreadStore {
       timing.ids_count = boundedCount(ids.length);
       const recordsStarted = performance.now();
       try {
-        for (const id of ids) {
+        for await (const { id, state: prefetched, readMs, batched } of this.listStates(ids)) {
           const recordStarted = performance.now();
           try {
-            const state = await this.liveState(id);
+            const state = await this.liveState(id, prefetched, batched);
             if (state.record) values.push({ summary: summary(state.record.thread), revision: state.record.revision });
           } finally {
             timing.scanned_count = boundedCount(timing.scanned_count + 1);
-            timing.max_record_ms = Math.max(timing.max_record_ms ?? 0, elapsedMs(recordStarted));
+            // On Redis, the batch fetch is shared; this is not a separate GET latency.
+            timing.max_record_ms = Math.max(timing.max_record_ms ?? 0, Math.min(300_000, Math.round(readMs + performance.now() - recordStarted)));
           }
         }
       } finally { timing.records_ms = elapsedMs(recordsStarted); }
