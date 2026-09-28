@@ -257,7 +257,7 @@ test("command swatch text keeps WCAG AA contrast across theme and color-scheme v
 });
 
 test("route shells keep document fixed and unlock uses the shared passphrase layout", async ({ page }) => {
-  for (const viewport of [{ width: 360, height: 640 }, { width: 768, height: 900 }, { width: 1440, height: 900 }, { width: 2000, height: 837 }, { width: 2000, height: 382 }, { width: 924, height: 922 }]) {
+  for (const viewport of [{ width: 360, height: 640 }, { width: 768, height: 900 }, { width: 1440, height: 900 }, { width: 2000, height: 1300 }, { width: 2000, height: 837 }, { width: 2000, height: 382 }, { width: 924, height: 922 }]) {
     await page.setViewportSize(viewport);
     for (const path of ["/new", "/threads", "/settings", "thread", "/unlock"]) {
     if (path === "thread") {
@@ -336,6 +336,21 @@ test("route shells keep document fixed and unlock uses the shared passphrase lay
     if (path === "thread") {
       await routeScroll.evaluate((element) => element.insertAdjacentHTML("beforeend", Array.from({ length: 36 }, (_, index) => `<p>Wide thread content ${index}</p>`).join("")));
       await expect(page.getByRole("scrollbar", { name: "Route content scroll position" })).toBeVisible();
+      const documentScroll = await page.evaluate(() => {
+        const sentinel = document.createElement("div");
+        sentinel.style.height = "300vh";
+        sentinel.setAttribute("aria-hidden", "true");
+        document.body.append(sentinel);
+        window.scrollTo(0, document.documentElement.scrollHeight);
+        const result = { windowY: window.scrollY, documentY: document.scrollingElement?.scrollTop ?? -1, viewportHeight: window.innerHeight };
+        sentinel.remove();
+        return result;
+      });
+      expect(documentScroll.windowY).toBe(0);
+      expect(documentScroll.documentY).toBe(0);
+      const footerAfterAttempt = await promptFooter.boundingBox();
+      expect(footerAfterAttempt).not.toBeNull();
+      expect(footerAfterAttempt!.y + footerAfterAttempt!.height).toBeCloseTo(documentScroll.viewportHeight, 0);
       if (test.info().project.name === "chromium") {
         await routeScroll.evaluate((element) => { element.scrollTop = 0; });
         const routeBounds = await routeScroll.boundingBox();
