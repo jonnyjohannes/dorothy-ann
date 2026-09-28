@@ -2,105 +2,102 @@
 
 ## Current State
 
-- Status: active; shared keyboard scrolling and prompt Escape focus handoff are complete. Typography is queued; constellation accents need a mapping decision.
+- Status: active. Keyboard scrolling and prompt Escape handoff are implemented and integrated locally; the color and typography items below are scoped but not implemented.
 - Owner: Jonny
-- Branch/worktree: `work/v1.2.2/post-facelift-facelift` in `../dorothy-ann-v1.2.2-post-facelift-facelift`; the verified scroll/Escape milestone was integrated locally into `release/v1.2.2` at `63a8f5a` for Jonny's testing. The work branch is synced to that commit for later plan work. No push or deployment was performed.
-- Related completed work: [UI facelift: scroll ownership, threads, spacing, and swatches](archive/ui-facelift-scroll-and-threads.md). That plan stays closed and unchanged.
-- Verification: `npm ci --no-audit --no-fund`, `npm run lint`, `npm run typecheck`, `npm test` (39 files, 366 passed), `npm run build`, `CI=1 npm run test:e2e -- --workers=2` (26 passed, 10 conditional skips), `git diff --check`. Browser coverage includes Chromium and mobile WebKit; physical-device keyboard testing remains open. Build has the existing large-chunk warning.
-- Verification (Escape follow-up): `npm run lint`, `npm run typecheck`, `npm test` (39 files, 368 passed), `npm run build`, `CI=1 npm run test:e2e -- --workers=2` (26 passed, 10 conditional skips), `git diff --check`. The first full e2e run exposed a fixture-dependent route-shell test assumption and a URL wait that also matched `/threads/new?q=...`; both were tightened and the focused and full suites then passed. Physical-device keyboard testing remains open.
-- Owner feedback: Escape still requires a click before arrow/page scrolling in the version Jonny tested; determine whether that was the unintegrated release/Production build or this worktree before calling operator validation complete. Double Escape works in his test. He favors semantic color relationships but wants a livelier, spatial constellation and a more visible prompt caret.
-- Rebase and local release verification: `npm ci --no-audit --no-fund`, `npm run lint`, `npm run typecheck`, `npm test` (39 files, 373 passed), `npm run build`, `CI=1 npm run test:e2e -- --workers=2` (26 passed, 10 conditional skips), and `git diff --check` passed in both the rebased worktree and local release branch; their trees matched at integration. Build retains the large-chunk warning.
-- Color decision in progress: Jonny wants focus and selection to use ink-on-paper / paper-on-ink, separate from the scheme's playful constellation. The transcript's new full-height yellow focus outline should join that consistent focus treatment. Scrollbars need not share one hue. Caret shape and selected-evidence treatment remain to be decided; no color code has changed.
-- Next action: settle the focus/selection inventory and scroll/caret treatments with Jonny, then implement on this work branch and rebase against the advancing release branch. Re-test Escape → scroll and arrow/page movement on local `release/v1.2.2`; if it still fails, reproduce that case on the same build before revising focus behavior.
+- Branch/worktree: `work/v1.2.2/post-facelift-facelift` in `../dorothy-ann-v1.2.2-post-facelift-facelift`. The work branch contains plan-only color decisions after the verified keyboard milestone. Local `release/v1.2.2` advanced independently to `f2a64c7` as of this planning pass; rebase/retest the work branch before the next integration. The release branch, not this worktree, is Jonny's testable branch. No push or deployment is authorized.
+- Related completed work: [UI facelift: scroll ownership, threads, spacing, and swatches](archive/ui-facelift-scroll-and-threads.md). It stays closed.
+- Integrated milestone: shared arrow/page scrolling, accessible scroll regions, prompt Escape → scroll focus, and paired Escape → home were merged locally at `63a8f5a`; plan handoff was recorded at `1b68496`. No color or font code has been integrated.
+- Verification of that milestone on both the rebased worktree and local release: `npm ci --no-audit --no-fund`, `npm run lint`, `npm run typecheck`, `npm test` (39 files, 373 passed), `npm run build`, `CI=1 npm run test:e2e -- --workers=2` (26 passed, 10 conditional skips), and `git diff --check`. Build retained a large-chunk warning. Physical-device keyboard and owner validation on the integrated build remain open.
+- Next action: implement the newly approved color items in ledger order on this work branch, then the previously approved typography. Rebase/retest before any further owner-requested local release integration; do not silently push to a release branch that may be Vercel's Production Branch.
 
 ## Abstract
 
-A follow-up UI component pass after the completed facelift. Restore arrow and page-key navigation for every unified scroll area in the layout, including future registered surfaces, without hijacking inputs or listbox navigation. The separate approved typography change keeps Dorothy Ann's Helvetica-first interface and answer prose while using Source Code Pro only for code-like content. Additional component changes need Jonny's scope; this title is not permission for a general redesign.
+Keep the completed native overflow and keyboard behavior. Remove the user-selectable Primary accent. Use ink/paper for the *editing or scrolling focus cue*, not for thread-row selection. Give each visible scrollbar thumb a scheme color drawn unpredictably on page load; let thread-row highlights advance through scheme accents each time the active row changes by pointer or keyboard, wrapping both the row index and hue sequence. Keep Helvetica for UI and prose and add Source Code Pro only to code-like text. Other color-constellation redesign is out of scope.
 
 ## Flow
 
 ```text
-completed facelift (unchanged) → post-facelift component pass
-                                 ├─ unified overflow: focusable scroll areas + local key fallback
-                                 ├─ Helvetica UI + answer prose / Source Code Pro code
-                                 └─ further tweaks: awaiting scope
+editing focus: native caret + input focus border ──ink on paper (or paper on ink)
+scroll focus: matching indicator cue ──ink/paper; thumb ──scheme hue drawn for this load
+/threads: active row changes ──next hue ──wrap hue; arrow keys wrap row index
+other commands/evidence/Markdown accents ──existing relationship policies
 ```
 
 ## Plan Ledger
 
-- [x] P1 — scope the first component tweak: ArrowUp/ArrowDown and PageUp/PageDown should scroll any focused unified layout/code surface that overflows, including future registered areas. Inputs, menus, and nested controls retain their own key behavior. Keep native overflow and existing indicators.
-- [x] P2 — overflowing shared scroll surfaces now receive a tab stop and local arrow/page-key fallback. Route and list regions are named; `.app-scroll-surface` registers future layout scrollers (with optional `data-scroll-axis="horizontal"`). Listbox/menu keys remain their own; no global key interception or focus stealing.
-- [x] P3 — Playwright verified focused transcript, home, settings, saved-thread list, and newly registered nested layout surface in Chromium and mobile WebKit. Code scrolls horizontally by arrow/page keys; the prompt retains ArrowDown; existing indicator focus/drag and menu locking tests passed. Lint, typecheck, unit tests (366), build, e2e (26 passed, 10 conditional skips), and diff check passed. No physical-device keyboard test was run.
-- [x] P4 — an open prompt suggester now consumes Escape locally without arming navigation. Otherwise the first eligible prompt Escape focuses the available route scroller (or blurs if none overflows) and arms the 500 ms pair; a second returns home/new. Modified/composing/repeated Escapes do not count. `/threads` and `/settings` route closes remain unchanged.
-- [x] P5 — unit tests cover suggester precedence, second Escape, expiry, modifiers, and repeat. Chromium and mobile WebKit fixture tests verify prompt Escape → transcript focus → page scrolling and paired Escape → home. Existing route Escape and prompt/listbox checks pass; full checks recorded in Current State. Owner-reported behavior is not yet matched to a tested build.
-- [~] P6 — scope removal of the Primary accent setting and separate two visual channels: focus/selected states use ink/paper contrast; unrelated decorative signals distribute scheme hues. `--accent` currently drives both channels (prompt/search focus, indicators, thread selection, generic outlines, quotes, status); command/evidence/Markdown already have relationship slots. Audit each meaning before changing preference/storage behavior or color tokens. No color implementation has started.
-- [ ] P6a — validate the Escape-to-scroll handoff on Jonny's testable local `release/v1.2.2` at or after `63a8f5a`; if it still fails, add a failing browser case before changing focus logic.
-- [ ] P7 — establish a reusable monospace font token and load Source Code Pro for browser use with an appropriate license and fallback. Preserve the existing Helvetica-first stack for the interface and answer prose.
-- [ ] P8 — apply the mono token to fenced and inline Markdown code, `/commands`, keyboard shortcuts, route-title code, and genuinely technical identifiers. Keep navigation, prompts, headings, answers, ordinary labels, and citations in the sans stack; do not turn whole boxes or answers monospace.
-- [ ] P9 — verify loaded-font and fallback rendering, long Markdown answers with inline/fenced code and tables, command swatches, narrow screens, and light/dark themes. Run applicable UI tests, lint, typecheck, build, and `git diff --check`; record what actually ran. Extend verification as further component tweaks are scoped.
+`[ ]` pending, `[~]` in progress, `[x]` verified; execute pending implementation items in the order shown. The owner-validation item is external and does not block unrelated color/font work.
+
+- [x] P1–P3 — scope, implement, and verify shared scroll-surface keyboard navigation on overflowing routes, saved threads, Markdown code, and registered future layout surfaces. Inputs and menus retain their keys; Chromium and mobile WebKit fixture checks passed.
+- [x] P4–P5 — scope, implement, and verify prompt Escape handoff and 500 ms paired Escape. The prompt suggester consumes Escape first; route-close and modified/composing/repeated-key behavior remain intact. Unit and browser fixture checks passed.
+- [x] P6 — record Jonny's narrowed color decision: ink/paper means focus in editing/scrolling, **not** selected thread rows; scrollbar thumbs and row highlights use scheme accents. This item is a spec decision, not implementation.
+- [ ] C1 — remove the Primary accent setting and its active preference application. Preserve color-scheme and theme settings; ignore (do not interpret or delete) existing `dorothy-ann-primary-accent` storage values. Keep `--accent` only as an explicit compatibility/fallback token while migrating its consumers; never use it to pick a single UI-wide hue. Verify old saved values have no visible effect.
+- [ ] C2 — implement ink/paper focus for the native prompt and `/threads` search carets and their existing focus borders, and for scroll regions/indicators. Remove the native caret hue-rotation behavior from these inputs; retain native editing/IME, no fake or thicker caret. Suppress the full-height scheme-colored transcript outline only when a matching accessible indicator supplies a visible ink/paper focus cue; use an ink/paper outline on the scroll surface as fallback if the custom indicator is absent. Do not remove the global focus-visible safety net for other controls. Test keyboard focus, pointer focus, light/dark, auto, forced-colors, and reduced-motion behavior.
+- [ ] C3 — assign scrollbar *thumb* hues from the selected scheme using a freshly drawn random permutation on each document load. Assign distinct palette slots to simultaneous scroll surfaces until the palette is exhausted; keep a mounted surface's slot stable across updates/scrolling. Apply the same slot to the custom indicator and native fallback scrollbar. A new load redraws rather than restoring a preference; repeats across independent loads are allowed. Monochrome has one hue and therefore cannot make different bars distinct; repeated colors in a scheme also cannot be forced unique without changing its palette. The focus cue stays ink/paper regardless of thumb hue. Do not randomize layout, keyboard behavior, command swatches, or source identity.
+- [ ] C4 — make `/threads` active-row background use the current scheme's ordered `--accent-1..8` sequence, mixed with paper enough to retain readable ink text. On a *change to a different active row* via ArrowUp/ArrowDown or pointer entry, advance the hue slot by one modulo available palette slots; repeating the same row, rendering, and scrolling do not advance it. ArrowDown on the final visible row wraps to the first, ArrowUp on the first wraps to the final, and hue rotation continues independently of row index. Initialize active index and hue to zero on mount; query/filter changes retain the current hue without advancing it and clamp/reset active index to a valid row. Empty results are safe. Keep hover and keyboard on the same active state, and preserve Enter, Delete/Backspace confirmation, and Escape behavior. In `mono`, the slot stays zero.
+- [ ] C5 — verify C1–C4: stored legacy primary preference ignored; schemes and light/dark/auto, several simultaneous scrollbars, a stubbed random draw per new page and stability within a page, no accidental focus-colored thumb/row, keyboard focus cues with and without an indicator, caret editing/composition, thread hover/arrow/wrap/color progression, filtering and empty results, keyboard activation/deletion, and contrast. Run focused UI/browser checks, then lint, typecheck, unit tests, build, e2e, and `git diff --check`; record actual results and manual gaps.
+- [ ] P7 — bundle licensed Source Code Pro web fonts at weights actually used, define a shared mono token and system fallback, and keep the current Helvetica Neue → Helvetica → Arial UI/prose stack.
+- [ ] P8 — apply the mono token only to Markdown inline/fenced code, `/commands`, keyboard shortcuts, route-title code, signature, and genuinely code-like identifiers. Audit rules that currently force code to inherit prose. Keep navigation, prompts, headings, answers, labels, and citations in sans.
+- [ ] P9 — verify computed font families after load and under font failure, Markdown tables/long answers/code blocks, mobile widths and horizontal code scrolling, light/dark themes, and existing keyboard focus. Run applicable repository checks and record results.
+- [ ] P6a — Jonny validates Escape → scroll → arrow/page behavior on his local `release/v1.2.2` at or after `63a8f5a`. If it still requires a click, reproduce that exact focus state against the same build, add a failing browser case, and fix separately before marking it closed. Physical-device keyboard behavior also remains external.
 
 ## Desired Outcome
 
-The completed facelift behavior remains intact. Readers can focus any overflowing unified layout/code region and scroll with arrow and page keys, while the prompt, menus, and nested controls keep their keys. Helvetica stays the recognizable reading and UI voice; Source Code Pro gives code and command syntax a deliberate, legible secondary voice without turning the interface into a terminal. Future component tweaks have explicit outcomes before code changes begin.
+The interface clearly distinguishes *where editing/scrolling focus is* (ink/paper) from *which row is active* (a rotating scheme tint) and *which scroll surface is moving* (its own scheme-colored thumb). No Primary accent control or hidden preference picks one color for everything. Keyboard navigation remains visible and functional. Code has a deliberate Source Code Pro face without replacing Helvetica prose.
 
 ## Current Reality
 
-`src/ui/styles/global.css` defines `--display` and the root font as `"Helvetica Neue", Helvetica, Arial, sans-serif`. `src/ui/App.module.css` gives the signature and route-title code a system monospace stack. `src/ui/styles/primitives.css` styles Markdown code blocks but does not choose a font family for Markdown code; browser defaults apply. No font files are currently bundled. The earlier facelift's scroll, thread-list, spacing, and swatch decisions are complete and documented in its archived plan. Overflow remains native. The shared controller now makes overflowing layout/code surfaces focusable and handles arrow/page keys locally on the surface (mobile WebKit did not scroll the focused transcript natively in the initial fixture test). Listboxes retain their own selection keys and custom indicators remain keyboard-accessible. The prompt still autofocuses and keeps its key behavior. Before this follow-up, PromptBox blurred on Escape without focusing the scroll region, and the global handler did not count that editable Escape; the second did not complete the intended pair. Now prompt Escape transfers focus to an overflowing route scroller and counts toward the same 500 ms pair; a command suggester consumes its own Escape first.
+- `src/ui/styles/global.css` defines ink/paper, eight accent slots per scheme, one `--accent` fallback, a global scheme-colored `:focus-visible` outline, and already-inverted `::selection`. `src/ui/App.tsx` applies the persisted Primary accent to `--accent`.
+- `SettingsBox`/`SettingsRoute` expose and store Primary accent. The prompt and thread-search native caret currently cycle through scheme slots every 2 seconds via `use-rotating-caret-color.ts`; their focus borders, scrollbars, thread-row highlights, quotes, and focus outlines also use `--accent`. Command swatches and evidence/Markdown relations have separate mappings that must not be flattened by this work.
+- `ScrollIndicators` mounts separate accessible indicators for overflowing surfaces and temporarily makes layout/code surfaces focusable; the new transcript focus exposes the global 3px yellow outline around an entire route. Indicators are portaled to `document.body`, so their color/focus cue cannot rely on inheriting the scroll surface's local CSS variables.
+- `ThreadsBox` currently clamps ArrowUp/ArrowDown at list ends; hover selects the same active index, and the row tint is fixed to `--accent`. The menu/listbox active styles are separate and remain out of this row-color change.
+- The source text still says no fonts are bundled. Typography work has not begun.
 
 ## Scope
 
-### Approved goals
+### Goals
 
-- Let focused unified overflow areas scroll with arrow and page keys: routes, saved-thread list, Markdown code, and future `.app-scroll-surface` layout areas. Retain keyboard access to prompts, menus, links, and custom scrollbars.
-- From an idle prompt, an eligible Escape should focus the overflowing route scroller (when available), so arrow and page keys work without a pointer click; keep the second Escape/new-thread and local-menu precedence.
-- Keep the existing sans-serif stack for UI and prose; do not introduce another display or body family.
-- Give code-like text a consistent Source Code Pro face, with a reliable fallback if the font has not loaded.
-- Preserve Markdown legibility, syntax distinction, responsive behavior, and the completed facelift contracts.
-
-### Awaiting scope
-
-- Remove Primary accent from settings. Standardize focus/selection as ink-on-paper or paper-on-ink, including prompt, `/threads` search, transcript scroll focus, other focusable controls, active thread rows, and menu options where appropriate. Keep unrelated decorative color roles and scrollbar thumbs distinct by scheme, not one primary hue. Decide remaining state semantics, mapping, and tests before implementation.
-- Additional UI component tweaks Jonny plans to describe. Amend this plan's ledger, boundaries, and verification before implementing any of them.
+- Color the *native insertion caret* and existing focus borders of the prompt and `/threads` search in ink/paper; color the focused scroll region or its matching indicator in ink/paper. Keep a visible accessible focus cue; avoid a giant accent-colored transcript frame.
+- Randomize only scrollbar thumb accent slots at document load, and rotate only `/threads` active-row highlights on user selection movement. Retain the existing ordered palette, dark/light variants, and source/command mappings.
+- Remove Primary accent from settings and effective preference behavior without destructive storage migration.
+- Ship the approved Helvetica + Source Code Pro split without changing answer or prompt behavior.
 
 ### Non-goals
 
-- A site-wide typography redesign, new font picker, or general permission to rework all components.
-- Making citations, whole answers, labels, or general UI text monospace.
-- Changing generated answer contracts, thread behavior, scroll ownership, persistence, or the completed facelift behavior beyond keyboard access to existing unified scroll areas.
+- Inverting selected evidence, menus, command chips, links, or buttons as part of this limited focus decision; their keyboard focus must remain visible, but redesigning those states needs a separate request.
+- Timed animation of row highlights or scrollbar hues, random palette colors outside the chosen scheme, guaranteed distinct hues in mono or duplicate-color palettes, or a new accent preference.
+- A custom/fake caret, a portable caret-width promise, or changing keyboard shortcuts, scroll ownership, persistence, thread search ranking, research behavior, or answer contracts.
+- Integrating unfinished font/color work into the release branch or pushing/deploying without the owner-requested release workflow.
 
 ## Decisions
 
-- Keep native overflow and the existing custom visual scrollbar. Register overflowing layout/code surfaces as focusable, with local keyboard fallback because mobile WebKit did not scroll a focused thread region with arrow keys in fixture tests. Menus retain their own selection keys and accessible indicator; no global keyboard interception, prompt-autofocus change, or route-shortcut change. Future layout scroll surfaces opt into the shared controller with `.app-scroll-surface`, optionally `data-scroll-axis="horizontal"`.
-- An open prompt suggester owns and consumes Escape. Otherwise the idle prompt's first Escape hands focus to the route scroller and counts toward the existing 500 ms pair; the second returns home/new. If no route region overflows, the first Escape simply blurs the prompt but still arms the pair. Modified/composing Escape does not count. Do not change `/threads` or `/settings` route-close behavior.
-- Jonny chose Helvetica + Source Code Pro over a replacement sans-serif. Keep Helvetica for navigation, prompts, headings, and all answer prose.
-- Use Source Code Pro for fenced and inline code, `/commands`, shortcuts, and technical identifiers only where they are actually rendered as code-like content. Avoid classifying ordinary text as code merely because it contains a number or label.
-- Prefer a self-hosted licensed web-font asset for predictable browser rendering; retain a system monospace fallback. Do not assume a locally installed font is available to every user.
-- Keep the previous facelift archived; this is a new follow-up plan on its own branch/worktree.
+- **Focus vs constellation:** editing/scrolling focus is ink/paper. Thread-row selection is **not** focus color; it moves through the scheme. Scrollbar thumbs are decorative scheme colors even when their surface has monochrome focus.
+- **Cursor:** keep a native thin insertion caret and replace its hue rotation with an ink/paper caret in the prompt and thread search. CSS does not provide a portable numeric caret thickness; `caret-shape: block` is limited availability and is not a thicker bar. No overlay or companion mark in this pass.
+- **Randomness:** one fresh randomized palette order per document load, never persisted; a repeated hue on a later load is valid randomness. Stub the random source in tests, not the production color choice. Distinctness is bounded by actual palette variety.
+- **Thread row sequence:** user-driven active-index change increments an independent palette counter. Both row navigation and hue sequence wrap; filtering does not consume a color. Selected-row fill remains a tint with readable text, not an ink/paper inversion.
+- **Preserved relationships:** command hue order/AA foreground choices and source/evidence/citation accent identity remain independent. Monochrome remains monochrome.
+- **Delivery:** keyboard/Escape milestone is only local on `release/v1.2.2`; Jonny tests release branches, not worktrees. Future color/font work stays on the isolated work branch until verified and explicitly integrated.
 
 ## Detailed Plan
 
-1. In the shared scroll controller, give overflowing layout/code areas a tab stop and local arrow/page-key navigation. Name route and list regions, register future layout areas with `.app-scroll-surface`, and avoid overriding input, menu, link, and nested code handling.
-2. Record any further component requests and agree on their scope and tests before implementing them.
-3. Source the needed Source Code Pro web-font files and license; load only weights actually used, and define a shared monospace token without changing the body font.
-4. Replace scattered system-mono declarations and cover Markdown `code` and `pre code` deliberately. Check rules that force code to inherit prose styling before deciding whether they represent true code or merely a semantic tag.
-5. Compare representative UI and transcript screens before/after, including mobile wrapping and horizontally scrollable code blocks; adjust code sizing/line-height only where necessary.
+1. After rebasing this work branch onto the current release tip, inspect every `--accent` consumer and classify it as caret/editing focus, scroll focus/thumb, thread active row, independent relationship color, or unaffected fallback. Change only the scoped categories; remove the Primary accent UI/runtime path and add a test for legacy storage being ignored.
+2. Make the ink/paper editing and scroll focus cues explicit. Give the portaled indicator a corresponding focused state; preserve a native scrollbar/focus-outline fallback, screen-reader labels, and its arrow/page/drag behavior. Verify contrast rather than relying on color alone.
+3. Generate one bounded random permutation of scheme slots at app load in the shared scroll controller. Give each mounted surface a slot; apply it to the thumb and native scrollbar, not the focus ring. Keep theme changes reactive through the palette tokens.
+4. Split thread active index from hue position in `ThreadsBox`; advance hue only on effective user moves, add wraparound navigation, and use the selected scheme's ordered CSS slot. Retain accessible active semantics and confirmation behavior.
+5. Run focused and full verification for the color work and update this plan's Current State/Handoff before any release integration.
+6. Complete P7–P9 for typography in the same isolated work branch, with their own verification milestone. Jonny may request local interim integration into `release/v1.2.2` to test; never describe worktree-only changes as available in his build.
 
 ## Verification
 
-- Test arrows and PageUp/PageDown on overflowing transcript, home/settings, saved-thread list, and newly registered nested layout area (including focus by pointer); verify horizontal code scrolling and prompt/listbox/nested interactive key ownership. Keep the indicator's keyboard and wheel movement tests.
-- Check computed font family for answer prose versus inline/fenced code, route-title code, command syntax, and shortcuts, both after font load and when the asset is unavailable.
-- Visually check long answers, tables, code blocks, command tiles, and keyboard-heavy UI at narrow and wide viewports in light and dark themes.
-- Add focused checks for each subsequently approved component tweak; run applicable repository checks and report manual device gaps. Do not claim checks before they run.
+- Color: fixture UI and browser tests for focus placement (including Escape handoff), caret/style contrast, random scroll hue assignment and mount stability, multi-surface distinctness where possible, fallback native scrollbar, row movement and hue wrapping, hover/keyboard equivalence, filtering, action keys, all schemes and theme modes, and text legibility. Re-run route-scroll and swatch contrast tests; check forced-colors and reduced-motion behavior. Physical-device keyboard/IME remains an owner validation gap unless actually tested.
+- Typography: computed font family for sans prose versus code, font-load failure, Markdown/table/code/layout regressions, keyboard focus, and light/dark/mobile.
+- Integration: `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `CI=1 npm run test:e2e -- --workers=2`, `git diff --check`, `git status`; report warnings and conditional skips. Rebase/retest after release advances. No release push or Vercel mutation is authorized by this plan.
 
 ## Open Questions
 
-- Define the focus treatment for scroll regions without the full-height yellow frame: a visible ink/paper cue on the focused surface or its matching indicator must remain for keyboard users. Prompt and search input focus should use the same visual language as other controls. Which active states (thread row, listbox option, selected evidence, citation target) use an inverse fill versus just an outline? Do not confuse hover, selection, keyboard focus, and data provenance.
-- For decorative constellation roles, should scheme hues distribute across spatial peers in a stable order, while only the caret rotates over time? Scrollbar thumbs may vary by surface/route rather than match; focus indication stays ink/paper even when a thumb has a hue. Actual DOM-order indexing can shift after dynamic content, so prefer stable visual-group positions/keys. Preserve related descendants and check contrast.
-- A thicker native prompt caret has no portable CSS width control. `caret-shape: block` is a limited-availability shape option, not an adjustable-thickness bar; a custom overlay would take responsibility for IME, selection, mobile editing, bidi, and caret positioning. Keep the native cycling caret for now; decide whether an adjacent colored cue can emphasize its current hue without turning the monochrome focus frame into another rotating accent.
-- `mono` has only one accent hue, so unrelated roles cannot receive distinct colors without changing that scheme. Should it remain intentionally monochrome?
-- Which other UI components and behaviors does Jonny want to adjust in this pass?
-- Which existing technical identifier surfaces, if any, need mono beyond the explicit code/command/shortcut locations? Decide from actual rendered UI, not a blanket selector.
+- No color/typography implementation decision is blocking. Later visual tweaks need their own explicit scope here before code.
+- Did Jonny's release-branch test after `63a8f5a` confirm Escape hands focus to a long scroll surface without a click? This is external validation, not evidence for or against the fixture checks.
+- Does a physical iOS/iPadOS keyboard and IME preserve the same focus behavior? Not yet verified.
 
 ## Handoff
 
-- Shared keyboard scrolling and prompt Escape handoff are implemented, fixture-verified, and integrated **locally** into `release/v1.2.2` at `63a8f5a` for Jonny to test; nothing was pushed or deployed. Typography is approved but not started, and primary-accent removal needs a mapping decision before code. Physical-device keyboard behavior and release-branch operator validation remain open. Do not implement unspecific UI tweaks. The archived facelift is not reopened; later changes remain on `work/v1.2.2/post-facelift-facelift` until scoped and verified.
+- This planning update changes no UI code. Implement C1–C5, then P7–P9 on `work/v1.2.2/post-facelift-facelift`; keep P6a open for owner validation. Commit verified milestones with `<|°_°|>`. Only `release/v1.2.2` is Jonny's testable branch. This work branch is behind the advancing release branch and must be rebased/retested before integration; do not push or deploy without separate authorization. The archived facelift remains closed.
