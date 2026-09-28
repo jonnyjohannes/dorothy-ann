@@ -1,13 +1,5 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { readColorScheme } from "./color-scheme";
-
-// Draw once per loaded document; slots are assigned to surfaces in discovery order.
-const scrollSlotOrder = Array.from({ length: 8 }, (_, index) => index);
-for (let index = scrollSlotOrder.length - 1; index > 0; index--) {
-  const draw = Math.floor(Math.random() * (index + 1));
-  [scrollSlotOrder[index], scrollSlotOrder[draw]] = [scrollSlotOrder[draw]!, scrollSlotOrder[index]!];
-}
 
 interface ScrollSurface {
   element: HTMLElement;
@@ -26,29 +18,15 @@ const KEYBOARD_SURFACES = `${ROUTE_SURFACES}, .app-scroll-surface, .ui-markdown 
 export function ScrollIndicators() {
   const { pathname } = useLocation();
   useEffect(() => {
-    const focusAccentSlot = Math.floor(Math.random() * scrollSlotOrder.length);
+    const focusAccentSlot = Math.floor(Math.random() * 8);
     document.documentElement.style.setProperty("--focus-accent", `color-mix(in srgb, var(--accent-${focusAccentSlot + 1}) 55%, var(--ink))`);
-    document.documentElement.style.setProperty("--focus-foreground", `var(--thread-foreground-${focusAccentSlot + 1}, var(--ink))`);
     return () => {
       document.documentElement.style.removeProperty("--focus-accent");
-      document.documentElement.style.removeProperty("--focus-foreground");
     };
   }, [pathname]);
   useEffect(() => {
     const surfaces = new Map<HTMLElement, ScrollSurface>();
-    const slots = new Map<HTMLElement, number>();
-    let nextSlot = 0;
     let disposed = false;
-    const applySlots = () => {
-      const mono = readColorScheme(document.documentElement.dataset.colorScheme) === "mono";
-      for (const [element, assignedSlot] of slots) {
-        const slot = mono ? 0 : assignedSlot;
-        const color = `var(--accent-${slot + 1})`;
-        element.style.setProperty("--scroll-thumb-color", color);
-        surfaces.get(element)?.indicator.style.setProperty("--scroll-thumb-color", color);
-      }
-    };
-    window.addEventListener("dorothy-ann-preference-change", applySlots);
 
     const refresh = () => {
       if (disposed) return;
@@ -70,28 +48,15 @@ export function ScrollIndicators() {
           surfaces.delete(element);
         }
       }
-      // A menu locks the route and hides its indicator, but the mounted route keeps its hue.
-      for (const element of slots.keys()) {
-        if (!element.isConnected || (!targets.has(element) && !(hasOpenMenu && element.matches(ROUTE_SURFACES)))) slots.delete(element);
-      }
       for (const [element, axis] of targets) {
         const scrollSize = axis === "vertical" ? element.scrollHeight : element.scrollWidth;
         const clientSize = axis === "vertical" ? element.clientHeight : element.clientWidth;
         if (scrollSize <= clientSize || clientSize <= 0) {
-          // Temporary loss of overflow removes the control, not this mounted element's slot.
           element.classList.remove("has-custom-scroll-indicator");
           surfaces.get(element)?.cleanup();
           surfaces.get(element)?.indicator.remove();
           surfaces.delete(element);
           continue;
-        }
-        if (!slots.has(element)) {
-          const reserved = new Set(slots.values());
-          const visible = new Set([...surfaces.keys()].map((mounted) => slots.get(mounted)));
-          // Dormant mounts keep their reservation, but visible thumbs take priority when slots run out.
-          const available = scrollSlotOrder.find((slot) => !reserved.has(slot))
-            ?? scrollSlotOrder.find((slot) => !visible.has(slot));
-          slots.set(element, available ?? scrollSlotOrder[nextSlot++ % scrollSlotOrder.length]!);
         }
         let surface = surfaces.get(element);
         if (!surface) {
@@ -118,7 +83,6 @@ export function ScrollIndicators() {
             indicator.setAttribute("aria-valuemin", "0");
             indicator.setAttribute("aria-valuemax", String(scrollSize - clientSize));
             indicator.tabIndex = 0;
-            indicator.style.setProperty("--scroll-thumb-color", element.style.getPropertyValue("--scroll-thumb-color"));
             indicator.append(thumb);
             document.body.append(indicator);
             const update = () => {
@@ -216,7 +180,7 @@ export function ScrollIndicators() {
       }
     };
 
-    const updateSurfaces = () => { refresh(); applySlots(); };
+    const updateSurfaces = refresh;
     updateSurfaces();
     const mutation = new MutationObserver(updateSurfaces);
     mutation.observe(document.documentElement, { childList: true, subtree: true });
@@ -225,7 +189,6 @@ export function ScrollIndicators() {
     window.addEventListener("resize", updateSurfaces, { passive: true });
     return () => {
       disposed = true;
-      window.removeEventListener("dorothy-ann-preference-change", applySlots);
       mutation.disconnect();
       resize.disconnect();
       window.removeEventListener("resize", updateSurfaces);

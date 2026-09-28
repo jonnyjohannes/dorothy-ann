@@ -68,7 +68,7 @@ test("legacy accent stays inert; native caret cycles and scroll focus uses the r
   expect(await input.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
 });
 
-test("one random accent colors global selection and focus controls per screen", async ({ page }) => {
+test("selection stays ink on paper while focus controls share a per-screen accent", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("dorothy-ann-color-scheme", "catppuccin");
     Math.random = () => location.search.includes("second") ? 0.99 : location.pathname === "/threads" ? 0.5 : 0;
@@ -81,11 +81,20 @@ test("one random accent colors global selection and focus controls per screen", 
     const probe = document.createElement("span");
     probe.textContent = "selection color probe";
     document.body.append(probe);
-    const color = getComputedStyle(probe, "::selection").backgroundColor;
+    const style = getComputedStyle(probe, "::selection");
+    const paper = document.createElement("span");
+    paper.style.color = "var(--paper)";
+    paper.style.backgroundColor = "var(--ink)";
+    document.body.append(paper);
+    const expected = { color: getComputedStyle(paper).color, background: getComputedStyle(paper).backgroundColor };
+    paper.remove();
+    const result = { color: style.color, background: style.backgroundColor, expected };
     probe.remove();
-    return color;
+    return result;
   });
-  expect(await selection()).toBe(first);
+  const selectionColors = await selection();
+  expect({ color: selectionColors.color, background: selectionColors.background }).toEqual(selectionColors.expected);
+  expect(selectionColors.background).not.toBe(first);
   await prompt.fill("same screen retains its color");
   expect(await prompt.locator("xpath=..").evaluate((element) => getComputedStyle(element).borderTopColor)).toBe(first);
   await page.keyboard.press("Alt+S");
@@ -94,7 +103,7 @@ test("one random accent colors global selection and focus controls per screen", 
   await fuzzySearch.focus();
   const screenFocus = await fuzzySearch.evaluate((element) => getComputedStyle(element).borderTopColor);
   expect(screenFocus).not.toBe(first);
-  expect(await selection()).toBe(screenFocus);
+  expect(await selection()).toEqual(selectionColors);
   const fuzzyListboxFocus = await page.evaluate(() => {
     const listbox = document.createElement("div");
     listbox.className = "ui-fuzzy-listbox";
@@ -109,7 +118,7 @@ test("one random accent colors global selection and focus controls per screen", 
   expect(nextLoad).not.toBe(first);
 });
 
-test("a page draw assigns stable distinct scroll slots and matches the native fallback", async ({ page }) => {
+test("native and custom scrollbar thumbs share the per-screen focus accent", async ({ page }) => {
   await page.addInitScript(() => {
     Math.random = () => 0;
     localStorage.setItem("dorothy-ann-color-scheme", "catppuccin");
@@ -126,44 +135,39 @@ test("a page draw assigns stable distinct scroll slots and matches the native fa
       route.append(surface);
     }
   });
-  const surfaces = page.locator(".app-scroll-surface");
   await expect.poll(() => page.getByRole("scrollbar", { name: "Page scroll position" }).count()).toBe(3);
-  const read = () => surfaces.evaluateAll((elements) => elements.map((element) => ({
-    slot: (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"),
-    native: getComputedStyle(element).scrollbarColor,
-  })));
-  const first = await read();
-  expect(new Set(first.map((entry) => entry.slot)).size).toBe(3);
-  if (test.info().project.name === "chromium") for (const entry of first) expect(entry.native).toContain("rgb(");
-  const indicators = page.getByRole("scrollbar", { name: "Page scroll position" });
-  for (let index = 0; index < 3; index++) {
-    expect(await indicators.nth(index).evaluate((element) => element.style.getPropertyValue("--scroll-thumb-color"))).toBe(first[index]!.slot);
-  }
-  await surfaces.first().evaluate((element) => { element.scrollTop = 30; });
-  expect((await read()).map((entry) => entry.slot)).toEqual(first.map((entry) => entry.slot));
-  await surfaces.nth(1).evaluate((element) => element.remove());
-  await page.evaluate(() => {
-    const surface = document.createElement("div");
-    surface.className = "app-scroll-surface";
-    surface.style.cssText = "height:70px;overflow:auto;width:180px";
-    surface.textContent = "overflow ".repeat(100);
-    document.querySelector(".app-route-scroll")!.append(surface);
+  const read = () => page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--focus-accent)";
+    document.body.append(probe);
+    const focus = getComputedStyle(probe).color;
+    probe.remove();
+    return {
+      focus,
+      surfaces: [...document.querySelectorAll<HTMLElement>(".app-scroll-surface")].map((element) => ({
+        native: getComputedStyle(element).scrollbarColor,
+        focus: getComputedStyle(element, "::-webkit-scrollbar-thumb").backgroundColor,
+      })),
+      indicators: [...document.querySelectorAll<HTMLElement>(".app-scroll-indicator > div")].map((element) => getComputedStyle(element).backgroundColor),
+    };
   });
-  await expect.poll(() => page.getByRole("scrollbar", { name: "Page scroll position" }).count()).toBe(3);
-  const replaced = await read();
-  expect(new Set(replaced.map((entry) => entry.slot)).size).toBe(3);
-  expect(replaced[0]!.slot).toBe(first[0]!.slot);
-  expect(replaced[1]!.slot).toBe(first[2]!.slot);
-  await page.evaluate(() => { localStorage.setItem("dorothy-ann-color-scheme", "mono"); window.dispatchEvent(new Event("dorothy-ann-preference-change")); });
-  expect((await read()).map((entry) => entry.slot)).toEqual(["var(--accent-1)", "var(--accent-1)", "var(--accent-1)"]);
+  const first = await read();
+  expect(first.surfaces).toHaveLength(3);
+  for (const surface of first.surfaces) expect(surface.native).toContain(first.focus);
+  expect(first.surfaces.map((surface) => surface.focus)).toEqual(Array(3).fill(first.focus));
+  expect(first.indicators).toHaveLength(4);
+  expect(first.indicators).toEqual(Array(first.indicators.length).fill(first.focus));
   await page.evaluate(() => { localStorage.setItem("dorothy-ann-color-scheme", "rose-pine"); window.dispatchEvent(new Event("dorothy-ann-preference-change")); });
-  expect((await read()).map((entry) => entry.slot)).toEqual(replaced.map((entry) => entry.slot));
+  const updated = await read();
+  for (const surface of updated.surfaces) expect(surface.native).toContain(updated.focus);
+  expect(updated.surfaces.map((surface) => surface.focus)).toEqual(Array(3).fill(updated.focus));
+  expect(updated.indicators).toEqual(Array(updated.indicators.length).fill(updated.focus));
   await page.reload();
   await expect(page.getByLabel("Search query")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--accent"))).toBe("");
 });
 
-test("a locked route keeps its scroll hue while a menu and another surface mount", async ({ page }) => {
+test("locked and newly mounted scrollbars keep the shared accent", async ({ page }) => {
   await page.addInitScript(() => {
     Math.random = () => 0;
     localStorage.setItem("dorothy-ann-color-scheme", "catppuccin");
@@ -173,7 +177,7 @@ test("a locked route keeps its scroll hue while a menu and another surface mount
   const route = page.locator(".app-route-scroll");
   const indicator = page.getByRole("scrollbar", { name: "Route content scroll position" });
   await expect(indicator).toBeVisible();
-  const originalSlot = await route.evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"));
+  const originalSlot = await route.evaluate((element) => getComputedStyle(element).getPropertyValue("--scroll-thumb-color"));
   await page.getByLabel("Search query").fill("/");
   await expect(page.getByRole("listbox", { name: "Commands" })).toBeVisible();
   await expect(indicator).toHaveCount(0);
@@ -186,14 +190,21 @@ test("a locked route keeps its scroll hue while a menu and another surface mount
   });
   const added = page.locator(".app-scroll-surface");
   await expect(page.getByRole("scrollbar", { name: "Page scroll position" })).toBeVisible();
-  expect(await added.evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"))).not.toBe(originalSlot);
+  expect(await added.evaluate((element) => getComputedStyle(element).getPropertyValue("--scroll-thumb-color"))).toBe(originalSlot);
   await page.getByLabel("Search query").press("Escape");
   await expect(indicator).toBeVisible();
-  expect(await route.evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"))).toBe(originalSlot);
-  expect(await indicator.evaluate((element) => element.style.getPropertyValue("--scroll-thumb-color"))).toBe(originalSlot);
+  expect(await route.evaluate((element) => getComputedStyle(element).getPropertyValue("--scroll-thumb-color"))).toBe(originalSlot);
+  expect(await indicator.locator("div").evaluate((element) => getComputedStyle(element).backgroundColor)).toBe(await page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--focus-accent)";
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  }));
 });
 
-test("a mounted surface keeps its hue across temporary overflow changes", async ({ page }) => {
+test("a mounted surface keeps the shared accent across temporary overflow changes", async ({ page }) => {
   await page.addInitScript(() => {
     Math.random = () => 0;
     localStorage.setItem("dorothy-ann-color-scheme", "catppuccin");
@@ -209,7 +220,7 @@ test("a mounted surface keeps its hue across temporary overflow changes", async 
   const surfaces = page.locator(".app-scroll-surface");
   const indicators = page.getByRole("scrollbar", { name: "Page scroll position" });
   await expect(indicators).toHaveCount(1);
-  const originalSlot = await surfaces.first().evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"));
+  const originalSlot = await surfaces.first().evaluate((element) => getComputedStyle(element).getPropertyValue("--scroll-thumb-color"));
   await surfaces.first().evaluate((element) => { element.style.height = "100000px"; window.dispatchEvent(new Event("resize")); });
   await expect(indicators).toHaveCount(0);
   await page.evaluate(() => {
@@ -220,54 +231,10 @@ test("a mounted surface keeps its hue across temporary overflow changes", async 
     document.body.append(second);
   });
   await expect(indicators).toHaveCount(1);
-  expect(await surfaces.nth(1).evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"))).not.toBe(originalSlot);
+  expect(await surfaces.nth(1).evaluate((element) => getComputedStyle(element).getPropertyValue("--scroll-thumb-color"))).toBe(originalSlot);
   await surfaces.first().evaluate((element) => { element.style.height = "70px"; window.dispatchEvent(new Event("resize")); });
   await expect(indicators).toHaveCount(2);
-  expect(await surfaces.first().evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"))).toBe(originalSlot);
-});
-
-test("dormant reservations do not duplicate simultaneous visible scroll hues", async ({ page }) => {
-  await page.addInitScript(() => {
-    Math.random = () => 0;
-    localStorage.setItem("dorothy-ann-color-scheme", "catppuccin");
-  });
-  await page.goto("/new");
-  await page.evaluate(() => {
-    for (let index = 0; index < 8; index++) {
-      const surface = document.createElement("div");
-      surface.className = "app-scroll-surface";
-      surface.style.cssText = "height:70px;overflow:auto;width:180px";
-      surface.textContent = "overflow ".repeat(100);
-      document.body.append(surface);
-    }
-  });
-  const surfaces = page.locator(".app-scroll-surface");
-  const indicators = page.getByRole("scrollbar", { name: "Page scroll position" });
-  await expect(indicators).toHaveCount(8);
-  const firstSlot = await surfaces.first().evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"));
-  await surfaces.evaluateAll((elements) => {
-    for (const element of elements.slice(1)) (element as HTMLElement).style.height = "100000px";
-    window.dispatchEvent(new Event("resize"));
-  });
-  await expect(indicators).toHaveCount(1);
-  await page.evaluate(() => {
-    const surface = document.createElement("div");
-    surface.className = "app-scroll-surface";
-    surface.style.cssText = "height:70px;overflow:auto;width:180px";
-    surface.textContent = "overflow ".repeat(100);
-    document.body.append(surface);
-  });
-  await expect(indicators).toHaveCount(2);
-  const ninthSlot = await surfaces.last().evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"));
-  expect(ninthSlot).not.toBe(firstSlot);
-  expect(await surfaces.first().evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"))).toBe(firstSlot);
-  // Find the dormant holder of the borrowed slot without assuming the shuffled order.
-  const borrowedIndex = await surfaces.evaluateAll((elements, slot) => elements.findIndex((element, index) => index > 0 && index < 8 && (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color") === slot), ninthSlot);
-  expect(borrowedIndex).toBeGreaterThan(0);
-  await surfaces.nth(borrowedIndex).evaluate((element) => { (element as HTMLElement).style.height = "70px"; window.dispatchEvent(new Event("resize")); });
-  await expect(indicators).toHaveCount(3);
-  expect(await surfaces.nth(borrowedIndex).evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"))).toBe(ninthSlot);
-  expect(await surfaces.last().evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"))).toBe(ninthSlot);
+  expect(await surfaces.first().evaluate((element) => getComputedStyle(element).getPropertyValue("--scroll-thumb-color"))).toBe(originalSlot);
 });
 
 test("scroll focus uses the random accent while user turns use the image hue", async ({ page }) => {
