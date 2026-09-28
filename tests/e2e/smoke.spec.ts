@@ -118,6 +118,105 @@ test("a disconnected fixture stream clears its provisional text without a saved 
   await expect(page.getByText("This is a bounded fixture answer grounded in the available evidence.")).toHaveCount(0);
 });
 
+test("thread transcript scrolls with arrow and page keys without stealing prompt focus", async ({ page }) => {
+  await page.goto("/new");
+  const prompt = page.getByLabel("Search query");
+  await prompt.fill("keyboard transcript scrolling");
+  await prompt.press("Enter");
+  await expect(page).toHaveURL(/\/threads\/(?!new$)[^/]+$/);
+  await expect(page.getByRole("heading", { name: "Evidence" })).toBeVisible();
+  await expect(prompt).toBeEnabled();
+  const transcript = page.getByRole("region", { name: "Thread content" });
+  await expect(page.locator(".app-route-scroll")).toHaveCount(1);
+  await transcript.evaluate((element) => {
+    element.insertAdjacentHTML("beforeend", Array.from({ length: 60 }, (_, index) => `<p>Long transcript paragraph ${index}</p>`).join(""));
+  });
+  await expect.poll(() => transcript.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  await transcript.locator("blockquote").first().click();
+  await expect(transcript).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect.poll(() => transcript.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  const afterArrow = await transcript.evaluate((element) => element.scrollTop);
+  await page.keyboard.press("PageDown");
+  await expect.poll(() => transcript.evaluate((element) => element.scrollTop)).toBeGreaterThan(afterArrow);
+  const afterPage = await transcript.evaluate((element) => element.scrollTop);
+  await page.keyboard.press("PageUp");
+  await expect.poll(() => transcript.evaluate((element) => element.scrollTop)).toBeLessThan(afterPage);
+  const afterPageUp = await transcript.evaluate((element) => element.scrollTop);
+  await page.keyboard.press("ArrowUp");
+  await expect.poll(() => transcript.evaluate((element) => element.scrollTop)).toBeLessThan(afterPageUp);
+  await prompt.focus();
+  await expect(prompt).toBeFocused();
+  const beforePromptKey = await transcript.evaluate((element) => element.scrollTop);
+  await page.keyboard.press("ArrowDown");
+  await expect(prompt).toBeFocused();
+  expect(await transcript.evaluate((element) => element.scrollTop)).toBe(beforePromptKey);
+  await prompt.press("Escape");
+  await expect(transcript).toBeFocused();
+  await page.keyboard.press("PageDown");
+  await expect.poll(() => transcript.evaluate((element) => element.scrollTop)).toBeGreaterThan(beforePromptKey);
+  await page.waitForTimeout(550);
+  await prompt.focus();
+  await prompt.press("Escape");
+  await expect(transcript).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(/\/$/);
+});
+
+test("shared keyboard scrolling works on routes, saved threads, and future layout surfaces", async ({ page }) => {
+  for (const [path, label] of [["/new", "Home content"], ["/settings", "Settings content"]] as const) {
+    await page.goto(path);
+    const route = page.getByRole("region", { name: label });
+    await route.evaluate((element) => element.insertAdjacentHTML("beforeend", Array.from({ length: 60 }, (_, index) => `<p>Extra content ${index}</p>`).join("")));
+    await expect(route).toHaveAttribute("tabindex", "0");
+    await route.locator("p").last().click();
+    await expect(route).toBeFocused();
+    await page.keyboard.press("Home");
+    await page.keyboard.press("PageDown");
+    await expect.poll(() => route.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    const afterPage = await route.evaluate((element) => element.scrollTop);
+    await page.keyboard.press("PageUp");
+    await expect.poll(() => route.evaluate((element) => element.scrollTop)).toBeLessThan(afterPage);
+  }
+
+  await page.goto("/threads");
+  const savedThreads = page.locator(".app-thread-list-scroll");
+  await savedThreads.evaluate((element) => element.insertAdjacentHTML("beforeend", Array.from({ length: 60 }, (_, index) => `<p>Saved item ${index}</p>`).join("")));
+  await expect(savedThreads).toHaveAttribute("tabindex", "0");
+  await savedThreads.locator("p").last().click();
+  await expect(savedThreads).toBeFocused();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("ArrowDown");
+  await expect.poll(() => savedThreads.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await page.keyboard.press("PageDown");
+  const afterPage = await savedThreads.evaluate((element) => element.scrollTop);
+  await page.keyboard.press("PageUp");
+  await expect.poll(() => savedThreads.evaluate((element) => element.scrollTop)).toBeLessThan(afterPage);
+  const find = page.getByLabel("Find threads");
+  await find.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(find).toBeFocused();
+
+  await page.goto("/new");
+  const route = page.getByRole("region", { name: "Home content" });
+  await route.evaluate((element) => {
+    const nested = document.createElement("div");
+    nested.className = "app-scroll-surface";
+    nested.setAttribute("role", "region");
+    nested.setAttribute("aria-label", "Additional layout content");
+    nested.style.cssText = "height: 80px; overflow: auto";
+    nested.innerHTML = Array.from({ length: 50 }, (_, index) => `<p>Nested content ${index}</p>`).join("");
+    element.append(nested);
+  });
+  const nested = page.getByRole("region", { name: "Additional layout content" });
+  await expect(nested).toHaveAttribute("tabindex", "0");
+  await nested.locator("p").first().click();
+  await expect(nested).toBeFocused();
+  await page.keyboard.press("PageDown");
+  await expect.poll(() => nested.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  expect(await route.evaluate((element) => element.scrollTop)).toBe(0);
+});
+
 test("native scroll surfaces gain accessible square accent indicators on desktop and mobile", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Search query").fill("scroll indicator route");
@@ -191,6 +290,18 @@ test("native scroll surfaces gain accessible square accent indicators on desktop
   await expect(routeScrollbar).toBeVisible();
   await expect(routeContent).not.toHaveClass(/route-scroll-locked/);
   await expect.poll(() => routeContent.evaluate((element) => element.scrollTop)).toBe(previousRouteScroll);
+  await expect(code).toHaveAttribute("tabindex", "0");
+  await code.focus();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => code.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+  const afterArrow = await code.evaluate((element) => element.scrollLeft);
+  await page.keyboard.press("PageDown");
+  await expect.poll(() => code.evaluate((element) => element.scrollLeft)).toBeGreaterThan(afterArrow);
+  const afterPage = await code.evaluate((element) => element.scrollLeft);
+  await page.keyboard.press("PageUp");
+  await expect.poll(() => code.evaluate((element) => element.scrollLeft)).toBeLessThan(afterPage);
+  await page.keyboard.press("End");
   if (test.info().project.name === "chromium") {
     const endPosition = await code.evaluate((element) => element.scrollLeft);
     await code.scrollIntoViewIfNeeded();
@@ -265,7 +376,7 @@ test("route shells keep document fixed and unlock uses the shared passphrase lay
       await page.goto("/new");
       await page.getByLabel("Search query").fill("thread width check");
       await page.getByLabel("Search query").press("Enter");
-      await expect(page).toHaveURL(/\/threads\/[^/]+$/);
+      await expect(page).toHaveURL(/\/threads\/(?!new$)[^/?]+$/);
     } else await page.goto(path);
     const shell = page.locator("main").first();
     await expect(shell).toBeVisible();
@@ -275,8 +386,11 @@ test("route shells keep document fixed and unlock uses the shared passphrase lay
     if (isThreadsPage) {
       await expect(page.getByRole("heading", { name: "/threads" })).toBeVisible();
       await expect(page.getByLabel("Find threads")).toBeVisible();
-      await expect(page.locator(".app-thread-list-scroll")).toHaveCount(1);
-      await expect(page.getByRole("scrollbar", { name: "Saved threads scroll position" })).toHaveCount(0);
+      const threadList = page.locator(".app-thread-list-scroll");
+      await expect(threadList).toHaveCount(1);
+      await expect(page.getByText("Loading threads…")).toHaveCount(0);
+      const listOverflows = await threadList.evaluate((element) => element.scrollHeight > element.clientHeight);
+      await expect(page.getByRole("scrollbar", { name: "Saved threads scroll position" })).toHaveCount(listOverflows ? 1 : 0);
       await expect.poll(() => page.locator(".app-threads-layout").evaluate((element) => element.getBoundingClientRect().width / window.innerWidth)).toBeGreaterThan(0.88);
     } else {
       await expect(routeScroll).toBeVisible();

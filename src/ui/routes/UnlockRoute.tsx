@@ -22,6 +22,6 @@ export function UnlockRoute() {
   };
   return <main className={styles.unlockShell}>
     <StickyHeader onIntent={() => navigate("/", { replace: true })} />
-    <section className={`${styles.routeLayout} app-route-scroll`}><UnlockBox message={message} onIntent={onIntent} /></section>
+    <section className={`${styles.routeLayout} app-route-scroll`} aria-label="Unlock content"><UnlockBox message={message} onIntent={onIntent} /></section>
   </main>;
 }

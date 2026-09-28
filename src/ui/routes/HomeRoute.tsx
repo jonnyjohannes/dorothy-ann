@@ -35,7 +35,7 @@ export function HomeRoute() {
 
   return <main className={`${styles.shell} ${styles.promptShell}`}>
     <StickyHeader onIntent={onIntent} />
-    <section className={`${styles.routeLayout} app-route-scroll`}>
+    <section className={`${styles.routeLayout} app-route-scroll`} aria-label="Home content">
       <h1 className={styles.pageTitle}><code>/new</code></h1>
       <div className={styles.commandList} aria-label="Commands">
         <p><Link to="/"><code>/new</code></Link><span><code>&lt;esc&gt;&lt;esc&gt;</code></span></p>

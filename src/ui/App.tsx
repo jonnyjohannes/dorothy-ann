@@ -44,22 +44,30 @@ export function GlobalShortcuts() {
       const target = event.target;
       const isEditable = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable);
       if (event.isComposing) return;
-      if (event.altKey && event.code === "KeyS") { event.preventDefault(); navigate("/threads", { state: threadSelectorState(location) }); return; }
-      if (event.altKey && event.code === "KeyC") { event.preventDefault(); navigate("/settings"); return; }
+      if (event.altKey && event.code === "KeyS") { event.preventDefault(); lastEscape.current = 0; navigate("/threads", { state: threadSelectorState(location) }); return; }
+      if (event.altKey && event.code === "KeyC") { event.preventDefault(); lastEscape.current = 0; navigate("/settings"); return; }
       if (event.key === "i" && !event.ctrlKey && !event.altKey && !event.metaKey && !isEditable) {
         const prompt = document.querySelector<HTMLInputElement>('input[aria-label="Search query"]:not(:disabled)');
-        if (prompt) { event.preventDefault(); prompt.focus(); return; }
+        if (prompt) { event.preventDefault(); lastEscape.current = 0; prompt.focus(); return; }
       }
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" || event.defaultPrevented || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
       if ((location.pathname === "/threads" || location.pathname === "/settings") && !isEditable) {
         event.preventDefault();
+        lastEscape.current = 0;
         navigate(location.pathname === "/threads" ? threadSelectorReturnTo(location.state) : "/", { replace: true });
         return;
       }
-      if (isEditable) return;
+      const promptEscape = target instanceof HTMLInputElement && target.matches('input[aria-label="Search query"]');
+      if (isEditable && !promptEscape) return;
+      event.preventDefault();
       const current = Date.now();
-      if (current - lastEscape.current < 500) { event.preventDefault(); navigate("/", { replace: true }); }
+      if (current - lastEscape.current < 500) { lastEscape.current = 0; navigate("/", { replace: true }); return; }
       lastEscape.current = current;
+      if (promptEscape) {
+        const scroller = document.querySelector<HTMLElement>('.app-route-scroll[tabindex="0"], .app-thread-list-scroll[tabindex="0"]');
+        if (scroller) scroller.focus({ preventScroll: true });
+        else target.blur();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

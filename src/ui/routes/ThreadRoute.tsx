@@ -165,7 +165,7 @@ export function ThreadRoute() {
   const selectCitation = (sourceId: string) => { setSelectedSourceId(sourceId); window.setTimeout(() => document.getElementById(`source-${sourceId}`)?.focus(), 0); };
   return <main className={`${styles.shell} ${styles.promptShell}`}>
     <StickyHeader onIntent={onIntent} actions={thread ? <div className={styles.headerActions} aria-label="Thread actions"><button className={`${styles.iconButton} ${successfulAction === "copy" ? styles.iconButtonSuccess : ""}`} type="button" onClick={() => void copyThread()} aria-label={successfulAction === "copy" ? "Copied thread" : "Copy thread"}>{successfulAction === "copy" ? <CheckGlyph /> : <CopyGlyph />}</button><button className={`${styles.iconButton} ${successfulAction === "export" ? styles.iconButtonSuccess : ""}`} type="button" onClick={exportThread} aria-label={successfulAction === "export" ? "Exported thread" : "Export thread"}>{successfulAction === "export" ? <CheckGlyph /> : <ExportGlyph />}</button></div> : undefined} />
-    <section className={`${styles.threadContent} app-route-scroll`}>
+    <section className={`${styles.threadContent} app-route-scroll`} aria-label="Thread content">
       {message && <p role="alert">{message}</p>}
       {thread && <TranscriptBox thread={thread} sources={sources} onIntent={onIntent} onCitationSelect={selectCitation} />}
       {view.active && activeRequest && <article className={styles.scrollback}><blockquote className={styles.userTurn}>{activeRequest}</blockquote></article>}

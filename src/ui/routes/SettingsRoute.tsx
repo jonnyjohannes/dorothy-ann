@@ -33,7 +33,7 @@ export function SettingsRoute() {
   };
   return <main className={styles.shell}>
     <StickyHeader onIntent={onIntent} />
-    <section className={`${styles.routeLayout} app-route-scroll`}>
+    <section className={`${styles.routeLayout} app-route-scroll`} aria-label="Settings content">
       <h1 className={styles.pageTitle}><code>/settings</code></h1>
       <SettingsBox values={values} persistence="saved" onIntent={onIntent} />
       {message && <p className={styles.commandMessage} role="status">{message}</p>}
