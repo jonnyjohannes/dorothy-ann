@@ -10,7 +10,8 @@
 - Current focus: implementation complete; inspect the actual wide/short screenshots and physical iOS behavior before release
 - Next action: owner review; no code work remains in this scope
 - Branch: `release/v1.2.2`
-- Comparison base: rebased onto `origin/release/v1.2.1` at `62e0546`; implementation is committed separately
+- Comparison base: rebased onto `origin/release/v1.2.1` at `62e0546`
+- Implementation commit: `05dc22f` (no release tag yet)
 
 ## Abstract
 
