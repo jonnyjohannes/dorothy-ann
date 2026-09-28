@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("legacy accent stays inert; native caret cycles scheme colors and scroll focus frames the region", async ({ page }) => {
+test("legacy accent stays inert; native caret cycles and scroll focus uses the random shared accent", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("dorothy-ann-primary-accent", "e068a5"));
   await page.goto("/new");
   const input = page.getByLabel("Search query");
@@ -18,7 +18,15 @@ test("legacy accent stays inert; native caret cycles scheme colors and scroll fo
           border: getComputedStyle(element.parentElement!).borderColor, override: document.documentElement.style.getPropertyValue("--accent") };
       });
       expect(colors.caret).not.toBe("");
-      expect(colors.border).toBe(colors.ink);
+      const focusAccent = await page.evaluate(() => {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--focus-accent)";
+        document.body.append(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color;
+      });
+      expect(colors.border).toBe(focusAccent);
       expect(colors.override).toBe("");
       await input.fill("composition remains editable");
       await expect(input).toHaveValue("composition remains editable");
@@ -29,9 +37,9 @@ test("legacy accent stays inert; native caret cycles scheme colors and scroll fo
   const indicator = page.getByRole("scrollbar", { name: "Route content scroll position" });
   await expect(indicator).toBeVisible();
   await scroller.focus();
-  await expect(scroller).toHaveClass(/app-scroll-surface--focused/);
-  expect(await scroller.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
-  const focusOutline = await scroller.evaluate((element) => getComputedStyle(element).outlineColor);
+  expect(await scroller.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("none");
+  expect(await indicator.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
+  const focusOutline = await indicator.evaluate((element) => getComputedStyle(element).outlineColor);
   expect(focusOutline).toBe(await page.evaluate(() => {
     const probe = document.createElement("span");
     probe.style.color = "var(--scroll-focus-color)";
@@ -41,13 +49,12 @@ test("legacy accent stays inert; native caret cycles scheme colors and scroll fo
     return color;
   }));
   await indicator.focus();
-  expect(await indicator.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("none");
-  expect(await scroller.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
+  expect(await indicator.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
+  expect(await scroller.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("none");
   if (test.info().project.name === "chromium") {
     await page.emulateMedia({ forcedColors: "active" });
     await indicator.focus();
-    expect(await indicator.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("none");
-    expect(await scroller.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
+    expect(await indicator.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
     expect(await indicator.locator("div").evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
     await page.emulateMedia({ forcedColors: "none" });
   }
@@ -56,8 +63,29 @@ test("legacy accent stays inert; native caret cycles scheme colors and scroll fo
   await scroller.focus();
   expect(await scroller.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
   expect(await scroller.evaluate((element) => getComputedStyle(element).outlineColor)).toBe(focusOutline);
+  expect(await input.evaluate((element) => getComputedStyle(element).animationDuration)).toBe("32s");
   await page.emulateMedia({ reducedMotion: "reduce" });
   expect(await input.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
+});
+
+test("one random focus accent stays shared across SPA routes and redraws on reload", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("dorothy-ann-color-scheme", "catppuccin");
+    Math.random = () => location.search.includes("second") ? 0.99 : 0;
+  });
+  await page.goto("/new?first");
+  const prompt = page.getByLabel("Search query");
+  await expect(prompt).toBeFocused();
+  const first = await prompt.locator("xpath=..").evaluate((element) => getComputedStyle(element).borderTopColor);
+  await page.keyboard.press("Alt+S");
+  const fuzzySearch = page.getByLabel("Find threads");
+  await expect(fuzzySearch).toBeVisible();
+  await fuzzySearch.focus();
+  const sameLoad = await fuzzySearch.evaluate((element) => getComputedStyle(element).borderTopColor);
+  expect(sameLoad).toBe(first);
+  await page.goto("/new?second");
+  const nextLoad = await page.getByLabel("Search query").locator("xpath=..").evaluate((element) => getComputedStyle(element).borderTopColor);
+  expect(nextLoad).not.toBe(first);
 });
 
 test("a page draw assigns stable distinct scroll slots and matches the native fallback", async ({ page }) => {
@@ -221,7 +249,7 @@ test("dormant reservations do not duplicate simultaneous visible scroll hues", a
   expect(await surfaces.last().evaluate((element) => (element as HTMLElement).style.getPropertyValue("--scroll-thumb-color"))).toBe(ninthSlot);
 });
 
-test("scroll focus uses the video hue without a gap and user turns use the image hue", async ({ page }) => {
+test("scroll focus uses the random accent while user turns use the image hue", async ({ page }) => {
   await page.goto("/new");
   await page.getByLabel("Search query").fill("color fixture topic");
   await page.getByLabel("Search query").press("Enter");
@@ -231,7 +259,7 @@ test("scroll focus uses the video hue without a gap and user turns use the image
   const indicator = page.getByRole("scrollbar", { name: "Route content scroll position" });
   await expect(indicator).toBeVisible();
   await scroller.focus();
-  await expect(scroller).toHaveClass(/app-scroll-surface--focused/);
+  await expect(indicator).toHaveClass(/surface-focused/);
   for (const scheme of ["mono", "catppuccin", "rose-pine"]) {
     for (const theme of ["light", "dark", "auto"]) {
       await page.emulateMedia({ colorScheme: theme === "auto" ? "dark" : "light" });
@@ -244,7 +272,7 @@ test("scroll focus uses the video hue without a gap and user turns use the image
         const probe = document.createElement("span");
         probe.style.cssText = "color:var(--scroll-focus-color);background:var(--command-accent-5)";
         document.body.append(probe);
-        const indicator = document.querySelector<HTMLElement>(".app-route-scroll")!;
+        const indicator = document.querySelector<HTMLElement>(".app-scroll-indicator[aria-label='Route content scroll position']")!;
         const turn = document.querySelector<HTMLElement>("blockquote[class*='userTurn']")!;
         const result = { focus: getComputedStyle(indicator).outlineColor, expected: getComputedStyle(probe).color,
           image: getComputedStyle(probe).backgroundColor, turn: getComputedStyle(turn).borderLeftColor,
@@ -260,7 +288,7 @@ test("scroll focus uses the video hue without a gap and user turns use the image
       });
       expect(colors.focus).toBe(colors.expected);
       expect(colors.turn).toBe(colors.image);
-      expect(colors.offset).toBe("-2px");
+      expect(colors.offset).toBe("0px");
       expect(colors.ratio, `${scheme}/${theme} scroll-focus contrast`).toBeGreaterThanOrEqual(3);
     }
   }

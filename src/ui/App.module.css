@@ -684,7 +684,7 @@
   box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 12%);
   backdrop-filter: blur(10px);
 }
-.promptBox:focus-within { border-color: var(--ink); }
+.promptBox:focus-within { border-color: var(--focus-accent); }
 .promptBox > input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); padding: 0.45rem 0.7rem; }
 .promptHint { align-self: center; color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
 .commandMessage { width: 100%; margin: 1rem 0; color: var(--muted); }
@@ -788,7 +788,7 @@
   .threadPicker .threadSelected { outline: 2px solid Highlight; outline-offset: -2px; }
 }
 .threadPicker li button:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
-.threadPicker .threadSearch:focus { border-color: var(--ink); outline: 0; }
+.threadPicker .threadSearch:focus { border-color: var(--focus-accent); outline: 0; }
 .chatForm {
   position: sticky;
   bottom: 0;

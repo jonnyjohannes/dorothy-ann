@@ -308,7 +308,7 @@ test("native scroll surfaces gain accessible square accent indicators on desktop
     const thumb = scrollbar.locator("div");
     const thumbBounds = await thumb.boundingBox();
     expect(thumbBounds).not.toBeNull();
-    await thumb.dragTo(thumb, { sourcePosition: { x: Math.max(1, thumbBounds!.width - 2), y: thumbBounds!.height / 2 }, targetPosition: { x: Math.max(1, thumbBounds!.width - 37), y: thumbBounds!.height / 2 } });
+    await thumb.dragTo(thumb, { sourcePosition: { x: thumbBounds!.width / 2, y: thumbBounds!.height / 2 }, targetPosition: { x: 0, y: thumbBounds!.height / 2 } });
     await expect.poll(() => code.evaluate((element) => element.scrollLeft)).toBeLessThan(endPosition);
   }
 });

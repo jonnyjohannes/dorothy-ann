@@ -26,6 +26,7 @@ for (const theme of ["light", "dark"] as const) {
       };
     });
     expect(normalized(fonts.prose)).toBe(sans);
+    expect(await page.locator("body").evaluate((element) => getComputedStyle(element).fontSize)).toBe("17px");
     expect(normalized(fonts.prompt)).toBe(sans);
     for (const family of [fonts.title, fonts.command, fonts.shortcut, fonts.signature, fonts.tagline]) expect(normalized(family)).toBe(mono);
   });

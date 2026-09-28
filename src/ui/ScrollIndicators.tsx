@@ -7,6 +7,7 @@ for (let index = scrollSlotOrder.length - 1; index > 0; index--) {
   const draw = Math.floor(Math.random() * (index + 1));
   [scrollSlotOrder[index], scrollSlotOrder[draw]] = [scrollSlotOrder[draw]!, scrollSlotOrder[index]!];
 }
+const focusAccentSlot = Math.floor(Math.random() * scrollSlotOrder.length);
 
 interface ScrollSurface {
   element: HTMLElement;
@@ -24,6 +25,7 @@ const KEYBOARD_SURFACES = `${ROUTE_SURFACES}, .app-scroll-surface, .ui-markdown 
 /** Adds accessible visual controls while leaving all movement to native overflow. */
 export function ScrollIndicators() {
   useEffect(() => {
+    document.documentElement.style.setProperty("--focus-accent", `var(--accent-${focusAccentSlot + 1})`);
     const surfaces = new Map<HTMLElement, ScrollSurface>();
     const slots = new Map<HTMLElement, number>();
     let nextSlot = 0;
@@ -131,10 +133,10 @@ export function ScrollIndicators() {
               thumb.style.setProperty("--scroll-thumb-size", `${ratio * 100}%`);
               thumb.style.setProperty("--scroll-thumb-start", `${start * 100}%`);
             };
-            const onFocus = () => element.classList.add("app-scroll-surface--focused");
-            const onBlur = () => element.classList.remove("app-scroll-surface--focused");
-            const onIndicatorFocus = () => { indicator.classList.add("app-scroll-indicator--surface-focused"); onFocus(); };
-            const onIndicatorBlur = () => { indicator.classList.remove("app-scroll-indicator--surface-focused"); onBlur(); };
+            const onFocus = () => indicator.classList.add("app-scroll-indicator--surface-focused");
+            const onBlur = () => indicator.classList.remove("app-scroll-indicator--surface-focused");
+            const onIndicatorFocus = onFocus;
+            const onIndicatorBlur = onBlur;
             element.addEventListener("focus", onFocus);
             element.addEventListener("blur", onBlur);
             indicator.addEventListener("focus", onIndicatorFocus);
@@ -188,7 +190,7 @@ export function ScrollIndicators() {
               const viewport = axis === "vertical" ? element.clientHeight : element.clientWidth;
               element.scrollTo(axis === "vertical" ? { top: scrollStart + delta * max / Math.max(1, track - viewport * viewport / (axis === "vertical" ? element.scrollHeight : element.scrollWidth)) } : { left: scrollStart + delta * max / Math.max(1, track - viewport * viewport / (axis === "horizontal" ? element.scrollWidth : element.scrollHeight)) });
             });
-            const cleanup = () => { element.removeEventListener("focus", onFocus); element.removeEventListener("blur", onBlur); indicator.removeEventListener("focus", onIndicatorFocus); indicator.removeEventListener("blur", onIndicatorBlur); element.classList.remove("app-scroll-surface--focused"); element.removeEventListener("scroll", update); window.removeEventListener("scroll", update); observer.disconnect(); mutation.disconnect(); indicator.removeEventListener("keydown", onKeyDown); if (keyboardSurface) { element.removeEventListener("keydown", onSurfaceKeyDown); if (originalTabIndex === null) element.removeAttribute("tabindex"); } };
+            const cleanup = () => { element.removeEventListener("focus", onFocus); element.removeEventListener("blur", onBlur); indicator.removeEventListener("focus", onIndicatorFocus); indicator.removeEventListener("blur", onIndicatorBlur); indicator.classList.remove("app-scroll-indicator--surface-focused"); element.removeEventListener("scroll", update); window.removeEventListener("scroll", update); observer.disconnect(); mutation.disconnect(); indicator.removeEventListener("keydown", onKeyDown); if (keyboardSurface) { element.removeEventListener("keydown", onSurfaceKeyDown); if (originalTabIndex === null) element.removeAttribute("tabindex"); } };
             surface = { element, axis, indicator, thumb, cleanup };
             surfaces.set(element, surface);
             element.classList.add("has-custom-scroll-indicator");
@@ -214,6 +216,7 @@ export function ScrollIndicators() {
     window.addEventListener("resize", updateSurfaces, { passive: true });
     return () => {
       disposed = true;
+      document.documentElement.style.removeProperty("--focus-accent");
       window.removeEventListener("dorothy-ann-preference-change", applySlots);
       mutation.disconnect();
       resize.disconnect();
