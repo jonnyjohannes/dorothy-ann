@@ -2,7 +2,7 @@ import { Redis } from "@upstash/redis";
 import type { ThreadId } from "../../domain/types.js";
 import type { LegacyMigrationIdentities } from "../../domain/migrations.js";
 import type { StoredThreadRecord, ThreadRevision } from "../../ports/storage-v3.js";
-import { ThreadStoreBase, type PersistedThreadState, type ThreadTombstone } from "./thread-store-base.js";
+import { ThreadStoreBase, type PersistedThreadState, type ThreadTombstone, type ThreadListTimingSink } from "./thread-store-base.js";
 import type { TerminalCommitIdentity } from "../../application/commit-terminal-turn.js";
 
 export interface V3Redis {
@@ -56,10 +56,11 @@ export class RedisThreadStore extends ThreadStoreBase {
     clock: () => Date = () => new Date(),
     revisions?: () => ThreadRevision,
     private readonly legacyPrefix = "dorothy-ann:v1:owner",
-  ) { super(identities, clock, revisions); this.prefix = prefix; }
+    onListTiming?: ThreadListTimingSink,
+  ) { super(identities, clock, revisions, onListTiming); this.prefix = prefix; }
 
-  static fromUpstash(url: string, token: string, identities: TerminalCommitIdentity & LegacyMigrationIdentities, prefix?: string) {
-    return new RedisThreadStore(new Redis({ url, token }) as unknown as V3Redis, identities, prefix);
+  static fromUpstash(url: string, token: string, identities: TerminalCommitIdentity & LegacyMigrationIdentities, prefix?: string, onListTiming?: ThreadListTimingSink) {
+    return new RedisThreadStore(new Redis({ url, token }) as unknown as V3Redis, identities, prefix, undefined, undefined, undefined, onListTiming);
   }
   private recordKey(id: ThreadId) { return `${this.prefix}:thread:${id}`; }
   private tombstoneKey(id: ThreadId) { return `${this.prefix}:deleted:${id}`; }

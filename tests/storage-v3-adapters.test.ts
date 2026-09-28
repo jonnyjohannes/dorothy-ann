@@ -2,7 +2,7 @@
 import "fake-indexeddb/auto";
 import { webcrypto } from "node:crypto";
 import { Hono } from "hono";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { IdentityPolicy } from "../src/application/identity-policy";
 import type { CanonicalSource, SearchTurn, ThreadId } from "../src/domain/types";
 import { IndexedDbThreadStore, openDorothyAnnV3Db } from "../src/infrastructure/browser/indexeddb-thread-store";
@@ -10,6 +10,8 @@ import { BrowserRemoteThreadStore } from "../src/infrastructure/browser/remote-t
 import { WebCryptoIdentityHasher } from "../src/infrastructure/identity/web-crypto-hasher";
 import { REDIS_MIGRATE_RECORD, REDIS_WRITE_RECORD, REDIS_WRITE_TOMBSTONE, RedisThreadStore, type V3Redis } from "../src/infrastructure/storage/redis-thread-store";
 import { createThreadStorageRoutes } from "../src/server/thread-storage-routes";
+import { createThreadListTimingSink } from "../server/runtime/thread-list-timing";
+import { createLogger, type LogRecord } from "../server/runtime/logger";
 import type { ThreadRevision, ThreadStore } from "../src/ports/storage-v3";
 
 const identity = () => new IdentityPolicy(new WebCryptoIdentityHasher(webcrypto.subtle as unknown as SubtleCrypto));
@@ -150,6 +152,65 @@ for (const [name, factory] of factories) describe(`${name} v3 storage adapter`, 
     const collision = { ...source, url: "https://example.com/other", canonicalUrl: "https://example.com/other" };
     const revision = earlier.ok ? earlier.value.record.revision : later.value.record.revision;
     expect(await store.commitTerminalTurn({ threadId, expectedRevision: revision, sourceRecords: [collision], turn: turn(4, collision, 7) })).toEqual({ ok: false, failure: { code: "integrity_failure", retryable: false } });
+  });
+});
+
+describe("Redis thread list timings", () => {
+  it("reports one count-only summary and fixed per-phase metrics without changing list results", async () => {
+    const logs: LogRecord[] = [];
+    const emit = vi.fn((name: string) => { if (name === "threads.list.ids.wall_elapsed_ms") throw new Error("metric unavailable"); });
+    const redis = new FakeRedis();
+    const identities = identity();
+    const store = new RedisThreadStore(redis, identities, "test", () => new Date(at(3)), revisions, "legacy", createThreadListTimingSink(createLogger({ level: "info", sink: (record) => { logs.push(record); } }), emit));
+    for (const n of [1, 2]) {
+      const id = uuid(n + 700) as ThreadId;
+      const committed = await store.commitTerminalTurn({ threadId: id, expectedRevision: null, create: { id, title: "SENTINEL_PRIVATE_TITLE", createdAt: at(1) as never }, sourceRecords: [], turn: turn(n) });
+      expect(committed.ok).toBe(true);
+    }
+    const listed = await store.list();
+    expect(listed.ok && listed.value).toHaveLength(2);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ event: "thread_list_timing", outcome: "ok", ids_count: 2, scanned_count: 2, returned_count: 2 });
+    expect(emit.mock.calls.map(([name]) => name)).toEqual([
+      "threads.list.total.wall_elapsed_ms", "threads.list.ids.wall_elapsed_ms", "threads.list.records.wall_elapsed_ms", "threads.list.sort.wall_elapsed_ms",
+    ]);
+    expect(emit.mock.calls.every((call) => call.length === 2 && Number.isInteger(call[1]) && call[1] >= 0)).toBe(true);
+    expect(JSON.stringify([logs, emit.mock.calls])).not.toMatch(/SENTINEL_PRIVATE_TITLE|10000000-0000-4000-8000-|SENTINEL_PROVIDER_PAYLOAD/u);
+  });
+
+  it("reports an index failure without inventing unentered record or sort timings", async () => {
+    const redis = new FakeRedis();
+    redis.zrange = async () => { throw new Error("SENTINEL_PROVIDER_PAYLOAD"); };
+    const logs: LogRecord[] = [];
+    const emit = vi.fn();
+    const store = new RedisThreadStore(redis, identity(), "test", () => new Date(at(3)), revisions, "legacy", createThreadListTimingSink(createLogger({ level: "info", sink: (record) => { logs.push(record); } }), emit));
+    expect(await store.list()).toEqual({ ok: false, failure: { code: "storage_unavailable", retryable: true } });
+    expect(logs[0]).toMatchObject({ event: "thread_list_timing", outcome: "failed", ids_count: 0, scanned_count: 0, returned_count: 0 });
+    expect(logs[0]).not.toHaveProperty("records_ms");
+    expect(logs[0]).not.toHaveProperty("sort_ms");
+    expect(emit.mock.calls.map(([name]) => name)).toEqual(["threads.list.total.wall_elapsed_ms", "threads.list.ids.wall_elapsed_ms"]);
+    expect(JSON.stringify(logs)).not.toContain("SENTINEL_PROVIDER_PAYLOAD");
+  });
+
+  it("measures a failed record read without pretending sorting happened", async () => {
+    const redis = new FakeRedis();
+    redis.scores.set("test:threads:index", new Map([[uuid(800), 1]]));
+    redis.get = async () => { throw new Error("SENTINEL_PROVIDER_PAYLOAD"); };
+    const logs: LogRecord[] = [];
+    const emit = vi.fn();
+    const store = new RedisThreadStore(redis, identity(), "test", () => new Date(at(3)), revisions, "legacy", createThreadListTimingSink(createLogger({ level: "info", sink: (record) => { logs.push(record); } }), emit));
+    expect(await store.list()).toMatchObject({ ok: false, failure: { code: "storage_unavailable" } });
+    expect(logs[0]).toMatchObject({ outcome: "failed", ids_count: 1, scanned_count: 1, returned_count: 0, max_record_ms: expect.any(Number) });
+    expect(logs[0]).not.toHaveProperty("sort_ms");
+    expect(emit.mock.calls.map(([name]) => name)).toEqual([
+      "threads.list.total.wall_elapsed_ms", "threads.list.ids.wall_elapsed_ms", "threads.list.records.wall_elapsed_ms",
+    ]);
+    expect(JSON.stringify(logs)).not.toContain("SENTINEL_PROVIDER_PAYLOAD");
+  });
+
+  it("does not let an observer failure alter storage results", async () => {
+    const store = new RedisThreadStore(new FakeRedis(), identity(), "test", () => new Date(at(3)), revisions, "legacy", () => { throw new Error("observer failure"); });
+    expect(await store.list()).toEqual({ ok: true, value: [] });
   });
 });
 

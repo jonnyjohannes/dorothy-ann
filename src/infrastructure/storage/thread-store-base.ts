@@ -10,10 +10,24 @@ const MAX_ISSUES = 20;
 export interface ThreadTombstone { deletedAt: IsoTimestamp; expiresAt: IsoTimestamp }
 export interface PersistedThreadState { record: StoredThreadRecord | null; tombstone: ThreadTombstone | null }
 export interface ImportEntry { thread: Thread; expiresAt: IsoTimestamp }
+export interface ThreadListTiming {
+  outcome: "ok" | "failed";
+  total_ms: number;
+  ids_ms?: number;
+  records_ms?: number;
+  sort_ms?: number;
+  ids_count: number;
+  scanned_count: number;
+  returned_count: number;
+  max_record_ms?: number;
+}
+export type ThreadListTimingSink = (record: ThreadListTiming) => void;
 interface CandidateData { entries: ImportEntry[]; preview: InspectedThreadImport["preview"] }
 
 const unavailable = <T>(code: "storage_unavailable" | "quota_exceeded" = "storage_unavailable"): ThreadStoreResult<T> => ({ ok: false, failure: { code, retryable: true } });
 const terminalFailure = <T>(code: "revision_conflict" | "thread_not_found" | "thread_deleted" | "invalid_record" | "integrity_failure"): ThreadStoreResult<T> => ({ ok: false, failure: { code, retryable: code === "revision_conflict" } as ThreadStoreFailure });
+const elapsedMs = (start: number) => Math.max(0, Math.min(300_000, Math.round(performance.now() - start)));
+const boundedCount = (value: number) => Math.min(10_000, value);
 const timestamp = (date: Date) => date.toISOString() as IsoTimestamp;
 const expiryAt = (activity: IsoTimestamp) => threadExpiryAt(activity);
 const summary = (thread: Thread): ThreadSummary => {
@@ -33,6 +47,7 @@ export abstract class ThreadStoreBase implements ThreadStore {
     protected readonly identities: TerminalCommitIdentity & LegacyMigrationIdentities,
     protected readonly clock: () => Date = () => new Date(),
     private readonly revisions: () => ThreadRevision = () => `revision_${crypto.randomUUID()}` as ThreadRevision,
+    private readonly onListTiming?: ThreadListTimingSink,
   ) {}
 
   protected abstract readState(threadId: ThreadId): Promise<PersistedThreadState>;
@@ -66,15 +81,39 @@ export abstract class ThreadStoreBase implements ThreadStore {
   }
 
   async list(): Promise<ThreadStoreResult<StoredThreadSummary[]>> {
+    const started = performance.now();
+    const timing: ThreadListTiming = { outcome: "failed", total_ms: 0, ids_count: 0, scanned_count: 0, returned_count: 0 };
     try {
       const values: StoredThreadSummary[] = [];
-      for (const id of await this.listIds()) {
-        const state = await this.liveState(id);
-        if (state.record) values.push({ summary: summary(state.record.thread), revision: state.record.revision });
-      }
-      values.sort((left, right) => right.summary.updatedAt.localeCompare(left.summary.updatedAt) || left.summary.id.localeCompare(right.summary.id));
+      let ids: ThreadId[];
+      const idsStarted = performance.now();
+      try { ids = await this.listIds(); }
+      finally { timing.ids_ms = elapsedMs(idsStarted); }
+      timing.ids_count = boundedCount(ids.length);
+      const recordsStarted = performance.now();
+      try {
+        for (const id of ids) {
+          const recordStarted = performance.now();
+          try {
+            const state = await this.liveState(id);
+            if (state.record) values.push({ summary: summary(state.record.thread), revision: state.record.revision });
+          } finally {
+            timing.scanned_count = boundedCount(timing.scanned_count + 1);
+            timing.max_record_ms = Math.max(timing.max_record_ms ?? 0, elapsedMs(recordStarted));
+          }
+        }
+      } finally { timing.records_ms = elapsedMs(recordsStarted); }
+      const sortStarted = performance.now();
+      try { values.sort((left, right) => right.summary.updatedAt.localeCompare(left.summary.updatedAt) || left.summary.id.localeCompare(right.summary.id)); }
+      finally { timing.sort_ms = elapsedMs(sortStarted); }
+      timing.returned_count = boundedCount(values.length);
+      timing.outcome = "ok";
       return { ok: true, value: values };
     } catch (error) { return resultFailure(error); }
+    finally {
+      timing.total_ms = elapsedMs(started);
+      try { this.onListTiming?.(timing); } catch { /* Diagnostics must not affect listing. */ }
+    }
   }
 
   async load(threadId: ThreadId): Promise<ThreadStoreResult<StoredThreadRecord | null>> {
