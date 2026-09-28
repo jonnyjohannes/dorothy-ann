@@ -207,6 +207,70 @@
     --command-accent-8: var(--accent-4); --command-foreground-8: #582892;
   }
 }
+/* Thread hues follow accent-slot order; reuse each home command's same-hue readable foreground. */
+:root[data-color-scheme="catppuccin"] {
+  --thread-foreground-1: var(--command-foreground-1);
+  --thread-foreground-2: var(--command-foreground-8);
+  --thread-foreground-3: var(--command-foreground-2);
+  --thread-foreground-4: var(--command-foreground-3);
+  --thread-foreground-5: var(--command-foreground-4);
+  --thread-foreground-6: var(--command-foreground-5);
+  --thread-foreground-7: var(--command-foreground-6);
+  --thread-foreground-8: var(--command-foreground-7);
+}
+:root[data-theme="dark"][data-color-scheme="catppuccin"] {
+  --thread-foreground-1: var(--command-foreground-8);
+  --thread-foreground-2: var(--command-foreground-1);
+  --thread-foreground-8: var(--command-foreground-7);
+  --thread-foreground-7: var(--command-foreground-6);
+  --thread-foreground-6: var(--command-foreground-5);
+  --thread-foreground-5: var(--command-foreground-4);
+  --thread-foreground-4: var(--command-foreground-3);
+  --thread-foreground-3: var(--command-foreground-2);
+}
+:root[data-color-scheme="rose-pine"] {
+  --thread-foreground-1: var(--command-foreground-1);
+  --thread-foreground-2: var(--command-foreground-3);
+  --thread-foreground-3: var(--command-foreground-4);
+  --thread-foreground-4: var(--command-foreground-2);
+  --thread-foreground-5: var(--command-foreground-5);
+  --thread-foreground-6: var(--command-foreground-6);
+  --thread-foreground-7: var(--command-foreground-7);
+  --thread-foreground-8: var(--command-foreground-8);
+}
+:root[data-theme="dark"][data-color-scheme="rose-pine"] {
+  --thread-foreground-1: var(--command-foreground-1);
+  --thread-foreground-2: var(--command-foreground-3);
+  --thread-foreground-3: var(--command-foreground-4);
+  --thread-foreground-4: var(--command-foreground-8);
+  --thread-foreground-5: var(--command-foreground-6);
+  --thread-foreground-6: var(--command-foreground-5);
+  --thread-foreground-7: var(--command-foreground-7);
+  --thread-foreground-8: var(--command-foreground-2);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"][data-color-scheme="catppuccin"] {
+    --thread-foreground-1: var(--command-foreground-8);
+    --thread-foreground-2: var(--command-foreground-1);
+    --thread-foreground-3: var(--command-foreground-2);
+    --thread-foreground-4: var(--command-foreground-3);
+    --thread-foreground-5: var(--command-foreground-4);
+    --thread-foreground-6: var(--command-foreground-5);
+    --thread-foreground-7: var(--command-foreground-6);
+    --thread-foreground-8: var(--command-foreground-7);
+  }
+  :root[data-theme="auto"][data-color-scheme="rose-pine"] {
+    --thread-foreground-1: var(--command-foreground-1);
+    --thread-foreground-2: var(--command-foreground-3);
+    --thread-foreground-3: var(--command-foreground-4);
+    --thread-foreground-4: var(--command-foreground-8);
+    --thread-foreground-5: var(--command-foreground-6);
+    --thread-foreground-6: var(--command-foreground-5);
+    --thread-foreground-7: var(--command-foreground-7);
+    --thread-foreground-8: var(--command-foreground-2);
+  }
+}
+:root { --scroll-focus-color: color-mix(in srgb, var(--command-accent-6) 55%, var(--ink)); }
 * {
   box-sizing: border-box;
 }
@@ -235,7 +299,7 @@ body {
   background: var(--scroll-thumb-color, var(--accent-1));
 }
 :is(.app-route-scroll, .app-thread-list-scroll, .app-scroll-surface, .ui-markdown pre):focus:not(.has-custom-scroll-indicator) {
-  outline: 2px solid var(--ink);
+  outline: 2px solid var(--scroll-focus-color);
   outline-offset: -2px;
 }
 :is(.app-route-scroll, .app-thread-list-scroll, .app-scroll-surface, .ui-markdown pre):focus.has-custom-scroll-indicator {
@@ -254,10 +318,10 @@ body {
   display: block;
   background: transparent;
   touch-action: none;
-  outline-offset: 2px;
+  outline-offset: 0;
 }
 .app-scroll-indicator:is(:focus, .app-scroll-indicator--surface-focused) {
-  outline: 2px solid var(--ink);
+  outline: 2px solid var(--scroll-focus-color);
 }
 .app-scroll-indicator > div {
   position: absolute;
@@ -267,6 +331,7 @@ body {
 @media (forced-colors: active) {
   .app-scroll-indicator > div { background: CanvasText; }
   .app-scroll-indicator:is(:focus, .app-scroll-indicator--surface-focused) { outline-color: CanvasText; }
+  :is(.app-route-scroll, .app-thread-list-scroll, .app-scroll-surface, .ui-markdown pre):focus:not(.has-custom-scroll-indicator) { outline-color: CanvasText; }
 }
 .app-scroll-indicator--vertical {
   top: var(--scroll-track-start);

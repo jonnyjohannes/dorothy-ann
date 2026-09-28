@@ -24,7 +24,8 @@ export function ThreadsBox({ state, onIntent }: { state: ThreadsViewState; onInt
   }, []);
   useEffect(() => { if (scheme === "mono") setSelection((current) => current.hue === 0 ? current : { ...current, hue: 0 }); }, [scheme]);
   useEffect(() => { activeRow.current?.scrollIntoView?.({ block: "nearest" }); }, [active]);
-  const rowStyle = { "--thread-active-accent": `var(--accent-${selection.hue % ACCENT_NAMES[scheme].length + 1})` } as CSSProperties;
+  const slot = selection.hue % ACCENT_NAMES[scheme].length + 1;
+  const rowStyle = { "--thread-active-accent": `var(--accent-${slot})`, "--thread-active-foreground": `var(--thread-foreground-${slot}, var(--command-foreground-1))` } as CSSProperties;
   useEffect(() => { searchInput.current?.focus(); }, []);
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing) return;

@@ -644,6 +644,7 @@
 .scrollback a { color: inherit; }
 .scrollback blockquote { margin-left: 0; margin-right: 1rem; border-left: 3px solid var(--accent); padding-left: 0.5rem; color: var(--muted); }
 .userTurn { margin-block: 1.5rem; }
+.scrollback blockquote.userTurn { border-left-color: var(--command-accent-5); }
 .researchActivity {
   margin: 1.5rem 0 0;
   color: var(--muted);
@@ -779,11 +780,15 @@
 :global(:root[data-theme="dark"]) .threadPicker li .threadDelete { color: #f38ba8; }
 :global(:root[data-theme="dark"]) .threadPicker li .threadDelete:hover { color: #f5a3b8; }
 .threadPicker li button small { color: var(--muted); margin-top: 0.25rem; }
-.threadPicker .threadSelected { background: color-mix(in srgb, var(--thread-active-accent, var(--accent-1)) 18%, var(--paper)); }
+.threadPicker .threadSelected { background: var(--thread-active-accent, var(--accent-1)); }
+.threadPicker .threadSelected button,
+.threadPicker .threadSelected button small,
+.threadPicker .threadSelected .threadDelete:hover { color: var(--thread-active-foreground, var(--command-foreground-1)); }
+.threadPicker .threadSelected button:focus-visible { outline: 2px solid var(--thread-active-foreground, var(--command-foreground-1)); outline-offset: -2px; }
 @media (forced-colors: active) {
   .threadPicker .threadSelected { outline: 2px solid Highlight; outline-offset: -2px; }
 }
-.threadPicker li button:focus-visible { outline: none; }
+.threadPicker li button:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 .threadPicker .threadSearch:focus { border-color: var(--ink); outline: 0; }
 .chatForm {
   position: sticky;

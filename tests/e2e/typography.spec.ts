@@ -19,12 +19,12 @@ for (const theme of ["light", "dark"] as const) {
       return {
         prose: family(":root"), prompt: family("input[aria-label='Search query']"),
         title: family("h1 code"), command: family("[aria-label='Commands'] code"),
-        shortcut: family("[aria-label='Commands'] p span code"), signature: family("header button"),
+        shortcut: family("[aria-label='Commands'] p span code"), signature: family("header button"), tagline: family("header button span:last-child"),
       };
     });
     expect(normalized(fonts.prose)).toBe(sans);
     expect(normalized(fonts.prompt)).toBe(sans);
-    for (const family of [fonts.title, fonts.command, fonts.shortcut, fonts.signature]) expect(normalized(family)).toBe(mono);
+    for (const family of [fonts.title, fonts.command, fonts.shortcut, fonts.signature, fonts.tagline]) expect(normalized(family)).toBe(mono);
   });
 }
 

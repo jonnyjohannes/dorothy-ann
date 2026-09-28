@@ -46,6 +46,7 @@ describe("v3 product boxes", () => {
     const rows = screen.getAllByRole("listitem");
     const selected = () => screen.getAllByRole("listitem").find((row) => row.className.includes("threadSelected"))!;
     expect(selected().style.getPropertyValue("--thread-active-accent")).toBe("var(--accent-1)");
+    expect(selected().style.getPropertyValue("--thread-active-foreground")).toBe("var(--thread-foreground-1, var(--command-foreground-1))");
     fireEvent.mouseEnter(rows[1]!);
     fireEvent.mouseEnter(rows[1]!);
     expect(selected()).toBe(rows[1]);
