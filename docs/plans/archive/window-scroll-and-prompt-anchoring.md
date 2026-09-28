@@ -11,7 +11,7 @@
 - Next action: owner re-test the reported browser/device
 - Branch: `release/v1.2.2`
 - Base: `1cf8a12` (release branch workflow update)
-- Implementation commit: recorded after commit
+- Implementation commit: `c11517c` (no release tag yet)
 
 ## Goal
 
