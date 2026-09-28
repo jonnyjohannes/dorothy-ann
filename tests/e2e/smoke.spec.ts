@@ -204,6 +204,19 @@ test("native scroll surfaces gain accessible square accent indicators on desktop
 test("command swatch text keeps WCAG AA contrast across theme and color-scheme variants", async ({ page }) => {
   await page.goto("/new");
   const buttons = page.locator('[aria-label="Commands"] a, [aria-label="Commands"] button');
+  const commandColors: Record<string, Record<string, { backgrounds: string[]; foregrounds: string[] }>> = {
+    mono: Object.fromEntries(["light", "dark", "auto"].map((theme) => [theme, { backgrounds: Array(7).fill("rgb(246, 201, 69)"), foregrounds: Array(7).fill("rgb(108, 82, 5)") }])),
+    catppuccin: {
+      light: { backgrounds: ["rgb(136, 57, 239)", "rgb(30, 102, 245)", "rgb(23, 146, 153)", "rgb(64, 160, 43)", "rgb(223, 142, 29)", "rgb(254, 100, 11)", "rgb(210, 15, 57)"], foregrounds: ["rgb(243, 236, 253)", "rgb(248, 250, 255)", "rgb(4, 28, 30)", "rgb(16, 40, 11)", "rgb(74, 47, 10)", "rgb(78, 29, 0)", "rgb(253, 234, 238)"] },
+      dark: { backgrounds: ["rgb(203, 166, 247)", "rgb(137, 180, 250)", "rgb(148, 226, 213)", "rgb(166, 227, 161)", "rgb(249, 226, 175)", "rgb(250, 179, 135)", "rgb(243, 139, 168)"], foregrounds: ["rgb(92, 16, 181)", "rgb(6, 61, 150)", "rgb(27, 100, 88)", "rgb(36, 102, 30)", "rgb(130, 93, 10)", "rgb(133, 54, 6)", "rgb(123, 13, 43)"] },
+      auto: { backgrounds: ["rgb(203, 166, 247)", "rgb(137, 180, 250)", "rgb(148, 226, 213)", "rgb(166, 227, 161)", "rgb(249, 226, 175)", "rgb(250, 179, 135)", "rgb(243, 139, 168)"], foregrounds: ["rgb(92, 16, 181)", "rgb(6, 61, 150)", "rgb(27, 100, 88)", "rgb(36, 102, 30)", "rgb(130, 93, 10)", "rgb(133, 54, 6)", "rgb(123, 13, 43)"] },
+    },
+    "rose-pine": {
+      light: { backgrounds: ["rgb(87, 82, 121)", "rgb(144, 122, 169)", "rgb(40, 105, 131)", "rgb(86, 148, 159)", "rgb(180, 99, 122)", "rgb(215, 130, 126)", "rgb(234, 157, 52)"], foregrounds: ["rgb(208, 206, 222)", "rgb(27, 21, 33)", "rgb(205, 230, 240)", "rgb(21, 35, 38)", "rgb(17, 8, 11)", "rgb(85, 29, 26)", "rgb(90, 56, 9)"] },
+      dark: { backgrounds: ["rgb(196, 167, 231)", "rgb(224, 222, 244)", "rgb(156, 207, 216)", "rgb(49, 116, 143)", "rgb(235, 111, 146)", "rgb(235, 188, 186)", "rgb(246, 193, 119)"], foregrounds: ["rgb(92, 41, 152)", "rgb(91, 80, 197)", "rgb(38, 87, 96)", "rgb(235, 245, 248)", "rgb(92, 13, 35)", "rgb(146, 46, 42)", "rgb(119, 73, 8)"] },
+      auto: { backgrounds: ["rgb(196, 167, 231)", "rgb(224, 222, 244)", "rgb(156, 207, 216)", "rgb(49, 116, 143)", "rgb(235, 111, 146)", "rgb(235, 188, 186)", "rgb(246, 193, 119)"], foregrounds: ["rgb(92, 41, 152)", "rgb(91, 80, 197)", "rgb(38, 87, 96)", "rgb(235, 245, 248)", "rgb(92, 13, 35)", "rgb(146, 46, 42)", "rgb(119, 73, 8)"] },
+    },
+  };
   const contrastRatios = async () => buttons.evaluateAll((elements) => elements.map((element) => {
     const parse = (color: string) => { const scale = color.startsWith("color(srgb") ? 1 : 255; return color.match(/[\d.]+/g)!.slice(0, 3).map(Number).map((channel) => channel / scale).map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4); };
     const luminance = (color: string) => { const [r, g, b] = parse(color); return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!; };
@@ -217,6 +230,8 @@ test("command swatch text keeps WCAG AA contrast across theme and color-scheme v
       await page.emulateMedia({ colorScheme: theme === "light" ? "light" : "dark" });
       await page.evaluate(({ scheme, theme }) => { document.documentElement.dataset.colorScheme = scheme; document.documentElement.dataset.theme = theme; }, { scheme, theme });
       const defaultRatios = await contrastRatios();
+      expect(defaultRatios.map(({ background }) => background)).toEqual(commandColors[scheme]![theme]!.backgrounds);
+      expect(defaultRatios.map(({ color }) => color)).toEqual(commandColors[scheme]![theme]!.foregrounds);
       expect(defaultRatios.every(({ ratio }) => ratio >= 4.5), `${scheme}/${theme} default contrast: ${JSON.stringify(defaultRatios)}`).toBe(true);
       for (const button of await buttons.all()) {
       await button.hover();
@@ -242,7 +257,7 @@ test("command swatch text keeps WCAG AA contrast across theme and color-scheme v
 });
 
 test("route shells keep document fixed and unlock uses the shared passphrase layout", async ({ page }) => {
-  for (const viewport of [{ width: 360, height: 640 }, { width: 768, height: 900 }, { width: 1440, height: 900 }]) {
+  for (const viewport of [{ width: 360, height: 640 }, { width: 768, height: 900 }, { width: 1440, height: 900 }, { width: 2000, height: 837 }, { width: 2000, height: 382 }, { width: 924, height: 922 }]) {
     await page.setViewportSize(viewport);
     for (const path of ["/new", "/threads", "/settings", "thread", "/unlock"]) {
     if (path === "thread") {
@@ -253,19 +268,30 @@ test("route shells keep document fixed and unlock uses the shared passphrase lay
     } else await page.goto(path);
     const shell = page.locator("main").first();
     await expect(shell).toBeVisible();
-    await expect(page.locator(".app-route-scroll")).toHaveCount(1);
-    await expect(page.locator(".app-route-scroll")).toBeVisible();
-    await expect.poll(() => page.locator(".app-route-scroll").evaluate((element) => element.getBoundingClientRect().width / window.innerWidth)).toBeGreaterThan(0.88);
+    const isThreadsPage = path === "/threads";
+    const routeScroll = page.locator(".app-route-scroll");
+    await expect(routeScroll).toHaveCount(isThreadsPage ? 0 : 1);
+    if (isThreadsPage) {
+      await expect(page.getByRole("heading", { name: "/threads" })).toBeVisible();
+      await expect(page.getByLabel("Find threads")).toBeVisible();
+      await expect(page.locator(".app-thread-list-scroll")).toHaveCount(1);
+      await expect(page.getByRole("scrollbar", { name: "Saved threads scroll position" })).toHaveCount(0);
+      await expect.poll(() => page.locator(".app-threads-layout").evaluate((element) => element.getBoundingClientRect().width / window.innerWidth)).toBeGreaterThan(0.88);
+    } else {
+      await expect(routeScroll).toBeVisible();
+      await expect.poll(() => routeScroll.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(0);
+      await expect.poll(() => routeScroll.evaluate((element) => element.getBoundingClientRect().width / window.innerWidth)).toBeGreaterThan(0.88);
+    }
     const expectedPromptFooter = path === "/new" || path === "thread";
     const promptFooter = page.locator(".app-prompt-footer");
     await expect(promptFooter).toHaveCount(expectedPromptFooter ? 1 : 0);
     if (expectedPromptFooter) {
       const [routeBounds, footerBounds, shellBounds] = await Promise.all([
-        page.locator(".app-route-scroll").boundingBox(),
+        routeScroll.boundingBox(),
         promptFooter.boundingBox(),
         page.locator("main").first().boundingBox(),
       ]);
-      expect(routeBounds, `${path} route bounds`).not.toBeNull();
+      expect(routeBounds, `${path} route bounds at ${viewport.width}x${viewport.height}`).not.toBeNull();
       expect(footerBounds, `${path} footer bounds`).not.toBeNull();
       expect(shellBounds, `${path} shell bounds`).not.toBeNull();
       expect(footerBounds!.x).toBeCloseTo(routeBounds!.x, 0);
@@ -273,11 +299,64 @@ test("route shells keep document fixed and unlock uses the shared passphrase lay
       expect(footerBounds!.y).toBeGreaterThan(routeBounds!.y);
       expect(footerBounds!.y + footerBounds!.height).toBeCloseTo(shellBounds!.y + shellBounds!.height, 0);
     }
+    if (path === "/settings" && viewport.width >= 2000) {
+      const [settingsBounds, routeBounds, controlBounds] = await Promise.all([
+        page.locator('[aria-label="Settings"]').boundingBox(),
+        routeScroll.boundingBox(),
+        page.getByRole("button", { name: "Appearance" }).boundingBox(),
+      ]);
+      expect(settingsBounds).not.toBeNull();
+      expect(routeBounds).not.toBeNull();
+      expect(controlBounds).not.toBeNull();
+      expect(settingsBounds!.width / routeBounds!.width).toBeLessThan(0.5);
+      expect(controlBounds!.x + controlBounds!.width).toBeLessThanOrEqual(settingsBounds!.x + settingsBounds!.width + 1);
+    }
+    if (isThreadsPage) {
+      const [headingBefore, searchBefore] = await Promise.all([
+        page.getByRole("heading", { name: "/threads" }).boundingBox(),
+        page.getByLabel("Find threads").boundingBox(),
+      ]);
+      await page.locator(".app-thread-list-scroll").evaluate((element) => {
+        const list = document.createElement("ul");
+        list.innerHTML = Array.from({ length: 36 }, (_, index) => `<li style="height:4rem;margin-block:1rem">Saved thread ${index}</li>`).join("");
+        element.append(list);
+      });
+      const threadsScrollbar = page.getByRole("scrollbar", { name: "Saved threads scroll position" });
+      await expect(threadsScrollbar).toBeVisible();
+      await page.locator(".app-thread-list-scroll").evaluate((element) => { element.scrollTop = element.scrollHeight; });
+      await expect.poll(() => page.locator(".app-thread-list-scroll").evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+      const [headingAfter, searchAfter] = await Promise.all([
+        page.getByRole("heading", { name: "/threads" }).boundingBox(),
+        page.getByLabel("Find threads").boundingBox(),
+      ]);
+      expect(headingAfter!.y).toBeCloseTo(headingBefore!.y, 0);
+      expect(searchAfter!.y).toBeCloseTo(searchBefore!.y, 0);
+      await expect(page.getByRole("scrollbar", { name: "Route content scroll position" })).toHaveCount(0);
+    }
+    if (path === "thread") {
+      await routeScroll.evaluate((element) => element.insertAdjacentHTML("beforeend", Array.from({ length: 36 }, (_, index) => `<p>Wide thread content ${index}</p>`).join("")));
+      await expect(page.getByRole("scrollbar", { name: "Route content scroll position" })).toBeVisible();
+      if (test.info().project.name === "chromium") {
+        await routeScroll.evaluate((element) => { element.scrollTop = 0; });
+        const routeBounds = await routeScroll.boundingBox();
+        expect(routeBounds).not.toBeNull();
+        await page.mouse.move(routeBounds!.x + routeBounds!.width / 2, routeBounds!.y + routeBounds!.height / 2);
+        await page.mouse.wheel(0, 500);
+        await expect.poll(() => routeScroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+      }
+    }
+    const verticalOwners = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>("*"))
+      .filter((element) => ["auto", "scroll"].includes(getComputedStyle(element).overflowY) && element.scrollHeight > element.clientHeight + 1)
+      .map((element) => element.className));
+    if (isThreadsPage || path === "thread") {
+      expect(verticalOwners).toHaveLength(1);
+      await expect(page.getByRole("scrollbar")).toHaveCount(1);
+    }
     const documentOverflow = await page.evaluate(() => document.documentElement.scrollHeight > document.documentElement.clientHeight || document.documentElement.scrollWidth > document.documentElement.clientWidth);
     expect(documentOverflow, `${path} document overflow`).toBe(false);
-    if (path === "/new" || path === "/unlock") {
+    if ((path === "/new" || path === "/unlock") && viewport.height >= 640) {
       const routeOverflows = await page.locator(".app-route-scroll").evaluate((element) => element.scrollHeight > element.clientHeight);
-      expect(routeOverflows, `${path} short route overflow`).toBe(false);
+      expect(routeOverflows, `${path} short route overflow at ${viewport.width}x${viewport.height}`).toBe(false);
       await expect(page.getByRole("scrollbar", { name: "Route content scroll position" })).toHaveCount(0);
     }
     if (path === "/unlock") {

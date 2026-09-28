@@ -1,13 +1,21 @@
 :root {
   --paper: #e0e0e0;
-  --command-foreground-1: var(--ink);
-  --command-foreground-2: var(--ink);
-  --command-foreground-3: var(--ink);
-  --command-foreground-4: var(--ink);
-  --command-foreground-5: var(--ink);
-  --command-foreground-6: var(--ink);
-  --command-foreground-7: var(--ink);
-  --command-foreground-8: var(--ink);
+  --command-accent-1: var(--accent-1);
+  --command-accent-2: var(--accent-2);
+  --command-accent-3: var(--accent-3);
+  --command-accent-4: var(--accent-4);
+  --command-accent-5: var(--accent-5);
+  --command-accent-6: var(--accent-6);
+  --command-accent-7: var(--accent-7);
+  --command-accent-8: var(--accent-8);
+  --command-foreground-1: #6c5205;
+  --command-foreground-2: #6c5205;
+  --command-foreground-3: #6c5205;
+  --command-foreground-4: #6c5205;
+  --command-foreground-5: #6c5205;
+  --command-foreground-6: #6c5205;
+  --command-foreground-7: #6c5205;
+  --command-foreground-8: #6c5205;
   --ink: #1e1e1e;
   --muted: #626262;
   --accent: #f6c945;
@@ -112,58 +120,68 @@
     --accent-8: #e0def4;
   }
 }
+/* Keep the command rail in a cool-to-warm hue progression; monochrome stays one hue. */
 :root[data-color-scheme="catppuccin"] {
-  --command-foreground-1: #fff;
-  --command-foreground-2: #fff;
-  --command-foreground-3: #fff;
-  --command-foreground-4: #000;
-  --command-foreground-5: #000;
-  --command-foreground-6: #000;
-  --command-foreground-7: #000;
-  --command-foreground-8: #fff;
+  --command-accent-1: var(--accent-1); --command-foreground-1: #f3ecfd;
+  --command-accent-2: var(--accent-3); --command-foreground-2: #f8faff;
+  --command-accent-3: var(--accent-4); --command-foreground-3: #041c1e;
+  --command-accent-4: var(--accent-5); --command-foreground-4: #10280b;
+  --command-accent-5: var(--accent-6); --command-foreground-5: #4a2f0a;
+  --command-accent-6: var(--accent-7); --command-foreground-6: #4e1d00;
+  --command-accent-7: var(--accent-8); --command-foreground-7: #fdeaee;
+  --command-accent-8: var(--accent-2); --command-foreground-8: #f2e2f6;
 }
+:root[data-theme="dark"][data-color-scheme="catppuccin"] {
+  --command-accent-1: var(--accent-2); --command-foreground-1: #5c10b5;
+  --command-accent-2: var(--accent-3); --command-foreground-2: #063d96;
+  --command-accent-3: var(--accent-4); --command-foreground-3: #1b6458;
+  --command-accent-4: var(--accent-5); --command-foreground-4: #24661e;
+  --command-accent-5: var(--accent-6); --command-foreground-5: #825d0a;
+  --command-accent-6: var(--accent-7); --command-foreground-6: #853606;
+  --command-accent-7: var(--accent-8); --command-foreground-7: #7b0d2b;
+  --command-accent-8: var(--accent-1); --command-foreground-8: #0323ef;
+}
+/* Rose Pine has fewer spectral hues, so its purple/cyan shades lead into rose, coral, and gold. */
 :root[data-color-scheme="rose-pine"] {
-  --command-foreground-1: #fff;
-  --command-foreground-2: #fff;
-  --command-foreground-3: #000;
-  --command-foreground-4: #000;
-  --command-foreground-5: #000;
-  --command-foreground-6: #000;
-  --command-foreground-7: #000;
-  --command-foreground-8: #fff;
-}
-:root[data-theme="dark"][data-color-scheme="mono"],
-:root[data-theme="dark"]:not([data-color-scheme]),
-:root[data-theme="dark"][data-color-scheme="catppuccin"],
-:root[data-theme="dark"][data-color-scheme="rose-pine"] {
-  --command-foreground-1: var(--paper);
-  --command-foreground-2: var(--paper);
-  --command-foreground-3: var(--paper);
-  --command-foreground-4: var(--paper);
-  --command-foreground-5: var(--paper);
-  --command-foreground-6: var(--paper);
-  --command-foreground-7: var(--paper);
-  --command-foreground-8: var(--paper);
+  --command-accent-1: var(--accent-1); --command-foreground-1: #d0cede;
+  --command-accent-2: var(--accent-4); --command-foreground-2: #1b1521;
+  --command-accent-3: var(--accent-2); --command-foreground-3: #cde6f0;
+  --command-accent-4: var(--accent-3); --command-foreground-4: #152326;
+  --command-accent-5: var(--accent-5); --command-foreground-5: #11080b;
+  --command-accent-6: var(--accent-6); --command-foreground-6: #551d1a;
+  --command-accent-7: var(--accent-7); --command-foreground-7: #5a3809;
+  --command-accent-8: var(--accent-8); --command-foreground-8: #bcb8ca;
 }
 :root[data-theme="dark"][data-color-scheme="rose-pine"] {
-  --command-foreground-3: #fff;
+  --command-accent-1: var(--accent-1); --command-foreground-1: #5c2998;
+  --command-accent-2: var(--accent-8); --command-foreground-2: #5b50c5;
+  --command-accent-3: var(--accent-2); --command-foreground-3: #265760;
+  --command-accent-4: var(--accent-3); --command-foreground-4: #ebf5f8;
+  --command-accent-5: var(--accent-6); --command-foreground-5: #5c0d23;
+  --command-accent-6: var(--accent-5); --command-foreground-6: #922e2a;
+  --command-accent-7: var(--accent-7); --command-foreground-7: #774908;
+  --command-accent-8: var(--accent-4); --command-foreground-8: #582892;
 }
 @media (prefers-color-scheme: dark) {
-  :root[data-theme="auto"][data-color-scheme="mono"],
-  :root[data-theme="auto"]:not([data-color-scheme]),
-  :root[data-theme="auto"][data-color-scheme="catppuccin"],
-  :root[data-theme="auto"][data-color-scheme="rose-pine"] {
-    --command-foreground-1: var(--paper);
-    --command-foreground-2: var(--paper);
-    --command-foreground-3: var(--paper);
-    --command-foreground-4: var(--paper);
-    --command-foreground-5: var(--paper);
-    --command-foreground-6: var(--paper);
-    --command-foreground-7: var(--paper);
-    --command-foreground-8: var(--paper);
+  :root[data-theme="auto"][data-color-scheme="catppuccin"] {
+    --command-accent-1: var(--accent-2); --command-foreground-1: #5c10b5;
+    --command-accent-2: var(--accent-3); --command-foreground-2: #063d96;
+    --command-accent-3: var(--accent-4); --command-foreground-3: #1b6458;
+    --command-accent-4: var(--accent-5); --command-foreground-4: #24661e;
+    --command-accent-5: var(--accent-6); --command-foreground-5: #825d0a;
+    --command-accent-6: var(--accent-7); --command-foreground-6: #853606;
+    --command-accent-7: var(--accent-8); --command-foreground-7: #7b0d2b;
+    --command-accent-8: var(--accent-1); --command-foreground-8: #0323ef;
   }
   :root[data-theme="auto"][data-color-scheme="rose-pine"] {
-    --command-foreground-3: #fff;
+    --command-accent-1: var(--accent-1); --command-foreground-1: #5c2998;
+    --command-accent-2: var(--accent-8); --command-foreground-2: #5b50c5;
+    --command-accent-3: var(--accent-2); --command-foreground-3: #265760;
+    --command-accent-4: var(--accent-3); --command-foreground-4: #ebf5f8;
+    --command-accent-5: var(--accent-6); --command-foreground-5: #5c0d23;
+    --command-accent-6: var(--accent-5); --command-foreground-6: #922e2a;
+    --command-accent-7: var(--accent-7); --command-foreground-7: #774908;
+    --command-accent-8: var(--accent-4); --command-foreground-8: #582892;
   }
 }
 * {

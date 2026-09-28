@@ -8,7 +8,8 @@ interface ScrollSurface {
   cleanup: () => void;
 }
 
-const SURFACES = [".app-route-scroll", ".ui-listbox-menu", ".ui-fuzzy-listbox", ".ui-markdown pre"] as const;
+const SCROLL_SURFACES = [".app-route-scroll", ".app-thread-list-scroll", ".ui-listbox-menu", ".ui-fuzzy-listbox", ".ui-markdown pre"] as const;
+const ROUTE_SURFACES = ".app-route-scroll, .app-thread-list-scroll";
 
 /** Adds accessible visual controls while leaving all movement to native overflow. */
 export function ScrollIndicators() {
@@ -20,12 +21,12 @@ export function ScrollIndicators() {
       if (disposed) return;
       const targets = new Map<HTMLElement, "vertical" | "horizontal">();
       const hasOpenMenu = document.querySelector(".ui-listbox-menu, .ui-fuzzy-listbox") !== null;
-      document.querySelectorAll<HTMLElement>(SURFACES.join(",")).forEach((element) => {
-        if (hasOpenMenu && element.matches(".app-route-scroll")) return;
+      document.querySelectorAll<HTMLElement>(SCROLL_SURFACES.join(",")).forEach((element) => {
+        if (hasOpenMenu && element.matches(ROUTE_SURFACES)) return;
         const horizontal = element.matches("pre");
         targets.set(element, horizontal ? "horizontal" : "vertical");
       });
-      document.querySelectorAll<HTMLElement>(".app-route-scroll").forEach((element) => {
+      document.querySelectorAll<HTMLElement>(ROUTE_SURFACES).forEach((element) => {
         element.classList.toggle("route-scroll-locked", hasOpenMenu);
       });
       for (const [element, surface] of surfaces) {
@@ -59,7 +60,9 @@ export function ScrollIndicators() {
               ? "Code horizontal scroll position"
               : element.matches(".app-route-scroll")
                 ? "Route content scroll position"
-                : element.matches(".ui-listbox-menu, .ui-fuzzy-listbox")
+                : element.matches(".app-thread-list-scroll")
+                  ? "Saved threads scroll position"
+                  : element.matches(".ui-listbox-menu, .ui-fuzzy-listbox")
                   ? `${element.getAttribute("aria-label") ?? "List"} scroll position`
                   : "Page scroll position";
             indicator.setAttribute("aria-label", label);

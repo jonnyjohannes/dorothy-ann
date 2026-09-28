@@ -172,14 +172,14 @@
 .commandList p > span {
   white-space: nowrap;
 }
-.commandList p:nth-child(8n + 1) { --command-accent: var(--accent-1); --command-foreground: var(--command-foreground-1); }
-.commandList p:nth-child(8n + 2) { --command-accent: var(--accent-2); --command-foreground: var(--command-foreground-2); }
-.commandList p:nth-child(8n + 3) { --command-accent: var(--accent-3); --command-foreground: var(--command-foreground-3); }
-.commandList p:nth-child(8n + 4) { --command-accent: var(--accent-4); --command-foreground: var(--command-foreground-4); }
-.commandList p:nth-child(8n + 5) { --command-accent: var(--accent-5); --command-foreground: var(--command-foreground-5); }
-.commandList p:nth-child(8n + 6) { --command-accent: var(--accent-6); --command-foreground: var(--command-foreground-6); }
-.commandList p:nth-child(8n + 7) { --command-accent: var(--accent-7); --command-foreground: var(--command-foreground-7); }
-.commandList p:nth-child(8n + 8) { --command-accent: var(--accent-8); --command-foreground: var(--command-foreground-8); }
+.commandList p:nth-child(8n + 1) { --command-accent: var(--command-accent-1); --command-foreground: var(--command-foreground-1); }
+.commandList p:nth-child(8n + 2) { --command-accent: var(--command-accent-2); --command-foreground: var(--command-foreground-2); }
+.commandList p:nth-child(8n + 3) { --command-accent: var(--command-accent-3); --command-foreground: var(--command-foreground-3); }
+.commandList p:nth-child(8n + 4) { --command-accent: var(--command-accent-4); --command-foreground: var(--command-foreground-4); }
+.commandList p:nth-child(8n + 5) { --command-accent: var(--command-accent-5); --command-foreground: var(--command-foreground-5); }
+.commandList p:nth-child(8n + 6) { --command-accent: var(--command-accent-6); --command-foreground: var(--command-foreground-6); }
+.commandList p:nth-child(8n + 7) { --command-accent: var(--command-accent-7); --command-foreground: var(--command-foreground-7); }
+.commandList p:nth-child(8n + 8) { --command-accent: var(--command-accent-8); --command-foreground: var(--command-foreground-8); }
 .commandList p > :first-child {
   --link-marker-color: var(--command-accent);
   color: var(--command-foreground, var(--ink));
@@ -558,6 +558,11 @@
   scrollbar-width: thin;
   scrollbar-color: var(--accent) transparent;
 }
+.threadsLayout {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
 .threadContent {
   width: 100%;
   min-width: 0;
@@ -569,7 +574,7 @@
   scrollbar-color: var(--accent) transparent;
 }
 .settings {
-  width: 100%;
+  width: min(100%, 44rem);
   margin: 0;
 }
 .settings h1 {
@@ -716,7 +721,15 @@
   .loaderBars i { animation: none; height: 0.8rem; opacity: 0.8; }
 }
 .commandOverlay { position: fixed; z-index: 4; inset: 0; display: grid; place-items: center; padding: clamp(1rem, 7vw, 7rem); background: color-mix(in srgb, var(--paper) 96%, transparent); }
-.threadPicker { width: 100%; min-height: 0; padding: 0; background: transparent; }
+.threadPicker {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+}
 .threadPickerInline {
   width: 100%;
   min-height: 0;
@@ -735,8 +748,16 @@
   padding: 0.75rem 0.8rem;
   font: inherit;
 }
+.threadListViewport {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+}
 .threadPicker ul {
-  margin: 1rem 0;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -757,7 +778,7 @@
 :global(:root[data-theme="dark"]) .threadPicker li .threadDelete { color: #f38ba8; }
 :global(:root[data-theme="dark"]) .threadPicker li .threadDelete:hover { color: #f5a3b8; }
 .threadPicker li button small { color: var(--muted); margin-top: 0.25rem; }
-.threadPicker .threadSelected button { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.threadPicker .threadSelected { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .threadPicker li button:focus-visible { outline: none; }
 .threadPicker .threadSearch:focus-visible { border-color: var(--accent); outline: 0; }
 .chatForm {

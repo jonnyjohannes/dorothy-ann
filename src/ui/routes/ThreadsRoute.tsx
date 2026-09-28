@@ -39,7 +39,7 @@ export function ThreadsRoute() {
   };
   return <main className={styles.shell}>
     <StickyHeader onIntent={onIntent} />
-    <section className={`${styles.routeLayout} app-route-scroll`}>
+    <section className={`${styles.routeLayout} ${styles.threadsLayout} app-threads-layout`}>
       <h1 className={styles.pageTitle}><code>/threads</code></h1>
       <ThreadsBox state={{ threads, loading, error }} onIntent={onIntent} />
       {commandMessage && <p className={styles.commandMessage} role="status">{commandMessage}</p>}

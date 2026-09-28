@@ -28,8 +28,9 @@ describe("global link treatment", () => {
 
   it("cycles homepage command swatches through vivid accents with theme-aware foregrounds", () => {
     for (let index = 1; index <= 8; index += 1) {
-      expect(appStyles).toContain(`--command-accent: var(--accent-${index})`);
+      expect(appStyles).toContain(`--command-accent: var(--command-accent-${index})`);
       expect(appStyles).toContain(`--command-foreground: var(--command-foreground-${index})`);
+      expect(globalStyles).toContain(`--command-accent-${index}:`);
       expect(globalStyles).toContain(`--command-foreground-${index}:`);
     }
     expect(appStyles).toMatch(/\.commandList p > :first-child\s*\{[^}]*--link-marker-color:\s*var\(--command-accent\);[^}]*color:\s*var\(--command-foreground, var\(--ink\)\)/s);
