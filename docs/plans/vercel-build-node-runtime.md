@@ -3,12 +3,12 @@
 ## Current State
 
 - Status: implementing
-- Verification: local Node 24.17.0 install, lint, root/API typecheck, project-reference typecheck, 362 tests, build, fixture e2e, and audit pass. Vercel Preview for `45838de` still reports function type errors; a fresh Preview must verify the standalone root-config fix.
+- Verification: local Node 24.17.0 lint, root/API and project-reference typechecks, 362 tests, build, fixture e2e, and audit pass. Vercel Preview for `62e0546` completed build/deployment with no function TypeScript or install-script warnings; only the accepted lazy-provider chunk warning remains.
 - Owner: Jonny
 - Executor: implementation worker on `release/v1.2.1`
 - Last updated: 2026-09-27
-- Current focus: root `tsconfig.json` now contains explicit strict NodeNext/ES2022 options and no project references; local direct root-config checking passes. Keep app/server project references in `tsconfig.build.json` and verify Vercel consumes the standalone root config.
-- Next action: commit and push the follow-up to PR #15, then inspect the new Preview's TypeScript diagnostics and Node-setting warning. Production deployment remains separately gated on exact-command approval.
+- Current focus: local and Preview release gates are green; the accepted lazy-provider chunk warning is documented. Complete PR #15 review and prepare the release cut; Production remains separately gated on exact-command approval.
+- Next action: verify PR checks/review state, then proceed with the approved merge/tag workflow. Do not run a Production deployment command without presenting its exact target/effect and receiving separate approval.
 
 ## Abstract
 
@@ -30,22 +30,22 @@ The browser app and Vercel API function are built in separate steps. Vercel comp
 
 Status: `[ ]` not started, `[~]` in progress, `[x]` verified, `[!]` blocked.
 
-- [~] P1 — make root compiler settings usable by Vercel's function compiler while retaining the local project-reference build.
+- [x] P1 — make root compiler settings usable by Vercel's function compiler while retaining the local project-reference build.
   - Deliverable: Vercel function type analysis uses strict null checking and ES2022/NodeNext settings, with no suppression or weakened checks; keep local app/server project references in a separate solution config.
   - Verify: run `npm run typecheck` and `npm run build`; confirm the root config has no project references; then verify fresh PR Preview has no function TypeScript diagnostics.
-  - Evidence: Preview build for `45838de` still reports errors consistent with Vercel not applying useful options from the solution-style root config: required Zod fields become optional, result unions do not narrow, and `Error` cause is unavailable. Local project-reference checks pass. Root `tsconfig.json` now has standalone strict NodeNext/ES2022 options; references moved to `tsconfig.build.json`, which build/typecheck scripts use. Local and fresh Preview verification pending.
-- [~] P2 — select and align the Node runtime target across repository pins.
+  - Evidence: Vercel Preview for `62e0546` completed with no function TypeScript diagnostics. Standalone root config checks `api/index.ts` under strict ES2022/NodeNext; app/server references remain in `tsconfig.build.json`. Local root/API and project-reference typechecks pass.
+- [x] P2 — select and align the Node runtime target across repository pins.
   - Deliverable: update both `package.json` `engines.node` and `mise.toml` `[tools].node` to Node 24.x; assess Node 24 compatibility for this app and its dependencies before changing them. Check for a Vercel project-level runtime override and do not change Vercel-side settings without separate explicit approval.
   - Verify: `mise` selects Node 24, `package.json` declares the matching supported range, and local Vercel build output resolves to Node 24; run applicable repository checks under that runtime.
-  - Evidence: both repository pins declare Node 24; `mise exec node@24.17.0` selected v24.17.0. The Preview log says `engines.node: 24.x` overrode a project setting of `22.x`, so that build used Node 24 while reporting the project setting as 22. Jonny reports correcting the project setting; the next Preview should confirm the warning is gone.
-- [~] P3 — resolve reported warnings and dependency notices, recording accepted lazy-media chunks and reviewed install-script policy.
+  - Evidence: `package.json` and `mise.toml` both declare Node 24.x; `mise exec node@24.17.0` selected v24.17.0. The `62e0546` Preview completed without the previous warning that the project setting was 22.x while `engines.node` selected 24.x, confirming the Vercel setting is aligned.
+- [x] P3 — resolve reported warnings and dependency notices, recording accepted lazy-media chunks and reviewed install-script policy.
   - Deliverable: remove Zod/Rollup false annotation warnings, deprecated package notices, and npm audit findings; allow only reviewed version-pinned install scripts for esbuild/unrs-resolver and explicitly deny MSW's unnecessary postinstall. Retain HLS/DASH/Mux playback through lazy imports without suppressing size diagnostics; document and accept provider-chunk warnings.
   - Verify: clean install has no deprecation/install-script warnings; Zod warnings are absent; initial app chunks remain under 500 kB; provider chunks are dynamically loaded only for supported in-viewport video; `npm audit` is clean; tests cover loading/fallback behavior; verify script policy on Vercel's npm version.
-  - Evidence: clean Node 24.17.0 `npm ci` has no deprecation notices and `npm audit` reports zero findings. A reproducible `patch-package` patch changes only two Zod explanatory comments that Rollup mistook for annotations; actual `@__PURE__` call annotations remain and both warning messages are gone. `EvidenceBox` now dynamically imports ReactPlayer only after a supported video card enters the viewport. Three >500 kB chunks remain: Mux (533.35 kB), HLS (591.58 kB), and DASH (858.98 kB); they are provider-specific dynamic chunks, not initial HTML modulepreloads. Jonny chose to retain these formats and accept the documented lazy-chunk warnings; no build warning thresholds were raised. After Vercel reported pending install-script approvals, `package.json` now permits only reviewed `esbuild@0.28.2` and `unrs-resolver@1.12.2` scripts and explicitly denies `msw@2.15.0` (its postinstall is a no-op here because no worker directory is configured). Remote install-policy verification is pending.
-- [~] P4 — run full local/repository verification under Node 24.x and the PR Preview pipeline.
+  - Evidence: clean Node 24.17.0 `npm ci` has no deprecation notices and `npm audit` reports zero findings. A reproducible `patch-package` patch changes only two Zod explanatory comments that Rollup mistook for annotations; actual `@__PURE__` call annotations remain and both warning messages are gone. `EvidenceBox` now dynamically imports ReactPlayer only after a supported video card enters the viewport. Three >500 kB chunks remain: Mux (533.35 kB), HLS (591.58 kB), and DASH (858.98 kB); they are provider-specific dynamic chunks, not initial HTML modulepreloads. Jonny chose to retain these formats and accept the documented lazy-chunk warnings; no build warning thresholds were raised. After Vercel reported pending install-script approvals, `package.json` now permits only reviewed `esbuild@0.28.2` and `unrs-resolver@1.12.2` scripts and explicitly denies `msw@2.15.0` (its postinstall is a no-op here because no worker directory is configured). The `62e0546` Vercel install emitted no pending install-script warning; npm audit reported zero vulnerabilities.
+- [x] P4 — run full local/repository verification under Node 24.x and the PR Preview pipeline.
   - Deliverable: strict typecheck, app build, and Vercel Preview pass; the documented lazy-provider warnings are accepted.
   - Verify: `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `npm run test:e2e`, `npm audit`, and `git diff --check`; then verify the current commit's Vercel Preview and inspect final `git status`.
-  - Evidence: after the root-config correction, Node 24.17.0 lint, root/API typecheck, project-reference typecheck, all 362 unit tests, build, `npm audit`, and fixture e2e (16 passed, 10 opt-in Analytics skips) pass. Build has only the three accepted lazy-provider chunk warnings under P3. Preview for `45838de` still emitted function TypeScript errors; the uncommitted correction requires a fresh Preview run.
+  - Evidence: Node 24.17.0 lint, root/API typecheck, project-reference typecheck, all 362 unit tests, build, `npm audit`, and fixture e2e (16 passed, 10 opt-in Analytics skips) pass. The `62e0546` Preview completed with no function TypeScript errors, install-script warnings, or Vercel Node-version mismatch warning. The only build warning is for the three accepted lazy provider chunks.
 - [ ] P5 — deploy the verified build to Production.
   - Deliverable: the intended Dorothy Ann Production deployment is `READY` and serves the built app/API on its expected aliases.
   - Verify: first confirm exact Vercel project/environment and show the exact deployment command and expected effect; obtain Jonny's separate explicit approval for that command. Then inspect deployment status and perform a bounded read-only smoke check. No `vercel link` or other project mutation without its own explicit approval.
@@ -57,10 +57,10 @@ The app passes strict local typechecking and repository checks under Node 24.x; 
 
 ## Current Reality
 
-- Deployment log targets `release/v1.2.1` at `d95923a`. Vite completes, then Vercel's later function build reports TS2339 union-narrowing errors in `src/server/thread-storage-routes.ts` and `src/server/turn-stream-boundary.ts`, and TS2322 Zod/schema output errors in `src/domain/schemas.ts`.
+- Historical deployment `d95923a` exposed TS2339 union-narrowing errors in the server routes and TS2322 Zod/schema errors. The later Preview on `45838de` still had those diagnostics; the Preview for `62e0546` completed without them after the root-config correction.
 - The release candidate preserves app/server project builds in `tsconfig.build.json`. Root `tsconfig.json` directly includes `api/index.ts` and supplies Vercel-compatible strict ES2022/NodeNext options; `vercel.json` does not pin a framework or build command.
-- Under Node v24.17.0, the root/API typecheck, project-reference typecheck, build, lint, unit tests, and fixture e2e pass. Preview on `45838de` still reported TypeScript errors because it predates the root-config correction; no fresh Preview has run yet. No Production deployment was performed.
-- Vercel's `45838de` log shows TypeScript used options equivalent to a non-strict ES5 compile: Zod's required fields become optional, result unions fail to narrow, and `Error` cause is unavailable. Vercel docs state root `tsconfig.json` options configure function compilation, but project references are unsupported. Moving references out of the root config and giving it standalone strict ES2022/NodeNext options resolves the same API graph in local root-config typechecking. Fresh Preview validation remains pending.
+- Under Node v24.17.0, root/API typecheck, project-reference typecheck, build, lint, 362 unit tests, audit, and fixture e2e pass. Vercel Preview at `62e0546` completed build and deployment with no TypeScript or install-script warnings and no Node-version mismatch warning. No Production deployment was performed.
+- The `45838de` type diagnostics were resolved by moving project references out of root `tsconfig.json` and using standalone strict ES2022/NodeNext options for the API; local root-config typechecking and the `62e0546` Preview pass. No casts or skipped checks were introduced.
 - `package.json` and `mise.toml` now declare Node 24.x; checks ran on Node v24.17.0. Node 26 remains outside the plan scope.
 - Listed dependency updates removed npm install deprecation notices and the two moderate audit findings (`npm audit`: zero vulnerabilities). A reproducible Zod comment patch removes Rollup's false annotation warnings. App-entry chunks are below 500 kB; Mux, HLS, and DASH provider chunks remain above that threshold and load through ReactPlayer's dynamic provider imports. Jonny accepted retaining these formats and documenting the conditional chunk warnings under P3.
 - The active Analytics/log-navigation follow-up is separate and unchanged.
@@ -127,18 +127,16 @@ Run `npm ci`, lint, root/API typecheck, project-reference typecheck, unit tests,
 
 ### Not verified / external pending
 
-- Vercel Preview for `45838de` completed deployment but reported function TypeScript diagnostics. Local root-config correction now passes; a fresh Preview must confirm that Vercel applies it. Its log says the project setting was still 22.x while package.json forced Node 24.x; Jonny reports updating the setting, so confirm the warning clears on the next build.
-- The Zod/Rollup false annotation warnings are fixed by a reproducible comment-only patch. Jonny accepted the three intentionally lazy provider chunks over 500 kB; their warning is documented without changing the build threshold. Vercel's pending install-script warning was reviewed; exact version approvals/denial are now in `package.json`, with confirmation pending in the next Preview.
-- Local lint, root/API typecheck, project-reference typecheck, all 362 unit tests, build, audit, and fixture e2e pass. Fresh Preview after the root-config change is pending. Vercel also reported unapproved dependency install scripts for `esbuild`, `msw`, and `unrs-resolver`; those warnings need review for production build effects, but did not prevent Vite from building.
+- Vercel Preview at `62e0546` completes with no TypeScript, install-script, or Node-version mismatch warnings. The only remaining build warning is the accepted set of three lazy video-provider chunks over 500 kB.
+- Local lint, root/API and project-reference typechecks, 362 unit tests, build, audit, and fixture e2e pass. Vercel Preview is green for the candidate. Production release/deployment remains pending.
 - Production deployment remains pending a confirmed project/environment, exact command proposal, and separate command-level approval.
 
 ## Handoff
 
-Local lint, root/API typecheck, project-reference typecheck, unit tests, build, audit, and fixture e2e pass; intentional Mux/HLS/DASH lazy-chunk warnings are accepted and documented. Commit and push the standalone-root-config fix to PR #15, confirm that Vercel Preview has no function TypeScript errors and uses Node 24, and review the npm install-script warnings. Production is not deployed. Before any Production mutation, show the exact command, target project/environment (`jonnyjohannes-projects/dorothy-ann`, Production), and expected effect, and obtain separate explicit approval.
+Local verification and Vercel Preview for `62e0546` pass; intentional Mux/HLS/DASH lazy-chunk warnings are accepted and documented. Complete PR #15 review and proceed with merge/tag only after the release decision. Production is not deployed. Before any Production mutation, show the exact command, target project/environment (`jonnyjohannes-projects/dorothy-ann`, Production), and expected effect, and obtain separate explicit approval.
 
 ## Open Questions
 
-- The provided `45838de` build log still reported Vercel Project Settings as 22.x even though `engines.node: 24.x` selected Node 24. Verify the owner's setting change in the next Preview log.
 - The exact Production deploy command and expected effect must be presented and separately approved before deployment.
 
 ## Sources
