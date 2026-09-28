@@ -11,7 +11,7 @@
 - Next action: owner visual review in the reported browser/device
 - Branch: `release/v1.2.2`
 - Base: `e309e32` (window-scroll lock and prompt anchoring)
-- Implementation commit: recorded after commit
+- Implementation commit: `2a569b0` (no release tag yet)
 
 ## Goal
 
