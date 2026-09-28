@@ -1,5 +1,12 @@
 import type { EvidencePack, KnowledgeUnit, ResearchGapId, ResearchProblemId, SupportRef, SupportedFinding, SupportedObservation } from "./types.js";
 
+/** Count extracted pages, not search hits, citation tokens, or repeated snapshots. */
+export function viableEvidenceSourceCount(knowledge: Pick<KnowledgeUnit, "evidence">): number {
+  return new Set(knowledge.evidence.flatMap((pack) => pack.sources
+    .filter((source) => source.page.text.trim().length > 0)
+    .map((source) => source.sourceId))).size;
+}
+
 export class KnowledgeIntegrityError extends Error {
   constructor() {
     super("knowledge_integrity_failure");

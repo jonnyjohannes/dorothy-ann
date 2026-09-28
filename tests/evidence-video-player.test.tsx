@@ -5,6 +5,8 @@ import { EvidenceBox } from "../src/ui/boxes/EvidenceBox";
 
 const { canPlayMock } = vi.hoisted(() => ({ canPlayMock: vi.fn() }));
 
+vi.mock("react-player/patterns", () => ({ canPlay: Object.fromEntries(["html", "hls", "dash", "mux", "youtube", "vimeo", "wistia", "spotify", "twitch", "tiktok"].map((kind) => [kind, canPlayMock])) }));
+
 vi.mock("react-player", () => {
   interface MockPlayerProps {
     controls?: boolean;
@@ -30,7 +32,7 @@ vi.mock("react-player", () => {
     </div>;
   }
 
-  return { default: Object.assign(MockPlayer, { canPlay: canPlayMock }) };
+  return { default: MockPlayer };
 });
 
 class MockIntersectionObserver implements IntersectionObserver {
@@ -114,13 +116,13 @@ describe("EvidenceBox portable video player", () => {
     expect(MockIntersectionObserver.instances).toHaveLength(1);
   });
 
-  it("mounts the provider paused after viewport entry with native controls", () => {
+  it("mounts the provider paused after viewport entry with native controls", async () => {
     canPlayMock.mockReturnValue(true);
     render(<EvidenceBox sources={[videoSource()]} onIntent={vi.fn()} />);
 
     act(() => MockIntersectionObserver.instances[0]?.trigger(true));
 
-    const player = screen.getByTestId("mock-react-player");
+    const player = await screen.findByTestId("mock-react-player");
     expect(player).toHaveAttribute("data-src", "https://www.youtube.com/watch?v=demo");
     expect(player).toHaveAttribute("data-playing", "false");
     expect(player).toHaveAttribute("data-controls", "true");
@@ -149,12 +151,12 @@ describe("EvidenceBox portable video player", () => {
     expect(MockIntersectionObserver.instances).toHaveLength(0);
   });
 
-  it("restores the linked thumbnail after a runtime playback failure", () => {
+  it("restores the linked thumbnail after a runtime playback failure", async () => {
     canPlayMock.mockReturnValue(true);
     render(<EvidenceBox sources={[videoSource()]} onIntent={vi.fn()} />);
     act(() => MockIntersectionObserver.instances[0]?.trigger(true));
 
-    fireEvent.click(screen.getByRole("button", { name: "Simulate playback error" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Simulate playback error" }));
 
     expect(screen.queryByTestId("mock-react-player")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Video result preview: Portable player demo" })).toHaveAttribute("href", "https://publisher.example/videos/demo");

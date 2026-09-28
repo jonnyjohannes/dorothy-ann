@@ -4,7 +4,7 @@ import type { BoxIntent } from "./box-types";
 import { ListboxMenu } from "../primitives/ListboxMenu";
 import { useRotatingCaretColor } from "../use-rotating-caret-color";
 
-const COMMANDS = ["/new", "/link", "/image", "/video", "/settings", "/threads"] as const;
+const COMMANDS = ["/new", "/link", "/news", "/image", "/video", "/settings", "/threads"] as const;
 export function PromptBox({ value, disabled = false, onChange, onIntent }: { value: string; disabled?: boolean; onChange: (value: string) => void; onIntent: (intent: BoxIntent) => void }) {
   const input = useRef<HTMLInputElement>(null);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);

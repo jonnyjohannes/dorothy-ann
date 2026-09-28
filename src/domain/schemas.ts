@@ -80,7 +80,7 @@ const usageSchema = z.strictObject({
   inputTokens: nonNegativeInt.optional(),
   outputTokens: nonNegativeInt.optional(),
   searches: nonNegativeInt.max(3).optional(),
-  extractedPages: nonNegativeInt.max(9).optional(),
+  extractedPages: nonNegativeInt.max(12).optional(),
   estimatedCostUsd: z.number().finite().nonnegative().optional(),
 });
 
@@ -198,9 +198,10 @@ export const gapLedgerV3Schema: z.ZodType<GapLedger> = z.strictObject({
   gaps: z.array(researchGapSchema).max(24),
   assessmentsUsed: nonNegativeInt.max(8),
   searchesUsed: nonNegativeInt.max(3),
-  sourcesConsumed: nonNegativeInt.max(9),
+  sourcesConsumed: nonNegativeInt.max(12),
 });
 const taskSchema: z.ZodType<ResearchTaskRecord> = z.strictObject({
+  surface: z.enum(["web", "news"]).optional(),
   problemId: researchProblemIdSchema,
   query: bounded(1, 500),
   purpose: bounded(1, 500),
@@ -244,11 +245,11 @@ const searchFailureSchema = z.union([
 ]);
 const destinationSchema = z.strictObject({ sourceId: sourceIdSchema, rank: positiveInt.max(10) });
 const searchResultSchema = z.discriminatedUnion("completion", [
-  z.strictObject({ completion: z.literal("results"), resultKind: z.enum(["link", "image", "video"]).default("link"), destinations: z.tuple([destinationSchema], destinationSchema) }).superRefine((result, context) => {
+  z.strictObject({ completion: z.literal("results"), resultKind: z.enum(["link", "news", "image", "video"]).default("link"), destinations: z.tuple([destinationSchema], destinationSchema) }).superRefine((result, context) => {
     if (new Set(result.destinations.map((item) => item.sourceId)).size !== result.destinations.length) context.addIssue({ code: "custom", message: "duplicate search destination" });
     if (new Set(result.destinations.map((item) => item.rank)).size !== result.destinations.length) context.addIssue({ code: "custom", message: "duplicate search rank" });
   }),
-  z.strictObject({ completion: z.literal("empty"), resultKind: z.enum(["link", "image", "video"]).default("link"), destinations: z.tuple([]) }),
+  z.strictObject({ completion: z.literal("empty"), resultKind: z.enum(["link", "news", "image", "video"]).default("link"), destinations: z.tuple([]) }),
 ]);
 export const searchTurnV3Schema: z.ZodType<SearchTurn> = z.discriminatedUnion("status", [
   z.strictObject({ ...terminalBase, kind: z.literal("search"), execution: recordedSearchExecution, status: z.literal("completed"), result: searchResultSchema }),

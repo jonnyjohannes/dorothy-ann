@@ -39,7 +39,7 @@ export interface CanonicalSource {
   snippet?: string;
   publishedAt?: IsoTimestamp;
 }
-export type SearchResultKind = "link" | "image" | "video";
+export type SearchResultKind = "link" | "news" | "image" | "video";
 export interface LinkSearchResult extends CanonicalSource { kind: "link"; rank: number }
 export interface ImageSearchResult {
   kind: "image";
@@ -219,6 +219,7 @@ export type ResolutionStopReason =
   | "provider_unavailable";
 export interface ResearchEvidenceRef { sourceId: SourceId; rank: number }
 export interface ResearchTaskRecord {
+  surface?: "web" | "news";
   problemId: ResearchProblemId;
   query: string;
   purpose: string;

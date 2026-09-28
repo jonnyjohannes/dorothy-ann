@@ -2,8 +2,9 @@
 
 ## Current State
 
-- Status: alpha2 implementation complete
-- Plan file: `docs/plans/dorothy-ann-v1.0.0-alpha1.md`
+- Status: superseded and archived — shipped as `d236441`, tagged `v1.0.0-alpha1`
+- Archived: 2026-09-21. Superseded by alpha2, v1.0.0, and the v1.1.0 refactor. The 11 `[~]` ledger items and the unchecked operator checklist below are frozen historical state, not open work.
+- Plan file: `docs/plans/archive/dorothy-ann-v1.0.0-alpha1.md`
 - Last updated: 2026-09-06
 - Current focus: alpha2 browser `q` entry verified locally; optional lookup thumbnails deferred after UI review
 - Handoff lives in: [`## Handoff`](#handoff)

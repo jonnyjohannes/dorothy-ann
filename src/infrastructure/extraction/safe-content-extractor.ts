@@ -4,10 +4,13 @@ import { Agent, fetch as undiciFetch } from "undici";
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
 import type { ExtractionOutcome, SearchResult } from "../../domain/types.js";
-import type {
-  ContentExtractor,
-  ExtractionLimits,
-} from "../../ports/extraction.js";
+import type { ContentExtractor, ExtractionLimits } from "../../ports/extraction.js";
+
+export type ExtractionFailureMetadata = {
+  failure_phase: "url_check" | "dns" | "fetch" | "redirect" | "body" | "text" | "unknown";
+  failure_detail: "unsafe_url" | "dns_failure" | "transport_other" | "deadline" | "http_rejected" | "redirect_blocked" | "body_limit" | "unsupported_content" | "zero_byte_body" | "no_readable_text" | "short_text" | "other";
+  http_status_bucket?: "403" | "429" | "other_4xx" | "5xx" | "other";
+};
 
 export interface ExtractorConfig {
   maxFetchBytes: number;
@@ -17,98 +20,77 @@ export interface ExtractorConfig {
 }
 
 type PublicAddress = { address: string; family: 4 | 6 };
+type ExtractionSubphase = "safety" | "http" | "body" | "text";
+type SubphaseTiming = { elapsedMs: number; succeeded: boolean };
+type ExtractionTimings = Partial<Record<ExtractionSubphase, SubphaseTiming>>;
 type FetchWithDispatcher = (input: string | URL, init?: RequestInit & { dispatcher?: Agent }) => Promise<Response>;
-
 const fetchWithDispatcher: FetchWithDispatcher = async (input, init) =>
   (await undiciFetch(input, init as Parameters<typeof undiciFetch>[1])) as unknown as Response;
 
 const privateIPv4 = (ip: string) => {
   const octets = ip.split(".").map(Number);
   return (
-    octets[0] === 0 ||
-    octets[0] === 10 ||
-    octets[0] === 127 ||
+    octets[0] === 0 || octets[0] === 10 || octets[0] === 127 ||
     (octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127) ||
     (octets[0] === 169 && octets[1] === 254) ||
     (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
-    (octets[0] === 192 && octets[1] === 168) ||
+    (octets[0] === 192 && (octets[1] === 0 || octets[1] === 168)) ||
+    (octets[0] === 198 && (octets[1] === 18 || octets[1] === 19)) ||
     octets[0] >= 224
   );
 };
 
 export function isPublicAddress(address: string): boolean {
-  if (isIP(address) === 4) return !privateIPv4(address);
+  const family = isIP(address);
+  if (family === 4) return !privateIPv4(address);
+  if (family !== 6) return false;
   const normalized = address.toLowerCase();
-  const mappedIpv4 = normalized.match(
-    /^::ffff:(\\d+\\.\\d+\\.\\d+\\.\\d+)$/,
-  )?.[1];
+  const mappedIpv4 = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)?.[1];
   if (mappedIpv4) return isPublicAddress(mappedIpv4);
-  return (
-    normalized !== "::" &&
-    normalized !== "::1" &&
-    !normalized.startsWith("fc") &&
-    !normalized.startsWith("fd") &&
-    !normalized.startsWith("fe8") &&
-    !normalized.startsWith("fe9") &&
-    !normalized.startsWith("fea") &&
-    !normalized.startsWith("feb") &&
-    !normalized.startsWith("::ffff:127.")
-  );
+  const mappedHex = /^::ffff:([\da-f]{1,4}):([\da-f]{1,4})$/.exec(normalized);
+  if (mappedHex) {
+    const high = Number.parseInt(mappedHex[1]!, 16);
+    const low = Number.parseInt(mappedHex[2]!, 16);
+    return isPublicAddress(`${high >>> 8}.${high & 255}.${low >>> 8}.${low & 255}`);
+  }
+  return normalized !== "::" && normalized !== "::1" &&
+    !normalized.startsWith("fc") && !normalized.startsWith("fd") &&
+    !normalized.startsWith("fe") && !normalized.startsWith("ff") &&
+    !normalized.startsWith("::ffff:");
 }
 
 async function resolvePublicAddresses(url: URL): Promise<PublicAddress[]> {
-  if (
-    ["localhost", "localhost.localdomain"].includes(url.hostname.toLowerCase())
-  ) {
-    throw new Error("unsafe_url");
-  }
-  const addresses = await resolveHost(url.hostname, {
-    all: true,
-    verbatim: true,
-  });
+  const hostname = url.hostname.replace(/^\[|\]$/g, "");
+  if (["localhost", "localhost.localdomain"].includes(hostname.toLowerCase()) ||
+    (isIP(hostname) !== 0 && !isPublicAddress(hostname))) throw new Error("unsafe_url");
+  const addresses = await resolveHost(url.hostname, { all: true, verbatim: true });
   const publicAddresses = addresses
     .filter(({ address }) => isPublicAddress(address))
     .map(({ address, family }) => ({ address, family: family as 4 | 6 }))
     .sort((left, right) => left.family - right.family);
-  if (!publicAddresses.length || publicAddresses.length !== addresses.length) {
-    throw new Error("unsafe_url");
-  }
+  if (!publicAddresses.length || publicAddresses.length !== addresses.length) throw new Error("unsafe_url");
   return publicAddresses;
 }
 
-export async function assertSafeUrl(value: string): Promise<URL> {
+export async function assertSafeUrl(value: string, onDns?: () => void): Promise<URL> {
   const url = new URL(value);
-  if (
-    !["http:", "https:"].includes(url.protocol) ||
-    url.username ||
-    url.password ||
-    (url.port && !["80", "443"].includes(url.port))
-  ) {
-    throw new Error("unsafe_url");
-  }
+  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password ||
+    (url.port && !["80", "443"].includes(url.port))) throw new Error("unsafe_url");
+  onDns?.();
   await resolvePublicAddresses(url);
   return url;
 }
 
-async function readBoundedBody(
-  response: Response,
-  maxBytes: number,
-  signal: AbortSignal,
-): Promise<Uint8Array> {
+async function readBoundedBody(response: Response, maxBytes: number, signal: AbortSignal): Promise<Uint8Array> {
   const declaredLength = response.headers.get("content-length");
-  if (declaredLength && Number(declaredLength) > maxBytes)
-    throw new Error("body_limit");
+  if (declaredLength && Number(declaredLength) > maxBytes) throw new Error("body_limit");
   if (!response.body) return new Uint8Array();
-
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
   let abortReader: (() => void) | undefined;
   const aborted = new Promise<never>((_, reject) => {
-    abortReader = () => {
-      void reader.cancel();
-      reject(new DOMException("The operation was aborted", "AbortError"));
-    };
+    abortReader = () => { void reader.cancel(); reject(new DOMException("The operation was aborted", "AbortError")); };
     if (signal.aborted) abortReader();
     else signal.addEventListener("abort", abortReader, { once: true });
   });
@@ -117,10 +99,7 @@ async function readBoundedBody(
       const next = await Promise.race([reader.read(), aborted]);
       if (next.done) break;
       total += next.value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel("body_limit");
-        throw new Error("body_limit");
-      }
+      if (total > maxBytes) { await reader.cancel("body_limit"); throw new Error("body_limit"); }
       chunks.push(next.value);
     }
   } finally {
@@ -129,173 +108,175 @@ async function readBoundedBody(
   }
   const result = new Uint8Array(total);
   let offset = 0;
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
+  for (const chunk of chunks) { result.set(chunk, offset); offset += chunk.byteLength; }
   return result;
 }
 
 function readableText(html: string): string {
   const { document } = parseHTML(html);
-  const article = new Readability(document as unknown as Document).parse();
-  return article?.textContent ?? "";
+  // The fetched page is untrusted; remove non-article and hidden markup before Readability.
+  document.querySelectorAll("script, style, noscript, template, svg, nav, footer, header, form, aside, button, input, textarea, select, [hidden], [inert], [aria-hidden='true'], [role='navigation'], [role='complementary']")
+    .forEach((node) => node.remove());
+  document.querySelectorAll("[style]").forEach((node) => {
+    if (/\bdisplay\s*:\s*none\b|\bvisibility\s*:\s*hidden\b/i.test(node.getAttribute("style") ?? "")) node.remove();
+  });
+  return new Readability(document as unknown as Document).parse()?.textContent ?? "";
+}
+
+function boundedText(text: string, maxCharacters: number): string {
+  return [...text.replace(/\s+/g, " ").trim()].slice(0, maxCharacters).join("");
 }
 
 function pinnedAgent(addresses: PublicAddress[]): Agent {
   let index = 0;
-  return new Agent({
-    connect: {
-      lookup: (_hostname, options, callback) => {
-        const requestedFamily = "family" in options && (options.family === 4 || options.family === 6) ? options.family : undefined;
-        const candidates = requestedFamily ? addresses.filter(({ family }) => family === requestedFamily) : addresses;
-        const available = candidates.length ? candidates : addresses;
-        const address = available[index++ % available.length];
-        if ("all" in options && options.all) callback(null, [address]);
-        else callback(null, address.address, address.family);
-      },
-    },
-  });
+  return new Agent({ connect: { lookup: (_hostname, options, callback) => {
+    const requestedFamily = "family" in options && (options.family === 4 || options.family === 6) ? options.family : undefined;
+    const candidates = requestedFamily ? addresses.filter(({ family }) => family === requestedFamily) : addresses;
+    const available = candidates.length ? candidates : addresses;
+    const address = available[index++ % available.length];
+    if ("all" in options && options.all) callback(null, [address]);
+    else callback(null, address.address, address.family);
+  } } });
+}
+
+function isDnsFailure(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error &&
+    (error.code === "ENOTFOUND" || error.code === "EAI_AGAIN" || error.code === "ENODATA");
 }
 
 export class SafeContentExtractor implements ContentExtractor {
   constructor(
     private readonly config: ExtractorConfig,
     private readonly fetcher: FetchWithDispatcher = fetchWithDispatcher,
+    private readonly onFailure?: (sourceId: SearchResult["sourceId"], metadata: ExtractionFailureMetadata) => void,
+    private readonly onTiming?: (phase: ExtractionSubphase, elapsedMs: number, succeeded: boolean) => void,
   ) {}
 
-  async extract(source: SearchResult, limits: ExtractionLimits): Promise<ExtractionOutcome> {
-    if (source.kind !== "link") return { sourceId: source.sourceId, status: "skipped", reason: "unsupported_content" };
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<ExtractionOutcome>((resolve) => {
-      timer = setTimeout(() => resolve({ sourceId: source.sourceId, status: "failed", code: "timeout", retryable: true }), limits.timeoutMs);
-    });
-    try { return await Promise.race([this.extractInternal(source, limits), timeout]); }
-    finally { if (timer) clearTimeout(timer); }
+  private recordTiming(timings: ExtractionTimings, phase: ExtractionSubphase, elapsedMs: number, succeeded: boolean): void {
+    const previous = timings[phase];
+    timings[phase] = { elapsedMs: (previous?.elapsedMs ?? 0) + elapsedMs, succeeded: (previous?.succeeded ?? true) && succeeded };
   }
 
-  private async extractInternal(
-    source: SearchResult,
-    limits: ExtractionLimits,
-  ): Promise<ExtractionOutcome> {
-    let current: URL;
-    try {
-      current = await assertSafeUrl(source.url);
-    } catch {
-      return {
-        sourceId: source.sourceId,
-        status: "skipped",
-        reason: "unsafe_url",
-      };
-    }
+  private async measure<T>(timings: ExtractionTimings, phase: "safety" | "http" | "body", run: () => Promise<T>): Promise<T> {
+    const started = performance.now();
+    let succeeded = false;
+    try { const result = await run(); succeeded = true; return result; }
+    finally { this.recordTiming(timings, phase, performance.now() - started, succeeded); }
+  }
 
-    for (
-      let redirects = 0;
-      redirects <= this.config.maxRedirects;
-      redirects++
-    ) {
+  async extract(source: SearchResult, limits: ExtractionLimits): Promise<ExtractionOutcome> {
+    const state: { phase: ExtractionFailureMetadata["failure_phase"]; detail: ExtractionFailureMetadata["failure_detail"]; bucket?: ExtractionFailureMetadata["http_status_bucket"]; timings: ExtractionTimings } = { phase: "url_check", detail: "other", timings: {} };
+    const observe = (outcome: ExtractionOutcome, metadata: ExtractionFailureMetadata) => {
+      if (outcome.status !== "viable") {
+        try { this.onFailure?.(source.sourceId, metadata); } catch { /* Diagnostics cannot change extraction. */ }
+      }
+      return outcome;
+    };
+    if (source.kind !== "link") return observe({ sourceId: source.sourceId, status: "skipped", reason: "unsupported_content" }, { failure_phase: "url_check", failure_detail: "unsupported_content" });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<{ timedOut: boolean; outcome: ExtractionOutcome; metadata: ExtractionFailureMetadata }>((resolve) => {
+      timer = setTimeout(() => resolve({ timedOut: true, outcome: { sourceId: source.sourceId, status: "failed", code: "timeout", retryable: true },
+        metadata: { failure_phase: state.phase, failure_detail: "deadline" } }), limits.timeoutMs);
+    });
+    try {
+      const winner = await Promise.race([
+        this.extractInternal(source, limits, state).then((outcome) => ({ timedOut: false, outcome, metadata: {
+          failure_phase: state.phase, failure_detail: state.detail, ...(state.bucket ? { http_status_bucket: state.bucket } : {}),
+        } })),
+        timeout,
+      ]);
+      if (!winner.timedOut) for (const phase of ["safety", "http", "body", "text"] as const) {
+        const timing = state.timings[phase];
+        if (timing) {
+          try { this.onTiming?.(phase, timing.elapsedMs, timing.succeeded); } catch { /* Observers cannot change extraction. */ }
+        }
+      }
+      return observe(winner.outcome, winner.metadata);
+    } finally { if (timer) clearTimeout(timer); }
+  }
+
+  private async extractInternal(source: SearchResult, limits: ExtractionLimits, state: { phase: ExtractionFailureMetadata["failure_phase"]; detail: ExtractionFailureMetadata["failure_detail"]; bucket?: ExtractionFailureMetadata["http_status_bucket"]; timings: ExtractionTimings }): Promise<ExtractionOutcome> {
+    let current: URL;
+    try { current = await this.measure(state.timings, "safety", () => assertSafeUrl(source.url, () => { state.phase = "dns"; })); }
+    catch (error) {
+      state.detail = state.phase === "dns" && isDnsFailure(error) ? "dns_failure" : "unsafe_url"; return { sourceId: source.sourceId, status: "skipped", reason: "unsafe_url" }; }
+
+    let followingRedirect = false;
+    for (let redirects = 0; redirects <= this.config.maxRedirects; redirects++) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), limits.timeoutMs);
       let dispatcher: Agent | undefined;
       try {
-        const addresses = await resolvePublicAddresses(current);
-        dispatcher = pinnedAgent(addresses);
-        const response = await this.fetcher(current, {
-          redirect: "manual",
-          signal: controller.signal,
-          headers: {
-            "user-agent": this.config.userAgent,
-            accept: "text/html,text/plain;q=0.9",
-          },
+        state.phase = "dns";
+        dispatcher = pinnedAgent(await this.measure(state.timings, "safety", () => resolvePublicAddresses(current)));
+        state.phase = "fetch";
+        const response = await this.measure(state.timings, "http", () => this.fetcher(current, {
+          redirect: "manual", signal: controller.signal,
+          headers: { "user-agent": this.config.userAgent, accept: "text/html,text/plain;q=0.9" },
           dispatcher,
-        } as RequestInit & { dispatcher: Agent });
-
+        }));
         if (response.status >= 300 && response.status < 400) {
+          state.phase = "redirect"; state.detail = "redirect_blocked";
           const location = response.headers.get("location");
-          if (!location || redirects === this.config.maxRedirects) {
-            return {
-              sourceId: source.sourceId,
-              status: "skipped",
-              reason: "blocked",
-            };
-          }
-          current = await assertSafeUrl(new URL(location, current).toString());
+          if (!location || redirects === this.config.maxRedirects)
+            return { sourceId: source.sourceId, status: "skipped", reason: "blocked" };
+          followingRedirect = true;
+          current = await this.measure(state.timings, "safety", () => assertSafeUrl(new URL(location, current).toString(), () => { state.phase = "dns"; }));
+          followingRedirect = false;
           continue;
         }
         if (!response.ok) {
-          return {
-            sourceId: source.sourceId,
-            status: "failed",
-            code: "fetch_failed",
-            retryable: response.status >= 500,
-          };
+          state.detail = "http_rejected";
+          state.bucket = response.status === 403 ? "403" : response.status === 429 ? "429" : response.status >= 400 && response.status < 500 ? "other_4xx" : response.status >= 500 && response.status < 600 ? "5xx" : "other";
+          return { sourceId: source.sourceId, status: "failed", code: "fetch_failed", retryable: response.status >= 500 };
         }
-        const contentType = response.headers
-          .get("content-type")
-          ?.split(";", 1)[0]
-          .trim()
-          .toLowerCase();
+        state.phase = "body";
+        const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
         if (contentType !== "text/html" && contentType !== "text/plain") {
-          return {
-            sourceId: source.sourceId,
-            status: "skipped",
-            reason: "unsupported_content",
-          };
+          state.detail = "unsupported_content";
+          return { sourceId: source.sourceId, status: "skipped", reason: "unsupported_content" };
         }
-        const buffer = await readBoundedBody(
-          response,
-          this.config.maxFetchBytes,
-          controller.signal,
-        );
-        const raw = new TextDecoder().decode(buffer);
-        const text = contentType === "text/html" ? readableText(raw) : raw;
-        const boundedCodePoints = [...text
-          .replace(/\s+/g, " ")
-          .trim()]
-          .slice(0, limits.maxCharacters);
-        const bounded = boundedCodePoints.join("");
-        if (boundedCodePoints.length < this.config.minCharacters) {
-          return {
-            sourceId: source.sourceId,
-            status: "skipped",
-            reason: "empty_content",
-          };
+        const body = await this.measure(state.timings, "body", () => readBoundedBody(response, this.config.maxFetchBytes, controller.signal));
+        if (!body.byteLength) state.detail = "zero_byte_body";
+        if (!body.byteLength) return { sourceId: source.sourceId, status: "skipped", reason: "empty_content" };
+        state.phase = "text";
+        const textStarted = performance.now();
+        let text: string;
+        let characterCount: number;
+        let textSucceeded = false;
+        try {
+          const raw = new TextDecoder().decode(body);
+          text = boundedText(contentType === "text/html" ? readableText(raw) : raw, limits.maxCharacters);
+          characterCount = [...text].length;
+          textSucceeded = characterCount >= this.config.minCharacters;
+        } finally { this.recordTiming(state.timings, "text", performance.now() - textStarted, textSucceeded); }
+        if (characterCount < this.config.minCharacters) {
+          state.detail = characterCount === 0 ? "no_readable_text" : "short_text";
+          return { sourceId: source.sourceId, status: "skipped", reason: "empty_content" };
         }
-        return {
-          sourceId: source.sourceId,
-          status: "viable",
-          page: {
-            sourceId: source.sourceId,
-            canonicalUrl: current.toString(),
-            title: source.title,
-            text: bounded,
-            extractedAt: new Date().toISOString() as never,
-            characterCount: boundedCodePoints.length,
-          },
-        };
+        return { sourceId: source.sourceId, status: "viable", page: {
+          sourceId: source.sourceId, canonicalUrl: current.toString(), title: source.title,
+          text, extractedAt: new Date().toISOString() as never, characterCount,
+        } };
       } catch (error) {
-        if (error instanceof Error && error.message === "body_limit") {
-          return {
-            sourceId: source.sourceId,
-            status: "failed",
-            code: "fetch_failed",
-            retryable: false,
-          };
+        if (error instanceof Error && error.message === "unsafe_url") {
+          state.detail = followingRedirect || redirects > 0 ? "redirect_blocked" : "unsafe_url";
+          return { sourceId: source.sourceId, status: "skipped", reason: "unsafe_url" };
         }
-        return {
-          sourceId: source.sourceId,
-          status: "failed",
-          code:
-            error instanceof DOMException && error.name === "AbortError"
-              ? "timeout"
-              : "fetch_failed",
-          retryable: true,
-        };
+        if (error instanceof Error && error.message === "body_limit") {
+          state.detail = "body_limit";
+          return { sourceId: source.sourceId, status: "failed", code: "fetch_failed", retryable: false };
+        }
+        state.detail = error instanceof DOMException && error.name === "AbortError" ? "deadline"
+          : state.phase === "dns" && isDnsFailure(error) ? "dns_failure" : "transport_other";
+        return { sourceId: source.sourceId, status: "failed",
+          code: error instanceof DOMException && error.name === "AbortError" ? "timeout" : "fetch_failed", retryable: true };
       } finally {
         clearTimeout(timer);
         await dispatcher?.close().catch(() => undefined);
       }
     }
+    state.phase = "redirect"; state.detail = "redirect_blocked";
     return { sourceId: source.sourceId, status: "skipped", reason: "blocked" };
   }
 }

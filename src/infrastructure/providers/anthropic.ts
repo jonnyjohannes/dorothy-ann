@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { AssistantContentPart, SourceId } from "../../domain/types.js";
 import type {
+  AssessmentAttemptObservation,
   LLMProvider,
   ObservationProposal,
   ResearchAssessmentInput,
@@ -17,7 +18,7 @@ type MessageEvent = {
   usage?: { input_tokens?: number; output_tokens?: number };
 };
 export type MessageStream = AsyncIterable<MessageEvent>;
-export type MessageResponse = { content?: Array<{ type?: string; text?: string }>; output_text?: string };
+export type MessageResponse = { content?: Array<{ type?: string; text?: string }>; output_text?: string; stop_reason?: string | null; usage?: { input_tokens?: number; output_tokens?: number } };
 
 interface MessagesClient {
   create(input: {
@@ -30,7 +31,9 @@ interface MessagesClient {
   }, options?: { signal?: AbortSignal }): Promise<MessageResponse | MessageStream>;
 }
 
-const boundedString = (maxLength: number) => ({ type: "string", minLength: 1, maxLength } as const);
+// The raw Anthropic JSON-schema format rejects minLength/maxLength/maxItems.
+// Keep full length and array bounds in parseProposal and ResearchAssessor.
+const boundedString = (maxLength: number) => ({ type: "string", description: `Non-empty; at most ${maxLength} characters.` } as const);
 const supportSchema = {
   anyOf: [
     { type: "object", additionalProperties: false, properties: { type: { const: "source" }, sourceId: boundedString(64) }, required: ["type", "sourceId"] },
@@ -64,7 +67,6 @@ const assessmentOutputSchema = {
             observations: {
               type: "array",
               minItems: 1,
-              maxItems: 24,
               items: {
                 type: "object",
                 additionalProperties: false,
@@ -72,7 +74,7 @@ const assessmentOutputSchema = {
                   proposition: boundedString(240),
                   statement: boundedString(1_000),
                   stance: { type: "string", enum: ["supports", "contradicts", "qualifies"] },
-                  support: { type: "array", minItems: 1, maxItems: 24, items: supportSchema },
+                  support: { type: "array", minItems: 1, items: supportSchema },
                 },
                 required: ["proposition", "statement", "stance", "support"],
               },
@@ -89,7 +91,6 @@ const assessmentOutputSchema = {
             problems: {
               type: "array",
               minItems: 1,
-              maxItems: 3,
               items: {
                 type: "object",
                 additionalProperties: false,
@@ -133,14 +134,19 @@ export interface AnthropicProviderOptions {
   apiKey?: string;
   assessmentModel: string;
   synthesisModel: string;
+  assessmentRetryMaxOutputTokens?: number;
   client?: { messages: MessagesClient };
-  onDiagnostic?: (record: { event: "assessment_structured_output_fallback"; stage: "assessing"; reason: "provider_bad_request" }) => void;
+  onDiagnostic?: (record:
+    | { event: "assessment_structured_output_fallback"; stage: "assessing"; reason: "provider_bad_request" }
+    | { event: "assessment_output_rejected"; stage: "assessing"; reason: AssessmentInvalidReason; format: "structured" | "fallback"; stop_reason: "end_turn" | "max_tokens" | "refusal" | "other" | "unknown"; output_tokens: number; text_chars: number }
+  ) => void;
 }
 
 /** Anthropic is deliberately kept behind the provider-neutral LLMProvider port. */
 export class AnthropicProvider implements LLMProvider {
   private readonly messages: MessagesClient;
   private readonly onDiagnostic: AnthropicProviderOptions["onDiagnostic"];
+  private readonly assessmentRetryMaxOutputTokens: number;
   readonly assessmentModelRef: string;
   readonly synthesisModelRef: string;
 
@@ -158,6 +164,9 @@ export class AnthropicProvider implements LLMProvider {
     if (!options.assessmentModel || !options.synthesisModel) throw new Error("invalid_llm_model_configuration");
     this.assessmentModelRef = options.assessmentModel;
     this.synthesisModelRef = options.synthesisModel;
+    const retryMax = options.assessmentRetryMaxOutputTokens ?? 1_600;
+    if (!Number.isSafeInteger(retryMax) || retryMax < 800 || retryMax > 1_600) throw new Error("invalid_assessment_retry_token_limit");
+    this.assessmentRetryMaxOutputTokens = retryMax;
     this.messages = options.client?.messages ?? new Anthropic({ apiKey: options.apiKey }).messages as unknown as MessagesClient;
     this.onDiagnostic = options.onDiagnostic;
   }
@@ -166,23 +175,63 @@ export class AnthropicProvider implements LLMProvider {
     let correction: string | undefined;
     let structuredOutput = true;
     let invalidReason: AssessmentInvalidReason = "empty_response";
+    let requestTokens = Math.min(1_200, input.maxOutputTokens);
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      const envelope = assessmentEnvelope(input, correction);
+      const inputChars = Math.min(2_000_000, input.systemPrompt.length + envelope.length);
+      const cap = requestTokens;
+      const started = performance.now();
+      let reported = false;
+      const observe = (result: Omit<AssessmentAttemptObservation, "attempt" | "elapsedMs" | "inputChars" | "maxOutputTokens">) => {
+        reported = true;
+        try { input.onAttempt?.({ attempt: attempt === 0 ? 1 : 2, elapsedMs: Math.min(300_000, Math.max(0, Math.round(performance.now() - started))), inputChars, maxOutputTokens: cap, ...result }); }
+        catch { /* Diagnostics must never alter assessment. */ }
+      };
       try {
         const request: Parameters<MessagesClient["create"]>[0] = {
           model: this.assessmentModelRef,
-          max_tokens: Math.min(800, input.maxOutputTokens),
+          max_tokens: cap,
           system: input.systemPrompt,
-          messages: [{ role: "user", content: assessmentEnvelope(input, correction) }],
+          messages: [{ role: "user", content: envelope }],
           ...(structuredOutput ? { output_config: { format: { type: "json_schema" as const, schema: assessmentOutputSchema } } } : {}),
         };
         const response = await this.create(request, input.signal);
+        const providerElapsed = performance.now() - started;
         const text = responseText(response);
         const proposal = parseProposal(text, input.allowedSupportRefs, input.problem);
-        if (proposal) return proposal;
+        const parseMs = Math.min(300_000, Math.max(0, Math.round(performance.now() - started - providerElapsed)));
+        const metadata = isStream(response) ? undefined : response;
+        const outputTokens = metadata?.usage?.output_tokens;
+        const inputTokens = metadata?.usage?.input_tokens;
+        const boundedTokens = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) ? Math.max(0, Math.min(1_000_000, value)) : undefined;
+        const stopReason = metadata?.stop_reason;
+        const normalizedStop = stopReason === "end_turn" || stopReason === "max_tokens" || stopReason === "refusal" ? stopReason : stopReason ? "other" : "unknown";
+        const countedInput = boundedTokens(inputTokens);
+        const countedOutput = boundedTokens(outputTokens);
+        const measurement = { parseMs, stopReason: normalizedStop, ...(countedInput === undefined ? {} : { inputTokens: countedInput }), ...(countedOutput === undefined ? {} : { outputTokens: countedOutput }) } as const;
+        if (proposal) {
+          observe({ ...measurement, outcome: "accepted", acceptedObservations: proposal.directive.kind === "resolved" ? Math.min(24, proposal.directive.observations.length) : 0 });
+          return proposal;
+        }
         invalidReason = assessmentInvalidReason(text);
+        observe({ ...measurement, outcome: "rejected", reason: invalidReason, outputShape: rejectedOutputShape(text) });
+        try {
+          this.onDiagnostic?.({
+            event: "assessment_output_rejected", stage: "assessing", reason: invalidReason,
+            format: structuredOutput ? "structured" : "fallback",
+            stop_reason: normalizedStop,
+            output_tokens: Math.min(1_600, countedOutput ?? 0),
+            text_chars: Math.min(16_000, [...text].length),
+          });
+        } catch { /* Diagnostics must never alter provider behavior. */ }
+        if (attempt === 0) requestTokens = stopReason === "max_tokens"
+          ? this.assessmentRetryMaxOutputTokens
+          : Math.min(1_200, input.maxOutputTokens);
       } catch (error) {
+        if (!reported) observe({ parseMs: 0, stopReason: "unknown", outcome: "failed", reason: "provider_error" });
         if (error instanceof AnthropicProviderError && error.code === "provider_bad_request" && structuredOutput) {
           structuredOutput = false;
+          requestTokens = Math.min(800, input.maxOutputTokens);
           try { this.onDiagnostic?.({ event: "assessment_structured_output_fallback", stage: "assessing", reason: "provider_bad_request" }); } catch { /* Diagnostics must never alter provider behavior. */ }
           continue;
         }
@@ -203,9 +252,10 @@ export class AnthropicProvider implements LLMProvider {
         system: input.systemPrompt,
         messages: [{ role: "user", content: synthesisEnvelope(input) }],
         stream: true,
-      });
+      }, input.signal);
       if (!isStream(response)) throw new AnthropicProviderError("synthesis_invalid_response", true);
       for await (const event of response) {
+        if (input.signal?.aborted) throw new AnthropicProviderError("provider_interrupted", true);
         const text = event.type === "content_block_delta" && event.delta?.type === "text_delta"
           ? event.delta.text
           : event.type === "content_block_start" && event.content_block?.type === "text"
@@ -217,6 +267,7 @@ export class AnthropicProvider implements LLMProvider {
           yield part;
         }
       }
+      if (input.signal?.aborted) throw new AnthropicProviderError("provider_interrupted", true);
       for (const part of parser.finish()) {
         emitted = true;
         yield part;
@@ -372,6 +423,31 @@ function jsonObjectCandidates(text: string): unknown[] {
   return candidates;
 }
 
+function rejectedOutputShape(text: string): NonNullable<AssessmentAttemptObservation["outputShape"]> {
+  const start = text.indexOf("{");
+  if (start < 0) return "incomplete_outer_json";
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let index = start; index < text.length; index += 1) {
+    const character = text[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') quoted = false;
+    } else if (character === '"') quoted = true;
+    else if (character === "{") depth += 1;
+    else if (character === "}" && --depth === 0) {
+      try {
+        const parsed: unknown = JSON.parse(text.slice(start, index + 1));
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return "complete_no_directive";
+        return "directive" in parsed ? "complete_invalid_directive" : "complete_no_directive";
+      } catch { return "incomplete_outer_json"; }
+    }
+  }
+  return "incomplete_outer_json";
+}
+
 function assessmentInvalidReason(text: string): AssessmentInvalidReason {
   if (!text.trim()) return "empty_response";
   const candidates = jsonObjectCandidates(text);
@@ -500,10 +576,12 @@ class CitationParser {
       const start = this.buffer.indexOf("[[cite:");
       if (start < 0) {
         if (!final) {
-          const keep = this.buffer.lastIndexOf("[");
-          if (keep >= 0 && this.buffer.length - keep < 8) {
-            if (keep) parts.push({ type: "text", markdown: this.buffer.slice(0, keep) });
-            this.buffer = this.buffer.slice(keep);
+          const markerPrefix = "[[cite:";
+          for (let length = Math.min(markerPrefix.length - 1, this.buffer.length); length > 0; length--) {
+            if (!this.buffer.endsWith(markerPrefix.slice(0, length))) continue;
+            const before = this.buffer.slice(0, -length);
+            if (before) parts.push({ type: "text", markdown: before });
+            this.buffer = this.buffer.slice(-length);
             return parts;
           }
         }

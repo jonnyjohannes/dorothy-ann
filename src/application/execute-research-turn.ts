@@ -11,6 +11,7 @@ import type {
 } from "../domain/types.js";
 import type { AnswerSynthesizer } from "./answer-synthesizer.js";
 import { collectResearchStateSourceIds } from "./commit-terminal-turn.js";
+import { enforceResearchSynthesisFloor } from "./research-synthesis-policy.js";
 
 export type ResearchResolutionResult = (ResearchResolution & {
   /** Canonical metadata admitted during acquisition, used for reference closure. */
@@ -42,6 +43,7 @@ export interface ResearchTurnExecutionInput {
   searchRef: string;
   finishedAt?: () => IsoTimestamp;
   signal?: AbortSignal;
+  onProvisionalText?: (text: string) => void | Promise<void>;
   interruptionReason?: TurnInterruption["reason"];
 }
 
@@ -171,7 +173,7 @@ export async function executeResearchTurn(input: ResearchTurnExecutionInput): Pr
         sources: sourceClosure(resolution.checkpoint, input.context),
       };
     }
-    resolution = { ...resolution, sources: resolution.sources?.map(canonicalSource) };
+    resolution = enforceResearchSynthesisFloor({ ...resolution, sources: resolution.sources?.map(canonicalSource) });
     if (input.signal?.aborted) {
       const state = resolution.status === "sufficient" || resolution.status === "best_effort"
         ? { kind: "resolution" as const, resolution }
@@ -246,6 +248,7 @@ export async function executeResearchTurn(input: ResearchTurnExecutionInput): Pr
       context: input.context,
       resolution,
       signal: input.signal,
+      onProvisionalText: input.onProvisionalText,
     });
     if (input.signal?.aborted) {
       return { turn: interrupted(input, { kind: "resolution", resolution }, "Research was interrupted."), sources };

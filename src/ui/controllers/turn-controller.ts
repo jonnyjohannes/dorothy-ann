@@ -39,6 +39,7 @@ export interface TurnControllerView {
   lastSequence: number;
   events: TurnGatewayEvent[];
   answerDraft: string;
+  previewPaused: boolean;
   sources: SourceRecord[];
   researchState?: { kind: "checkpoint"; checkpoint: ResearchCheckpoint } | { kind: "resolution"; resolution: ResearchResolution };
 }
@@ -65,6 +66,7 @@ interface ActiveRun {
   abort: AbortController;
   events: TurnGatewayEvent[];
   answerDraft: string;
+  previewFrames: number;
   sources: Map<string, SourceRecord>;
   researchState?: { kind: "checkpoint"; checkpoint: ResearchCheckpoint } | { kind: "resolution"; resolution: ResearchResolution };
   terminalSources?: SourceRecord[];
@@ -95,7 +97,7 @@ function sourceClosure(turn: Turn, sources: CanonicalSource[]): boolean {
 export class TurnController {
   private active?: ActiveRun;
   private pending?: Candidate;
-  private readonly view: TurnControllerView = { active: false, lastSequence: 0, events: [], answerDraft: "", sources: [] };
+  private readonly view: TurnControllerView = { active: false, lastSequence: 0, events: [], answerDraft: "", previewPaused: false, sources: [] };
 
   constructor(
     private readonly gateway: TurnGateway,
@@ -110,12 +112,14 @@ export class TurnController {
   async run(input: TurnStartInput): Promise<TurnControllerResult> {
     if (this.active) return { ok: false, error: "already_active", message: controllerErrorMessage("already_active") };
     const abort = new AbortController();
-    const active: ActiveRun = { input, abort, events: [], answerDraft: "", sources: new Map() };
+    const active: ActiveRun = { input, abort, events: [], answerDraft: "", previewFrames: 0, sources: new Map() };
+    this.pending = undefined;
     this.active = active;
     this.view.active = true;
     this.view.lastSequence = 0;
     this.view.events = [];
     this.view.answerDraft = "";
+    this.view.previewPaused = false;
     this.view.sources = [];
     this.view.researchState = undefined;
     this.emit();
@@ -124,6 +128,7 @@ export class TurnController {
     let protocolMessage: string | undefined;
     try {
       for await (const event of this.gateway.stream(gatewayRequest(input), input.gatewayOptions, abort.signal)) {
+        if (active.cancelled || abort.signal.aborted) break;
         const accepted = this.acceptEvent(active, event);
         if (!accepted.ok) { protocolError = accepted.error; protocolMessage = accepted.message; abort.abort(); break; }
         this.emit();
@@ -138,6 +143,7 @@ export class TurnController {
       if (!active.cancelled && !protocolError) return this.finishInterruption(active, "connection_lost");
     }
     if (protocolError) return this.finishWithoutCommit(active, protocolError, protocolMessage);
+    if (active.cancelled) return this.finishInterruption(active, active.cancelled);
     if (terminal) return this.finishWithCommit({ input, turn: terminal, sourceRecords: this.sourcesForTerminal(active, terminal) });
     return this.finishInterruption(active, active.cancelled ?? "connection_lost");
   }
@@ -146,6 +152,8 @@ export class TurnController {
     if (!this.active) return false;
     this.active.cancelled = reason;
     this.active.abort.abort();
+    this.clearPreview();
+    this.emit();
     return true;
   }
 
@@ -157,8 +165,9 @@ export class TurnController {
 
   private acceptEvent(active: ActiveRun, event: TurnGatewayEvent): { ok: true } | { ok: false; error: TurnControllerError; message?: string } {
     if (!isGatewayIdentity(event, active.input.executionId, active.input.turnId)) return { ok: false, error: "invalid_event" };
-    const expected = active.events.length + 1;
-    if (event.sequence !== expected) return { ok: false, error: "invalid_event" };
+    const expected = this.view.lastSequence + 1;
+    if (event.sequence !== expected || active.events.length >= 512) return { ok: false, error: "invalid_event" };
+    if (event.type === "answer_delta" && (active.previewFrames >= 256 || active.answerDraft.length + event.delta.length > 64_000)) return { ok: false, error: "invalid_event" };
     if (expected === 1 && event.type !== "accepted") return { ok: false, error: "invalid_event" };
     if (expected > 1 && event.type === "accepted") return { ok: false, error: "invalid_event" };
     if (event.type === "accepted" && event.kind !== active.input.kind) return { ok: false, error: "invalid_event" };
@@ -166,10 +175,11 @@ export class TurnController {
     active.events.push(event);
     this.view.lastSequence = event.sequence;
     this.view.events = [...active.events];
-    if (event.type === "answer_delta") active.answerDraft += event.delta;
+    if (event.type === "answer_delta") { active.answerDraft += event.delta; active.previewFrames += 1; }
     if (event.type === "source_delta") for (const source of event.sources) active.sources.set(source.sourceId, source);
     if (event.type === "research_state") active.researchState = event.state;
     this.view.answerDraft = active.answerDraft;
+    this.view.previewPaused = active.answerDraft.length >= 64_000 || active.previewFrames >= 256;
     this.view.sources = [...active.sources.values()];
     this.view.researchState = active.researchState;
     return { ok: true };
@@ -204,9 +214,17 @@ export class TurnController {
     return this.finishWithCommit({ input: active.input, turn, sourceRecords: [] });
   }
 
+  private clearPreview(): void {
+    this.view.answerDraft = "";
+    this.view.previewPaused = false;
+    if (this.active) this.active.answerDraft = "";
+  }
+
   private finishWithoutCommit(active: ActiveRun, error: TurnControllerError, message?: string): TurnControllerResult {
     if (this.active === active) this.active = undefined;
     this.view.active = false;
+    this.clearPreview();
+    this.view.events = [];
     this.emit();
     return { ok: false, error, message: message ?? controllerErrorMessage(error) };
   }
@@ -214,6 +232,9 @@ export class TurnController {
   private async finishWithCommit(candidate: Candidate): Promise<TurnControllerResult> {
     if (this.active?.input.turnId === candidate.input.turnId) this.active = undefined;
     this.view.active = false;
+    this.clearPreview();
+    this.view.events = [];
+    this.emit();
     const result = await this.commit(candidate);
     this.emit();
     return result;

@@ -2,7 +2,7 @@
 
 ## Current State
 
-- Status: done
+- Status: done; archived — shipped as `657dc89`, tagged `v1.0.0`, superseded by v1.1.0
 - Last updated: 2026-09-15
 - Current focus: v1.0.0 launch complete; focused patches may follow real-world use
 - Handoff lives in: [`## Handoff`](#handoff)

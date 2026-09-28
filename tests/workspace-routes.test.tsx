@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { GlobalShortcuts } from "../src/ui/App";
 import { WorkspaceController } from "../src/ui/controllers/workspace-controller";
-import { ResearchStatus } from "../src/ui/routes/ThreadRoute";
+import { ProvisionalAnswer, ResearchStatus } from "../src/ui/routes/ThreadRoute";
 import { researchAnswerPosition } from "../src/ui/policies/answer-position";
 import { HomeRoute } from "../src/ui/routes/HomeRoute";
 import { threadSelectorReturnTo, threadSelectorState } from "../src/ui/navigation-state";
@@ -20,6 +20,17 @@ describe("workspace controller", () => {
     expect(controller.route("/settings")).toEqual({ kind: "settings" });
     expect(controller.route("/unlock")).toEqual({ kind: "unlock" });
     expect(controller.route("/threads/thread-1")).toEqual({ kind: "thread", threadId: "thread-1" });
+  });
+  it("renders an unlinked, whitespace-preserving provisional answer with state-only announcements", () => {
+    const { rerender } = render(<ProvisionalAnswer text={"# Draft\n[[cite:unverified]] https://example.com"} paused={false} />);
+    const preview = screen.getByRole("region", { name: "Provisional answer preview" });
+    expect(preview).toHaveTextContent("provisional · checking answer and citations");
+    expect(preview.querySelector("a")).toBeNull();
+    expect(preview.querySelector('[aria-live="off"]')).toHaveTextContent("# Draft");
+    expect(preview.querySelector('[aria-live="off"]')?.className).toContain("provisionalText");
+    rerender(<ProvisionalAnswer text="last partial text" paused />);
+    expect(screen.getByRole("status")).toHaveTextContent("preview paused; final answer pending");
+    expect(preview.querySelector('[aria-live="off"]')).toHaveTextContent("last partial text");
   });
   it("renders an accessible animated research status with a reduced-motion-safe bar structure", () => {
     render(<ResearchStatus answerDraft="" />);
@@ -67,6 +78,7 @@ describe("workspace controller", () => {
     expect(controller.command({ type: "prompt_submitted", value: "what" })).toEqual({ type: "submit", value: "what", kind: "research" });
     expect(controller.command({ type: "prompt_submitted", value: "what?" })).toEqual({ type: "submit", value: "what?", kind: "research" });
     expect(controller.command({ type: "command_requested", command: "/link  apollo 11 landing  " })).toEqual({ type: "submit", value: "apollo 11 landing", kind: "search", resultKind: "link" });
+    expect(controller.command({ type: "command_requested", command: "/news latest" })).toEqual({ type: "submit", value: "latest", kind: "search", resultKind: "news" });
     expect(controller.command({ type: "command_requested", command: "/image apollo" })).toEqual({ type: "submit", value: "apollo", kind: "search", resultKind: "image" });
     expect(controller.command({ type: "command_requested", command: "/video apollo" })).toEqual({ type: "submit", value: "apollo", kind: "search", resultKind: "video" });
     expect(controller.command({ type: "command_requested", command: "/link" })).toEqual({ type: "invalid", message: "Usage: /link <query>" });
@@ -75,8 +87,8 @@ describe("workspace controller", () => {
   it("populates and focuses the prompt from the visible search command actions", () => {
     render(<MemoryRouter><HomeRoute /></MemoryRouter>);
     const commands = Array.from(screen.getByLabelText("Commands").querySelectorAll("p"), (row) => row.firstElementChild?.textContent);
-    expect(commands).toEqual(["/new", "/threads", "/link", "/image", "/video", "/settings"]);
-    expect(screen.getAllByText("{query}")).toHaveLength(3);
+    expect(commands).toEqual(["/new", "/threads", "/link", "/news", "/image", "/video", "/settings"]);
+    expect(screen.getAllByText("{query}")).toHaveLength(4);
     expect(screen.queryByText("<query>")).not.toBeInTheDocument();
     const prompt = screen.getByLabelText("Search query");
     prompt.blur();

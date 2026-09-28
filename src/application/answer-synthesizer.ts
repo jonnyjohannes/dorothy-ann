@@ -7,6 +7,7 @@ import type {
   ThreadContext,
 } from "../domain/types.js";
 import type { LLMProvider, ResearchSynthesisInput } from "../ports/llm.js";
+import { viableEvidenceSourceCount } from "../domain/knowledge.js";
 
 export const DEFAULT_SYNTHESIS_MAX_OUTPUT_TOKENS = 4_096;
 
@@ -16,6 +17,8 @@ export interface AnswerSynthesizerInput {
   context: ThreadContext;
   resolution: SufficientResearchResolution | BestEffortResearchResolution;
   signal?: AbortSignal;
+  /** Parsed text only; awaited before reading the next provider part. Never authoritative. */
+  onProvisionalText?: (text: string) => void | Promise<void>;
 }
 
 export class AnswerSynthesisError extends Error {
@@ -66,7 +69,7 @@ function reachableSourceIds(
 ): Set<SourceId> {
   const ids = new Set<SourceId>();
   for (const pack of resolution.knowledge.evidence) {
-    for (const source of pack.sources) ids.add(source.sourceId);
+    for (const source of pack.sources) if (source.page.text.trim()) ids.add(source.sourceId);
   }
   return ids;
 }
@@ -132,6 +135,7 @@ export class AnswerSynthesizer {
 
   async synthesize(input: AnswerSynthesizerInput): Promise<AssistantContent> {
     if (input.signal?.aborted) throw new AnswerSynthesisError("unavailable", "provider_interrupted");
+    if (viableEvidenceSourceCount(input.resolution.knowledge) < 2) throw new AnswerSynthesisError("invalid_output", "insufficient_sources");
     const allowedSourceIds = [...reachableSourceIds(input.resolution)];
     const providerInput: ResearchSynthesisInput = {
       systemPrompt: this.systemPrompt,
@@ -141,15 +145,34 @@ export class AnswerSynthesizer {
       resolution: input.resolution,
       allowedSourceIds,
       maxOutputTokens: this.maxOutputTokens,
+      signal: input.signal,
     };
     const parts: AssistantContentPart[] = [];
+    let opening = "";
+    let openingResolved = false;
+    const publish = async (text: string, final = false) => {
+      if (!input.onProvisionalText || (!text && !final)) return;
+      if (openingResolved) { if (text) await input.onProvisionalText(text); return; }
+      opening += text;
+      const firstContent = opening.search(/\S/);
+      if (firstContent < 0 && !final) return;
+      const candidate = opening.slice(Math.max(firstContent, 0));
+      if (candidate.startsWith("#") && !final && !/\r?\n/.test(candidate)) return;
+      openingResolved = true;
+      const safe = normalizeLeadingHeading([{ type: "text", markdown: opening }])[0];
+      await input.onProvisionalText(safe.type === "text" ? safe.markdown : opening);
+      opening = "";
+    };
     try {
       for await (const part of this.provider.synthesizeResearch(providerInput)) {
         if (input.signal?.aborted) throw new AnswerSynthesisError("unavailable", "provider_interrupted");
         if (!part || (part.type !== "text" && part.type !== "citation")) continue;
         if (part.type === "text" && typeof part.markdown !== "string") continue;
         parts.push(part);
+        if (part.type === "text") await publish(part.markdown);
       }
+      if (input.signal?.aborted) throw new AnswerSynthesisError("unavailable", "provider_interrupted");
+      await publish("", true);
       const reachable = enforceReachableCitations(parts, input.resolution, allowedSourceIds);
       return validateAnswer(normalizeLeadingHeading(coalesceAssistantContent(reachable)));
     } catch (error) {

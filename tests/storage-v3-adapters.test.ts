@@ -97,6 +97,45 @@ for (const [name, factory] of factories) describe(`${name} v3 storage adapter`, 
     expect(await store.remove({ threadId })).toEqual({ ok: true, value: "already_absent" });
   });
 
+  it("round-trips news turn provenance without changing article source identity", async () => {
+    const { store, identities } = await factory();
+    const threadId = uuid(950) as ThreadId;
+    const source = await canonical(identities);
+    const news: SearchTurn = { ...turn(1, source), result: { completion: "results", resultKind: "news", destinations: [{ sourceId: source.sourceId, rank: 1 }] } };
+    const committed = await store.commitTerminalTurn({ threadId, expectedRevision: null, create: { id: threadId, title: "News", createdAt: at(1) as never }, sourceRecords: [source], turn: news });
+    expect(committed.ok).toBe(true);
+    const loaded = await store.load(threadId);
+    expect(loaded.ok && loaded.value?.thread.turns[0]).toMatchObject({ result: { resultKind: "news" } });
+    expect(loaded.ok && loaded.value?.thread.sources[0]).toMatchObject({ kind: "link", sourceId: source.sourceId });
+    const backup = await store.exportData();
+    expect(backup.ok).toBe(true);
+    if (!backup.ok) return;
+    const destination = await factory();
+    const inspected = await destination.store.inspectImport(backup.value);
+    expect(inspected.ok).toBe(true);
+    if (!inspected.ok) return;
+    expect(await destination.store.importData(inspected.value.candidate, { onConflict: "keep_existing" })).toMatchObject({ ok: true });
+    const restored = await destination.store.load(threadId);
+    expect(restored.ok && restored.value?.thread.turns[0]).toMatchObject({ result: { resultKind: "news" } });
+    expect(restored.ok && restored.value?.thread.sources).toHaveLength(1);
+  });
+
+  it.each(["web-first", "news-first"])("keeps one canonical card across %s article searches", async (order) => {
+    const { store, identities } = await factory();
+    const threadId = uuid(order === "web-first" ? 960 : 961) as ThreadId;
+    const source = await canonical(identities);
+    const first: SearchTurn = { ...turn(1, source), result: { completion: "results", resultKind: order === "web-first" ? "link" : "news", destinations: [{ sourceId: source.sourceId, rank: 1 }] } };
+    const second: SearchTurn = { ...turn(2, source, 3), result: { completion: "results", resultKind: order === "web-first" ? "news" : "link", destinations: [{ sourceId: source.sourceId, rank: 1 }] } };
+    const created = await store.commitTerminalTurn({ threadId, expectedRevision: null, create: { id: threadId, title: "Same article", createdAt: at(1) as never }, sourceRecords: [source], turn: first });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const committed = await store.commitTerminalTurn({ threadId, expectedRevision: created.value.record.revision, sourceRecords: [], turn: second });
+    expect(committed.ok).toBe(true);
+    const loaded = await store.load(threadId);
+    expect(loaded.ok && loaded.value?.thread.sources).toHaveLength(1);
+    expect(loaded.ok && loaded.value?.thread.turns.map((item) => item.kind === "search" && item.status === "completed" ? item.result.resultKind : "other")).toEqual(order === "web-first" ? ["link", "news"] : ["news", "link"]);
+  });
+
   it("passes CAS, deterministic insertion, and source-integrity checks", async () => {
     const { store, identities } = await factory();
     const threadId = uuid(920) as ThreadId;

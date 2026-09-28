@@ -131,7 +131,6 @@ function buildEvidence(selected: Turn[], limits: ThreadContextLimits): EvidenceP
       if (remaining >= 256) {
         const text = prefix(boundedText, remaining);
         sources.push({ ...source, page: { ...source.page, text, characterCount: length(text) } });
-        remaining = 0;
       }
       if (sources.length > 0) admitted.push({ turnCreatedAt: candidate.turn.createdAt, pack: { ...candidate.pack, sources } });
       break outer;

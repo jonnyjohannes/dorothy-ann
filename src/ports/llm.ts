@@ -38,6 +38,23 @@ export interface ResearchAssessmentProposal {
 /** The knowledge shape supplied to assessment; kept as a named port concept. */
 export type ResearchKnowledge = KnowledgeUnit;
 
+/** Optional per-attempt operational measurement; never carries prompt or provider output. */
+export interface AssessmentAttemptObservation {
+  attempt: 1 | 2;
+  elapsedMs: number;
+  parseMs: number;
+  inputChars: number;
+  maxOutputTokens: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  stopReason: "end_turn" | "max_tokens" | "refusal" | "other" | "unknown";
+  outcome: "accepted" | "rejected" | "failed";
+  /** Count-only validated output diagnostic; absent if no provider output. */
+  acceptedObservations?: number;
+  outputShape?: "incomplete_outer_json" | "complete_no_directive" | "complete_invalid_directive";
+  reason?: "empty_response" | "invalid_json" | "missing_directive" | "unknown_directive" | "invalid_search_query" | "invalid_resolved" | "invalid_decomposition" | "provider_error";
+}
+
 export interface ResearchAssessmentInput {
   systemPrompt: string;
   problem: ResearchProblem;
@@ -47,6 +64,7 @@ export interface ResearchAssessmentInput {
   allowedSupportRefs: SupportRef[];
   maxOutputTokens: number;
   signal?: AbortSignal;
+  onAttempt?: (observation: AssessmentAttemptObservation) => void;
 }
 
 export interface ResearchSynthesisInput {
@@ -57,6 +75,7 @@ export interface ResearchSynthesisInput {
   resolution: SufficientResearchResolution | BestEffortResearchResolution;
   allowedSourceIds: SourceId[];
   maxOutputTokens: number;
+  signal?: AbortSignal;
 }
 
 export interface LLMProvider {

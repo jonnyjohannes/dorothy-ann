@@ -15,5 +15,6 @@ export default defineConfig({
       },
     },
   },
-  server: { proxy: { "/api": "http://localhost:8787" } },
+  server: { proxy: { "/api": process.env.DOROTHY_E2E_API_ORIGIN ?? "http://localhost:8787" } },
+  preview: { proxy: { "/api": process.env.DOROTHY_E2E_API_ORIGIN ?? "http://localhost:8787" } },
 });

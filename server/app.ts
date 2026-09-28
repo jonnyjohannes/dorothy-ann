@@ -11,8 +11,7 @@ import type { AssistantContentPart, CanonicalSource, GapLedger, KnowledgeUnit, R
 import { IdentityPolicy } from "../src/application/identity-policy.js";
 import { WebCryptoIdentityHasher } from "../src/infrastructure/identity/web-crypto-hasher.js";
 import { BraveSearchProvider } from "../src/infrastructure/providers/brave.js";
-import { SafeContentExtractor } from "../src/infrastructure/extraction/safe-content-extractor.js";
-import type { ContentExtractor } from "../src/ports/extraction.js";
+import { SafeContentExtractor, type ExtractionFailureMetadata } from "../src/infrastructure/extraction/safe-content-extractor.js";
 import { AnthropicProvider } from "../src/infrastructure/providers/anthropic.js";
 import { EvidenceAcquirer } from "../src/application/evidence-acquirer.js";
 import { ResearchAssessor } from "../src/application/research-assessor.js";
@@ -24,7 +23,8 @@ import { createPortableApp } from "../src/server/app.js";
 import type { TurnExecutor, TurnExecutionRequest, TurnExecutionTerminal } from "../src/server/turn-stream-boundary.js";
 import { createThreadStorageRoutes } from "../src/server/thread-storage-routes.js";
 import type { ThreadStore } from "../src/ports/storage-v3.js";
-import { loggerResearchTimingSink, ResearchTimingCollector, type ResearchTimingSink } from "./runtime/research-timing.js";
+import { loggerResearchTimingSink, logAssessmentAnomaly, ResearchTimingCollector, type ResearchTimingSink } from "./runtime/research-timing.js";
+import { logSelectedExtractionFailure } from "./runtime/extraction-log.js";
 import { createLogger, type Logger } from "./runtime/logger.js";
 
 class UnavailableSearchProvider implements SearchProvider {
@@ -44,11 +44,18 @@ class FixtureSearchProvider implements SearchProvider {
     const sourceId = await this.identities.sourceId(canonicalUrl);
     if (kind === "image") return [{ kind, sourceId, rank: 1, title: `Fixture image for ${query}`, url: canonicalUrl, canonicalUrl, imageUrl: canonicalUrl, sourcePageUrl: "https://example.com/fixture", displayUrl: "example.com", thumbnailUrl: canonicalUrl }];
     if (kind === "video") return [{ kind, sourceId, rank: 1, title: `Fixture video for ${query}`, url: canonicalUrl, canonicalUrl, videoUrl: canonicalUrl, sourcePageUrl: "https://example.com/fixture", displayUrl: "example.com", thumbnailUrl: "https://example.com/fixture.jpg", durationSeconds: 30 }];
-    return [{ kind, sourceId, rank: 1, title: `Fixture result for ${query}`, url: canonicalUrl, canonicalUrl, displayUrl: "example.com/fixture", snippet: "A safe fixture result for local development." }];
+    const secondUrl = "https://example.com/fixture-second";
+    const secondId = await this.identities.sourceId(secondUrl);
+    // Explicit article searches keep one fixture result; research receives two.
+    return [
+      { kind: "link" as const, sourceId, rank: 1, title: `Fixture result for ${query}`, url: canonicalUrl, canonicalUrl, displayUrl: "example.com/fixture", snippet: "A safe fixture result for local development." },
+      { kind: "link" as const, sourceId: secondId, rank: 2, title: `Another fixture result for ${query}`, url: secondUrl, canonicalUrl: secondUrl, displayUrl: "example.com/fixture-second", snippet: "A second fixture source for local development." },
+    ].slice(0, options.resultKind === "link" || options.resultKind === "news" ? 1 : options.maxResults);
   }
 }
 
 class FixtureLlmProvider implements LLMProvider {
+  constructor(private readonly synthesisDelayMs = 0) {}
   async assessResearch(input: ResearchAssessmentInput): Promise<ResearchAssessmentProposal> {
     const source = input.knowledge.evidence[0]?.sources[0] ?? input.problem.context.availableEvidence[0]?.sources[0];
     if (!source) return { directive: { kind: "search", query: input.problem.question, purpose: input.problem.purpose, successCriterion: input.problem.successCriterion, priority: 1 } };
@@ -57,6 +64,8 @@ class FixtureLlmProvider implements LLMProvider {
   async *synthesizeResearch(input: ResearchSynthesisInput): AsyncIterable<AssistantContentPart> {
     const source = input.allowedSourceIds[0];
     yield { type: "text", markdown: "This is a bounded fixture answer grounded in the available evidence." };
+    if (this.synthesisDelayMs) await new Promise((resolve) => setTimeout(resolve, this.synthesisDelayMs));
+    if (input.signal?.aborted) return;
     if (source) yield { type: "citation", sourceId: source };
   }
 }
@@ -78,7 +87,6 @@ function createExecutor(
   identities: IdentityPolicy,
   search: SearchProvider,
   llm: LLMProvider,
-  extractor: ContentExtractor | undefined,
   logger: Logger,
   researchTimingSink?: ResearchTimingSink,
 ): TurnExecutor {
@@ -93,6 +101,7 @@ function createExecutor(
       }
 
       const timing = researchTimingSink ? new ResearchTimingCollector(researchTimingSink) : undefined;
+      let assessmentCalls = 0;
       let timingResolution: ResearchResolution | undefined;
       let timingLedger: GapLedger | undefined;
       let timingTerminalStatus: "completed" | "failed" | "interrupted" | "executor_error" = "executor_error";
@@ -105,26 +114,62 @@ function createExecutor(
         };
         await emitResearchPhase("resolving");
 
-        const timedSearch = timing?.decorateSearch(search) ?? search;
+        const observedSearch = timing && search instanceof BraveSearchProvider
+          ? search.withTiming((phase, elapsedMs, succeeded) => timing.markSearchSubphase(phase, elapsedMs, succeeded)) : search;
+        const timedSearch = timing?.decorateSearch(observedSearch) ?? observedSearch;
+        const extractionMetadata = new Map<string, ExtractionFailureMetadata>();
+        const extractor = config.DOROTHY_FIXTURE_MODE ? undefined : new SafeContentExtractor({
+          maxFetchBytes: config.MAX_FETCH_BYTES, maxRedirects: config.MAX_REDIRECTS,
+          userAgent: "dorothy-ann/1.1", minCharacters: 120,
+        }, undefined, (sourceId, metadata) => { extractionMetadata.set(sourceId, metadata); },
+        (phase, elapsedMs, succeeded) => timing?.markExtractionSubphase(phase, elapsedMs, succeeded));
         const timedExtractor = extractor && timing ? timing.decorateExtractor(extractor) : extractor;
         const timedLlm = timing?.decorateLlm(llm) ?? llm;
-        const acquirer = new EvidenceAcquirer({ search: timedSearch, extractor: timedExtractor, fixture: config.DOROTHY_FIXTURE_MODE });
+        const acquirer = new EvidenceAcquirer({ search: timedSearch, extractor: timedExtractor, fixture: config.DOROTHY_FIXTURE_MODE,
+          ...(!config.DOROTHY_FIXTURE_MODE ? { onSelectedExtractionFailure: (entry) => {
+            const metadata = extractionMetadata.get(entry.sourceId);
+            extractionMetadata.delete(entry.sourceId);
+            logSelectedExtractionFailure(logger, { ...entry, metadata });
+          } } : {}),
+        });
         const resolver = new ResearchResolver({
           identities,
           assessor,
           acquirer,
-          acquisitionLimits: { maxCandidatesPerSearch: config.MAX_SEARCH_RESULTS, maxSourcesPerRequest: 3, maxConcurrentSearches: config.MAX_CONCURRENT_SEARCHES, maxConcurrentExtractions: config.MAX_CONCURRENT_EXTRACTIONS, extractionMaxCharacters: config.MAX_EXTRACTED_CHARS_PER_PAGE, extractionTimeoutMs: config.EXTRACTION_TIMEOUT_MS },
+          acquisitionLimits: { maxCandidatesPerSearch: config.MAX_SEARCH_RESULTS, maxSourcesPerRequest: 5, maxConcurrentSearches: config.MAX_CONCURRENT_SEARCHES, maxConcurrentExtractions: config.MAX_CONCURRENT_EXTRACTIONS, extractionMaxCharacters: config.MAX_EXTRACTED_CHARS_PER_PAGE, extractionTimeoutMs: config.EXTRACTION_TIMEOUT_MS },
+          ...(timing ? { onAcquisitionWall: (elapsedMs: number, succeeded: boolean) => timing.markAcquisitionWall(elapsedMs, succeeded) } : {}),
+          ...(timing ? { onEvidenceYield: (requests: Parameters<ResearchTimingCollector["markEvidenceYield"]>[0]) => timing.markEvidenceYield(requests) } : {}),
+          onAssessmentDecision: (decision) => {
+            timing?.markAssessmentValidation(decision.validationMs);
+            logger.debug("assessment_decision", { stage: "assessing", call: assessmentCalls, ...decision });
+          },
           assess: async (assessment) => {
+            const call = ++assessmentCalls;
+            const started = performance.now();
+            const evidenceSources = assessment.knowledge.evidence.reduce((total, pack) => total + pack.sources.length, 0);
+            const evidenceChars = logger.enabled("debug") ? assessment.knowledge.evidence.reduce((total, pack) => total + pack.sources.reduce((sum, source) => sum + source.page.text.length, 0), 0) : undefined;
+            let outcome: "accepted" | "failed" = "failed";
             try {
-              const result = await timedLlm.assessResearch({ systemPrompt: prompts.assessor, problem: assessment.problem, knowledge: assessment.knowledge, ledger: assessment.ledger, budget: assessment.budget, allowedSupportRefs: assessment.allowedSupportRefs, maxOutputTokens: config.MAX_ASSESSMENT_OUTPUT_TOKENS, signal: assessment.signal });
+              const result = await timedLlm.assessResearch({ systemPrompt: prompts.assessor, problem: assessment.problem, knowledge: assessment.knowledge, ledger: assessment.ledger, budget: assessment.budget, allowedSupportRefs: assessment.allowedSupportRefs, maxOutputTokens: config.MAX_ASSESSMENT_OUTPUT_TOKENS, signal: assessment.signal,
+                onAttempt: (observation) => {
+                  timing?.markAssessmentAttempt(observation);
+                  logAssessmentAnomaly(logger, observation);
+                  logger.debug("assessment_attempt", { stage: "assessing", call, ...observation });
+                },
+              });
               timing?.markAssessmentDirective(result.directive.kind);
+              outcome = "accepted";
               return result;
             } catch (error) {
               timing?.markAssessmentFailure(error);
               const code = error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : "unknown";
               const reason = error && typeof error === "object" && "reason" in error && typeof error.reason === "string" ? error.reason : undefined;
-              logger.debug("assessment_failed", { stage: "assessing", failure_code: code, invalid_reason: reason });
+              const allowedCodes = ["provider_bad_request", "provider_rate_limited", "provider_unavailable", "provider_failed", "provider_interrupted", "assessment_invalid_response"];
+              const allowedReasons = ["empty_response", "invalid_json", "missing_directive", "unknown_directive", "invalid_search_query", "invalid_resolved", "invalid_decomposition"];
+              logger.debug("assessment_failed", { stage: "assessing", failure_code: allowedCodes.includes(code) ? code : "other", invalid_reason: reason && allowedReasons.includes(reason) ? reason : undefined });
               throw error;
+            } finally {
+              logger.debug("assessment_call", { stage: "assessing", call, depth: assessment.problem.depth, evidence_sources: Math.min(24, evidenceSources), evidence_chars: Math.min(500_000, evidenceChars ?? 0), elapsed_ms: Math.max(0, Math.min(300_000, Math.round(performance.now() - started))), outcome });
             }
           },
         });
@@ -139,7 +184,7 @@ function createExecutor(
         const context = request.context;
         const problemId = await identities.problemId({ turnId: request.turnId, question: request.question, purpose: "answer the user question", successCriterion: "provide a supported answer" });
         const problem: ResearchProblem = { id: problemId, question: request.question, purpose: "answer the user question", successCriterion: "provide a supported answer", context, depth: 0 };
-        const resolveRoot = () => resolver.resolve({ turnId: request.turnId, problem, knowledge: emptyKnowledge(problemId), ledger: { gaps: [], assessmentsUsed: 0, searchesUsed: 0, sourcesConsumed: 0 }, budget: { searchesRemaining: 3, sourcesRemaining: 9, assessmentsRemaining: 8, depthRemaining: 2 }, signal, onPhase: emitResearchPhase });
+        const resolveRoot = () => resolver.resolve({ turnId: request.turnId, problem, knowledge: emptyKnowledge(problemId), ledger: { gaps: [], assessmentsUsed: 0, searchesUsed: 0, sourcesConsumed: 0 }, budget: { searchesRemaining: 3, sourcesRemaining: 12, assessmentsRemaining: 8, depthRemaining: 2 }, signal, onPhase: emitResearchPhase });
         const root = timing ? await timing.measureResolution(resolveRoot) : await resolveRoot();
         timingLedger = root.kind === "resolution" ? root.resolution.ledger : root.checkpoint.ledger;
         if (root.kind === "resolution") timingResolution = root.resolution;
@@ -153,18 +198,27 @@ function createExecutor(
         } else {
           await onSignal({ type: "research_state", state: { kind: "checkpoint", checkpoint: root.checkpoint } });
         }
-        const result = await executeResearchTurn({ turnId: request.turnId, userMessage: requestMessage(request), createdAt: new Date().toISOString() as never, context, answerPosition: request.answerPosition, resolver: { resolve: async () => resolution as ResearchResolutionResult }, synthesizer: phaseSynthesizer, assessmentModelRef: "assessment", synthesisModelRef: "synthesis", searchRef: "brave", signal });
+        let previewChars = 0;
+        let previewFrames = 0;
+        let queued = "";
+        const flushPreview = async () => {
+          if (!queued || signal.aborted || previewFrames >= 256) return;
+          const delta = queued.slice(0, 64_000 - previewChars);
+          queued = "";
+          if (!delta) return;
+          await onSignal({ type: "answer_delta", delta });
+          previewChars += delta.length;
+          previewFrames += 1;
+          if (previewFrames === 1) timing?.markFirstAnswerSignal();
+        };
+        const result = await executeResearchTurn({ turnId: request.turnId, userMessage: requestMessage(request), createdAt: new Date().toISOString() as never, context, answerPosition: request.answerPosition, resolver: { resolve: async () => resolution as ResearchResolutionResult }, synthesizer: phaseSynthesizer, assessmentModelRef: "assessment", synthesisModelRef: "synthesis", searchRef: "brave", signal, onProvisionalText: async (text) => {
+          if (signal.aborted || previewChars >= 64_000 || previewFrames >= 256) return;
+          queued += text.slice(0, 64_000 - previewChars - queued.length);
+          // The first safe fragment is written immediately. Later fragments batch.
+          if (previewFrames === 0 || queued.length >= 256 || queued.length === 64_000 - previewChars) await flushPreview();
+        } });
+        if (result.turn.status === "completed") await flushPreview();
         timingTerminalStatus = result.turn.status;
-        if (result.turn.status === "completed") {
-          let firstAnswer = true;
-          for (const part of result.turn.result.answer.parts) if (part.type === "text") {
-            if (firstAnswer) {
-              timing?.markFirstAnswerSignal();
-              firstAnswer = false;
-            }
-            await onSignal({ type: "answer_delta", delta: part.markdown });
-          }
-        }
         return terminalFor(result);
       } finally {
         timing?.emit({
@@ -202,19 +256,22 @@ export function createApp({ config, systemPrompts, threadStoreV3: injectedStore,
     : config.BRAVE_SEARCH_API_KEY
       ? new BraveSearchProvider(config.BRAVE_SEARCH_API_KEY, fetch, identities)
       : new UnavailableSearchProvider();
-  const extractor = config.DOROTHY_FIXTURE_MODE ? undefined : new SafeContentExtractor({ maxFetchBytes: config.MAX_FETCH_BYTES, maxRedirects: config.MAX_REDIRECTS, userAgent: "dorothy-ann/1.1", minCharacters: 120 });
+  const fixtureDelay = Number(process.env.DOROTHY_FIXTURE_SYNTHESIS_DELAY_MS ?? 0);
   const llm: LLMProvider = config.DOROTHY_FIXTURE_MODE
-    ? new FixtureLlmProvider()
+    ? new FixtureLlmProvider(Number.isInteger(fixtureDelay) && fixtureDelay >= 0 && fixtureDelay <= 2_000 ? fixtureDelay : 0)
     : config.ANTHROPIC_API_KEY && config.ANTHROPIC_ASSESSMENT_MODEL && config.ANTHROPIC_SYNTHESIS_MODEL
       ? new AnthropicProvider({
         apiKey: config.ANTHROPIC_API_KEY,
         assessmentModel: config.ANTHROPIC_ASSESSMENT_MODEL,
         synthesisModel: config.ANTHROPIC_SYNTHESIS_MODEL,
-        onDiagnostic: (record) => logger.debug(record.event, { stage: record.stage, reason: record.reason }),
+        assessmentRetryMaxOutputTokens: config.MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS,
+        onDiagnostic: (record) => logger.debug(record.event, record.event === "assessment_output_rejected"
+          ? { stage: record.stage, reason: record.reason, format: record.format, stop_reason: record.stop_reason, output_tokens: record.output_tokens, text_chars: record.text_chars }
+          : { stage: record.stage, reason: record.reason }),
       })
       : new UnavailableLlmProvider();
-  const timingSink = researchTimingSink ?? (config.RESEARCH_TIMING_LOGS || logger.enabled("debug") ? loggerResearchTimingSink(logger, config.RESEARCH_TIMING_LOGS && !logger.enabled("debug") ? "info" : "debug") : undefined);
-  const executor = createExecutor(config, systemPrompts, identities, search, llm, extractor, logger, timingSink);
+  const timingSink = researchTimingSink ?? (logger.enabled("info") ? loggerResearchTimingSink(logger) : undefined);
+  const executor = createExecutor(config, systemPrompts, identities, search, llm, logger, timingSink);
   const auth = config.APP_PASSPHRASE_SCRYPT_HASH && config.SESSION_SIGNING_KEYS ? new SessionAuth(config.APP_PASSPHRASE_SCRYPT_HASH, config.SESSION_SIGNING_KEYS) : undefined;
   const limiter: LoginAttemptLimiter = config.UPSTASH_REDIS_REST_URL && config.UPSTASH_REDIS_REST_TOKEN ? new UpstashLoginLimiter(config.UPSTASH_REDIS_REST_URL, config.UPSTASH_REDIS_REST_TOKEN) : new InMemoryLoginLimiter();
   const authenticate = async (context: Context) => {
@@ -236,7 +293,7 @@ export function createApp({ config, systemPrompts, threadStoreV3: injectedStore,
   });
   const statusRoutes = new Hono();
   statusRoutes.get("/", (context) => context.json({ fixtureMode: config.DOROTHY_FIXTURE_MODE, provider: searchReady && llmReady, search: searchReady, llm: llmReady, storage: Boolean(injectedStore) }));
-  const app = createPortableApp({ executor, maxRequestBytes: config.MAX_TURN_REQUEST_BYTES, maxResults: config.MAX_SEARCH_RESULTS, researchLimits: { maxCandidatesPerSearch: 5, maxSourcesPerRequest: 3, maxConcurrentSearches: config.MAX_CONCURRENT_SEARCHES, maxConcurrentExtractions: config.MAX_CONCURRENT_EXTRACTIONS, extractionMaxCharacters: config.MAX_EXTRACTED_CHARS_PER_PAGE, extractionTimeoutMs: config.EXTRACTION_TIMEOUT_MS }, authenticate, routes: { auth: authRoutes, status: statusRoutes, storage: injectedStore ? createThreadStorageRoutes(injectedStore) : undefined } });
+  const app = createPortableApp({ executor, maxRequestBytes: config.MAX_TURN_REQUEST_BYTES, maxResults: config.MAX_SEARCH_RESULTS, researchLimits: { maxCandidatesPerSearch: 5, maxSourcesPerRequest: 5, maxConcurrentSearches: config.MAX_CONCURRENT_SEARCHES, maxConcurrentExtractions: config.MAX_CONCURRENT_EXTRACTIONS, extractionMaxCharacters: config.MAX_EXTRACTED_CHARS_PER_PAGE, extractionTimeoutMs: config.EXTRACTION_TIMEOUT_MS }, authenticate, onDiagnostic: (record) => logger.debug(record.event, record), routes: { auth: authRoutes, status: statusRoutes, storage: injectedStore ? createThreadStorageRoutes(injectedStore) : undefined } });
   app.get("/api/health", (context) => context.json({ ok: true, fixtureMode: config.DOROTHY_FIXTURE_MODE }));
   return app;
 }

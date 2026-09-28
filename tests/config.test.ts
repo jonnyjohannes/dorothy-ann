@@ -7,7 +7,6 @@ describe("runtime configuration", () => {
 
     expect(config).toMatchObject({
       LOG_LEVEL: "info",
-      RESEARCH_TIMING_LOGS: false,
       MAX_SEARCH_RESULTS: 10,
       MAX_CONCURRENT_SEARCHES: 3,
       MAX_CONCURRENT_EXTRACTIONS: 3,
@@ -17,7 +16,8 @@ describe("runtime configuration", () => {
       MAX_EVIDENCE_CHARS_TOTAL: 48_000,
       MAX_THREAD_CONTEXT_TURNS: 8,
       MAX_THREAD_CONTEXT_CHARS: 24_000,
-      MAX_ASSESSMENT_OUTPUT_TOKENS: 800,
+      MAX_ASSESSMENT_OUTPUT_TOKENS: 1_200,
+      MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS: 1_600,
       MAX_OUTPUT_TOKENS: 4_096,
       MAX_TURN_REQUEST_BYTES: 128_000,
     });
@@ -28,12 +28,6 @@ describe("runtime configuration", () => {
     expect(() => loadConfig({ LOG_LEVEL: "verbose" }, { onDeprecation: vi.fn() })).toThrow("invalid configuration: LOG_LEVEL");
   });
 
-  it("accepts only explicit research timing log booleans", () => {
-    expect(loadConfig({ RESEARCH_TIMING_LOGS: "true" }, { onDeprecation: vi.fn() }).RESEARCH_TIMING_LOGS).toBe(true);
-    expect(loadConfig({ RESEARCH_TIMING_LOGS: "false" }, { onDeprecation: vi.fn() }).RESEARCH_TIMING_LOGS).toBe(false);
-    expect(() => loadConfig({ RESEARCH_TIMING_LOGS: "TRUE_PRIVATE_VALUE" }, { onDeprecation: vi.fn() })).toThrow("invalid configuration: RESEARCH_TIMING_LOGS");
-  });
-
   it("accepts lowered canonical operational values", () => {
     const config = loadConfig({
       MAX_CONCURRENT_SEARCHES: "2",
@@ -41,11 +35,15 @@ describe("runtime configuration", () => {
       MAX_EVIDENCE_CHARS_PER_SOURCE: "1000",
       MAX_EVIDENCE_CHARS_TOTAL: "2000",
       MAX_TURN_REQUEST_BYTES: "8000",
+      MAX_ASSESSMENT_OUTPUT_TOKENS: "900",
+      MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS: "1200",
     }, { onDeprecation: vi.fn() });
 
     expect(config.MAX_CONCURRENT_SEARCHES).toBe(2);
     expect(config.MAX_CONCURRENT_EXTRACTIONS).toBe(1);
     expect(config.MAX_TURN_REQUEST_BYTES).toBe(8_000);
+    expect(config.MAX_ASSESSMENT_OUTPUT_TOKENS).toBe(900);
+    expect(config.MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS).toBe(1_200);
   });
 
   it.each([
@@ -53,6 +51,9 @@ describe("runtime configuration", () => {
     ["MAX_CONCURRENT_EXTRACTIONS", "0"],
     ["MAX_THREAD_CONTEXT_TURNS", "1.5"],
     ["MAX_OUTPUT_TOKENS", "4097"],
+    ["MAX_ASSESSMENT_OUTPUT_TOKENS", "1201"],
+    ["MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS", "799"],
+    ["MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS", "1601"],
     ["MAX_TURN_REQUEST_BYTES", "7999"],
   ])("rejects invalid %s", (name, value) => {
     expect(() => loadConfig({ [name]: value }, { onDeprecation: vi.fn() })).toThrow(`invalid configuration: ${name}`);

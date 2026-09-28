@@ -12,6 +12,10 @@ const optionalPositiveInt = (maximum: number) => z.preprocess(
   (value) => value === undefined || value === "" ? undefined : value,
   z.coerce.number().int().min(1).max(maximum).optional(),
 );
+const optionalIntRange = (minimum: number, maximum: number) => z.preprocess(
+  (value) => value === undefined || value === "" ? undefined : value,
+  z.coerce.number().int().min(minimum).max(maximum).optional(),
+);
 const optionalNonNegativeInt = (maximum: number) => z.preprocess(
   (value) => value === undefined || value === "" ? undefined : value,
   z.coerce.number().int().min(0).max(maximum).optional(),
@@ -20,7 +24,6 @@ const optionalNonNegativeInt = (maximum: number) => z.preprocess(
 const environmentSchema = z.object({
   DOROTHY_FIXTURE_MODE: z.string().default("true").transform((value) => value !== "false"),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error", "silent"]).default("info"),
-  RESEARCH_TIMING_LOGS: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   ANTHROPIC_API_KEY: optionalString,
   ANTHROPIC_ASSESSMENT_MODEL: optionalRef,
   ANTHROPIC_SYNTHESIS_MODEL: optionalRef,
@@ -42,7 +45,8 @@ const environmentSchema = z.object({
   MAX_EVIDENCE_CHARS_TOTAL: optionalPositiveInt(48_000),
   MAX_THREAD_CONTEXT_TURNS: optionalPositiveInt(8),
   MAX_THREAD_CONTEXT_CHARS: optionalPositiveInt(24_000),
-  MAX_ASSESSMENT_OUTPUT_TOKENS: optionalPositiveInt(800),
+  MAX_ASSESSMENT_OUTPUT_TOKENS: optionalPositiveInt(1_200),
+  MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS: optionalIntRange(800, 1_600),
   MAX_OUTPUT_TOKENS: optionalPositiveInt(4_096),
   MAX_TURN_REQUEST_BYTES: z.preprocess(
     (value) => value === undefined || value === "" ? undefined : value,
@@ -70,7 +74,6 @@ type ParsedEnvironment = z.infer<typeof environmentSchema>;
 export interface AppConfig {
   DOROTHY_FIXTURE_MODE: boolean;
   LOG_LEVEL: "debug" | "info" | "warn" | "error" | "silent";
-  RESEARCH_TIMING_LOGS: boolean;
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_ASSESSMENT_MODEL?: string;
   ANTHROPIC_SYNTHESIS_MODEL?: string;
@@ -92,6 +95,7 @@ export interface AppConfig {
   MAX_THREAD_CONTEXT_TURNS: number;
   MAX_THREAD_CONTEXT_CHARS: number;
   MAX_ASSESSMENT_OUTPUT_TOKENS: number;
+  MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS: number;
   MAX_OUTPUT_TOKENS: number;
   MAX_TURN_REQUEST_BYTES: number;
 
@@ -159,7 +163,6 @@ export function loadConfig(
   return {
     DOROTHY_FIXTURE_MODE: parsed.DOROTHY_FIXTURE_MODE,
     LOG_LEVEL: parsed.LOG_LEVEL,
-    RESEARCH_TIMING_LOGS: parsed.RESEARCH_TIMING_LOGS,
     ANTHROPIC_API_KEY: parsed.ANTHROPIC_API_KEY,
     ANTHROPIC_ASSESSMENT_MODEL: assessmentModel,
     ANTHROPIC_SYNTHESIS_MODEL: synthesisModel,
@@ -179,7 +182,8 @@ export function loadConfig(
     MAX_EVIDENCE_CHARS_TOTAL: maxEvidenceCharsTotal,
     MAX_THREAD_CONTEXT_TURNS: parsed.MAX_THREAD_CONTEXT_TURNS ?? 8,
     MAX_THREAD_CONTEXT_CHARS: canonicalOrLegacy(environment, parsed, "MAX_THREAD_CONTEXT_CHARS", "MAX_CONTEXT_CHARS", 24_000, 24_000, reporter),
-    MAX_ASSESSMENT_OUTPUT_TOKENS: parsed.MAX_ASSESSMENT_OUTPUT_TOKENS ?? 800,
+    MAX_ASSESSMENT_OUTPUT_TOKENS: parsed.MAX_ASSESSMENT_OUTPUT_TOKENS ?? 1_200,
+    MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS: parsed.MAX_ASSESSMENT_RETRY_OUTPUT_TOKENS ?? 1_600,
     MAX_OUTPUT_TOKENS: parsed.MAX_OUTPUT_TOKENS ?? 4_096,
     MAX_TURN_REQUEST_BYTES: canonicalOrLegacy(environment, parsed, "MAX_TURN_REQUEST_BYTES", "MAX_REQUEST_BYTES", 128_000, 128_000, reporter),
     MAX_REQUEST_BYTES: Math.min(parsed.MAX_REQUEST_BYTES ?? 32_000, 128_000),

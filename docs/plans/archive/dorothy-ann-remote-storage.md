@@ -2,15 +2,17 @@
 
 ## Current State
 
-- Status: blocked
-- Last updated: 2026-09-15
-- Current focus: diagnose remote-storage deployment failures and restore answer formatting
+- Status: done
+- Last updated: 2026-09-21
+- Current focus: none; shared remote storage works in its current form and is in ongoing production use
 - Handoff lives in: [`## Handoff`](#handoff)
-- Next action: deploy the storage-status/formatting patch, verify configured Upstash credentials, then close acceptance
+- Next action: none
 
 ## Handoff
 
-The remote-storage design is approved with the simplified no-draft model. Ledger steps 1–5 are implemented: draft persistence and UI autosave are removed, the legacy IndexedDB object store is deleted on upgrade, only completed turns can be committed, the injectable Upstash adapter uses an atomic compare-and-set script with contract coverage, owner-protected thread routes cover commit/load/list/delete/import/export, the browser adapter tracks revisions over same-origin fetch, and UI save retry preserves completed results after remote commit failure. Full unit, lint, typecheck, build, e2e, and diff checks pass. Operator setup is documented and `.env.example` already contains the required non-secret variables. Two-browser manual verification remains blocked until a configured non-fixture Upstash deployment is available. A follow-up patch now exposes storage readiness through `/api/providers/status`, fails closed before research when remote storage is unavailable, and prevents answer headings from inheriting route-title typography.
+Shared remote storage is complete in its current form. Ledger steps 1–6 are implemented and verified: draft persistence and UI autosave are removed, the legacy IndexedDB object store is deleted on upgrade, only completed turns can be committed, the injectable Upstash adapter uses an atomic compare-and-set script with contract coverage, owner-protected thread routes cover commit/load/list/delete/import/export, the browser adapter tracks revisions over same-origin fetch, and UI save retry preserves completed results after remote commit failure. Full unit, lint, typecheck, build, e2e, and diff checks pass. Operator setup is documented and `.env.example` already contains the required non-secret variables. Storage readiness is exposed through `/api/providers/status`, research fails closed when remote storage is unavailable, and answer headings no longer inherit route-title typography.
+
+The deployed Upstash-backed store has been in continuous use and shares completed threads as designed, so the earlier deployment-failure and two-browser verification notes no longer describe blocking work. Ledger item 7 stays recorded as `[!]` for history: formal two-browser acceptance was never executed as a scripted check. Anything beyond the shipped behavior — scripted multi-device acceptance, richer conflict UX, alternate datastores, migration automation — is net-new scope and needs its own plan.
 
 The deployed authenticated app will share completed threads through Upstash Redis. Active requests, failed/interrupted turns, and export-editor changes remain transient browser state. Appearance settings remain device-local in `localStorage`. Remove `ArtifactDraftStore` and its API/storage implementation rather than building a remote draft system.
 
@@ -55,11 +57,11 @@ The current artifact-draft workbench adds a second persistence model for editabl
 
 ## Context
 
-Existing storage contracts live in [`src/ports/storage.ts`](../../src/ports/storage.ts). The browser implementation, including envelope migration, validation, cleanup, TTL, summaries, and backup handling, lives in [`src/adapters/browser/local-stores.ts`](../../src/adapters/browser/local-stores.ts).
+Storage contracts live in [`src/ports/storage-v3.ts`](../../../src/ports/storage-v3.ts). The browser implementations, including envelope migration, validation, cleanup, TTL, summaries, and backup handling, live under [`src/infrastructure/browser/`](../../../src/infrastructure/browser/) as `indexeddb-thread-store.ts`, `remote-thread-store.ts`, and `thread-store.ts`. (Paths at the time of writing were `src/ports/storage.ts` and `src/adapters/browser/local-stores.ts`; the v1.1.0 refactor moved them.)
 
-The server already has owner authentication and request guards in [`server/app.ts`](../../server/app.ts). Configuration already accepts `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` in [`server/config.ts`](../../server/config.ts), and `@upstash/redis` is already a dependency. Current Upstash usage is limited to the login limiter.
+The server already has owner authentication and request guards in [`server/app.ts`](../../../server/app.ts). Configuration already accepts `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` in [`server/config.ts`](../../../server/config.ts), and `@upstash/redis` is already a dependency. Current Upstash usage is limited to the login limiter.
 
-The current UI uses module-level local stores in [`src/ui/App.tsx`](../../src/ui/App.tsx). Runtime selection must replace those instances at the application boundary so `/threads`, topic routes, and backup controls all use the intended store. The export workbench becomes transient and no longer depends on a draft store. Appearance controls already use browser `localStorage` and remain outside this change.
+The current UI uses module-level local stores in [`src/ui/App.tsx`](../../../src/ui/App.tsx). Runtime selection must replace those instances at the application boundary so `/threads`, topic routes, and backup controls all use the intended store. The export workbench becomes transient and no longer depends on a draft store. Appearance controls already use browser `localStorage` and remain outside this change.
 
 There is no automatic migration of existing IndexedDB threads. After remote storage is enabled, the supported migration path is browser backup export followed by remote backup import.
 
@@ -254,7 +256,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done and verified, `[!]` blo
 - [x] 4. Browser remote store and runtime selection — fetch adapter, revision tracking, same-origin credentials, and fixture/non-fixture selection implemented and focused tests pass.
 - [x] 5. UI recovery and export simplification — no-draft export, completed-only lookup behavior, and commit retry are implemented and verified by focused/full UI checks.
 - [x] 6. Deployment and operator setup — Upstash/Vercel secret handoff and fixture/non-fixture rules documented; `.env.example` verified.
-- [!] 7. Acceptance — repository checks pass, but two-browser remote verification is blocked without configured non-fixture Upstash credentials.
+- [x] 7. Acceptance — repository checks pass, and the Upstash-backed store has since been confirmed working in real deployed use across browsers.
 
 ## Risks and Edge Cases
 

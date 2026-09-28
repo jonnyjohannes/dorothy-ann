@@ -9,9 +9,8 @@ import { EvidenceBox } from "../boxes/EvidenceBox";
 import { PromptBox } from "../boxes/PromptBox";
 import { StickyHeader } from "../boxes/StickyHeader";
 import { TranscriptBox } from "../boxes/TranscriptBox";
-import { MarkdownContent } from "../primitives/MarkdownContent";
-import { sourceAccentSlotForIndex } from "../color-scheme";
 import { researchAnswerPosition } from "../policies/answer-position";
+import { newsSourceIds } from "../policies/news-provenance";
 import { threadMarkdown } from "../policies/thread-markdown";
 import type { BoxIntent } from "../boxes/box-types";
 import { workspaceController } from "../controllers/workspace-controller";
@@ -48,6 +47,13 @@ export function ResearchStatus({ answerDraft, events = [] }: { answerDraft: stri
   return <div className={styles.researchLoader} role="status" aria-live="polite"><span className={styles.loaderBars} aria-hidden="true"><i /><i /><i /></span><span>{researchStage(answerDraft, events)}</span></div>;
 }
 
+export function ProvisionalAnswer({ text, paused }: { text: string; paused: boolean }) {
+  return <section className={styles.provisionalAnswer} aria-label="Provisional answer preview">
+    <p role="status" aria-live="polite">provisional · checking answer and citations{paused ? " · preview paused; final answer pending" : ""}</p>
+    <div aria-live="off" className={styles.provisionalText}>{text}</div>
+  </section>;
+}
+
 function emptyContext(threadId: ThreadId): ThreadContext { return { threadId, turns: [], knownSources: [], availableEvidence: [] }; }
 function sourceRecords(thread: Thread | null, live: SourceRecord[]): SourceRecord[] {
   const values = new Map<string, SourceRecord>();
@@ -78,7 +84,7 @@ export function ThreadRoute() {
   const query = queryValues.length === 1 ? (params.get("q") ?? "") : "";
   const [thread, setThread] = useState<Thread | null>(null);
   const threadRef = useRef<Thread | null>(null);
-  const [view, setView] = useState<TurnControllerView>({ active: false, lastSequence: 0, events: [], answerDraft: "", sources: [] });
+  const [view, setView] = useState<TurnControllerView>({ active: false, lastSequence: 0, events: [], answerDraft: "", previewPaused: false, sources: [] });
   const [activeRequest, setActiveRequest] = useState("");
   const [value, setValue] = useState("");
   const [message, setMessage] = useState("");
@@ -86,9 +92,11 @@ export function ThreadRoute() {
   const [selectedSourceId, setSelectedSourceId] = useState<string | undefined>(undefined);
   const feedbackTimer = useRef<number | undefined>(undefined);
   const controller = useRef<TurnController | undefined>(undefined);
+  const runGeneration = useRef(0);
   const started = useRef(false);
 
   useEffect(() => () => { if (feedbackTimer.current !== undefined) window.clearTimeout(feedbackTimer.current); }, []);
+  useEffect(() => () => { runGeneration.current += 1; started.current = false; controller.current?.cancel("navigation"); }, [threadId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,13 +105,16 @@ export function ThreadRoute() {
   }, [threadId]);
 
   const run = useCallback(async (request: string, kind: "search" | "research", resultKind?: SearchResultKind) => {
+    const generation = runGeneration.current;
     setActiveRequest(request);
     const createdAt = timestamp();
     const turnId = uuid() as TurnId;
     const userMessage: UserMessage = { id: uuid() as UserMessage["id"], role: "user", content: request, createdAt };
     const executionId = uuid() as never;
     const store = await getBrowserThreadStore();
+    if (generation !== runGeneration.current) return;
     const record = await store.load(threadId);
+    if (generation !== runGeneration.current) return;
     const current = record.ok ? record.value?.thread ?? null : threadRef.current;
     const context = kind === "research" ? (current ? buildThreadContext(current, contextLimits) : emptyContext(threadId)) : undefined;
     const answerPosition = researchAnswerPosition(current?.turns ?? []);
@@ -111,6 +122,7 @@ export function ThreadRoute() {
     controller.current = activeController;
     setMessage("");
     const result = await activeController.run({ threadId, turnId, executionId, kind, resultKind, request, userMessage, createdAt, expectedRevision: record.ok ? record.value?.revision ?? null : null, create: current ? undefined : { id: threadId, title: [...request].slice(0, 120).join(""), createdAt }, context, answerPosition: kind === "research" ? answerPosition : undefined, gatewayOptions: { maxResults: 5, researchLimits: {} } });
+    if (generation !== runGeneration.current) return;
     setActiveRequest("");
     if (result.ok) { threadRef.current = result.record.thread; setThread(result.record.thread); if (routeThreadId === "new" || !routeThreadId) navigate(`/threads/${encodeURIComponent(String(threadId))}`, { replace: true }); }
     else setMessage(result.error === "commit_retryable" ? "The result was not saved. Retry save." : result.message ?? "That turn could not be completed.");
@@ -142,11 +154,14 @@ export function ThreadRoute() {
     if (command.type === "submit") { setValue(""); setMessage(""); void run(command.value, command.kind, command.kind === "search" ? command.resultKind : undefined); }
     else if (command.type === "navigate") navigate(command.to, { replace: command.replace, state: command.to === "/threads" ? threadSelectorState(location) : undefined });
     else if (command.type === "invalid") setMessage(command.message);
-    else if (command.type === "retry") void controller.current?.retryCommit();
+    else if (command.type === "retry") void controller.current?.retryCommit().then((result) => {
+      if (!result) return;
+      if (result.ok) { threadRef.current = result.record.thread; setThread(result.record.thread); setMessage(""); }
+      else setMessage(result.message ?? "The result was not saved.");
+    });
   };
   const sources = sourceRecords(thread, view.sources);
-  const sourceById = new Map(sources.map((source) => [String(source.sourceId), source]));
-  const resolveCitation = (sourceId: string) => { const source = sourceById.get(sourceId); const number = sources.findIndex((candidate) => String(candidate.sourceId) === sourceId) + 1; return source ? { label: source.title, href: source.url, sourceId, number } : undefined; };
+  const discoveredViaNews = newsSourceIds(thread);
   const selectCitation = (sourceId: string) => { setSelectedSourceId(sourceId); window.setTimeout(() => document.getElementById(`source-${sourceId}`)?.focus(), 0); };
   return <main className={`${styles.shell} ${styles.threadShell}`}>
     <StickyHeader onIntent={onIntent} actions={thread ? <div className={styles.headerActions} aria-label="Thread actions"><button className={`${styles.iconButton} ${successfulAction === "copy" ? styles.iconButtonSuccess : ""}`} type="button" onClick={() => void copyThread()} aria-label={successfulAction === "copy" ? "Copied thread" : "Copy thread"}>{successfulAction === "copy" ? <CheckGlyph /> : <CopyGlyph />}</button><button className={`${styles.iconButton} ${successfulAction === "export" ? styles.iconButtonSuccess : ""}`} type="button" onClick={exportThread} aria-label={successfulAction === "export" ? "Exported thread" : "Export thread"}>{successfulAction === "export" ? <CheckGlyph /> : <ExportGlyph />}</button></div> : undefined} />
@@ -154,8 +169,8 @@ export function ThreadRoute() {
     {thread && <TranscriptBox thread={thread} sources={sources} onIntent={onIntent} onCitationSelect={selectCitation} />}
     {view.active && activeRequest && <article className={styles.scrollback}><blockquote className={styles.userTurn}>{activeRequest}</blockquote></article>}
     {view.active && <ResearchStatus answerDraft={view.answerDraft} events={view.events} />}
-    {view.active && view.answerDraft && <MarkdownContent markdown={view.answerDraft} threadSeed={String(threadId)} resolveCitation={resolveCitation} citationAccentSlot={(sourceId) => { const index = sources.findIndex((source) => String(source.sourceId) === sourceId); return index >= 0 ? sourceAccentSlotForIndex(index, 8) : undefined; }} onCitationSelect={selectCitation} />}
-    {sources.length > 0 && <EvidenceBox sources={sources} selectedSourceId={selectedSourceId} onIntent={onIntent} />}
+    {view.active && view.answerDraft && <ProvisionalAnswer text={view.answerDraft} paused={view.previewPaused} />}
+    {sources.length > 0 && <EvidenceBox sources={sources} discoveredViaNews={discoveredViaNews} selectedSourceId={selectedSourceId} onIntent={onIntent} />}
     <PromptBox value={value} disabled={view.active} onChange={setValue} onIntent={onIntent} />
   </main>;
 }

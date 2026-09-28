@@ -35,7 +35,16 @@ export class BraveSearchProvider implements SearchProvider {
     private readonly fetcher: BraveFetch = fetch,
     private readonly identities: SourceIdentity,
     private readonly endpoint = "https://api.search.brave.com/res/v1/web/search",
+    private readonly onTiming?: (phase: "http" | "json_normalization", elapsedMs: number, succeeded: boolean) => void,
   ) {}
+
+  withTiming(onTiming: (phase: "http" | "json_normalization", elapsedMs: number, succeeded: boolean) => void): BraveSearchProvider {
+    return new BraveSearchProvider(this.apiKey, this.fetcher, this.identities, this.endpoint, onTiming);
+  }
+
+  private observe(phase: "http" | "json_normalization", started: number, succeeded: boolean): void {
+    try { this.onTiming?.(phase, performance.now() - started, succeeded); } catch { /* Observers cannot change search. */ }
+  }
 
   async search(query: string, options: SearchOptions): Promise<SearchResult[]> {
     const kind = options.resultKind ?? "link";
@@ -43,14 +52,28 @@ export class BraveSearchProvider implements SearchProvider {
       ? this.endpoint.replace(/\/web\/search$/u, "/images/search")
       : kind === "video"
         ? this.endpoint.replace(/\/web\/search$/u, "/videos/search")
-        : this.endpoint;
+        : kind === "news"
+          ? this.endpoint.replace(/\/web\/search$/u, "/news/search")
+          : this.endpoint;
     const url = new URL(endpoint);
     url.searchParams.set("q", query);
     url.searchParams.set("count", String(Math.min(options.maxResults, 10)));
     if (options.locale) url.searchParams.set("search_lang", options.locale);
-    const response = await this.fetcher(url.toString(), { headers: { Accept: "application/json", "X-Subscription-Token": this.apiKey } });
+    const started = performance.now();
+    let response: Response;
+    let httpSucceeded = false;
+    try {
+      response = await this.fetcher(url.toString(), { headers: { Accept: "application/json", "X-Subscription-Token": this.apiKey } });
+      httpSucceeded = true;
+    } finally { this.observe("http", started, httpSucceeded); }
     if (!response.ok) throw new Error(response.status === 429 ? "provider_rate_limited" : "provider_unavailable");
-    return normalizeBravePayload(await response.json() as unknown, options.maxResults, this.identities, kind);
+    const parseStarted = performance.now();
+    let parsed = false;
+    try {
+      const result = await normalizeBravePayload(await response.json() as unknown, options.maxResults, this.identities, kind);
+      parsed = true;
+      return result;
+    } finally { this.observe("json_normalization", parseStarted, parsed); }
   }
 }
 
@@ -130,9 +153,11 @@ async function normalizeVideoEntries(entries: unknown[], maxResults: number, ide
 export async function normalizeBravePayload(payload: unknown, maxResults: number, identities: SourceIdentity, resultKind: SearchResultKind = "link"): Promise<SearchResult[]> {
   if (typeof payload !== "object" || payload === null) throw new Error("invalid_response");
   const root = payload as Record<string, unknown>;
-  if (resultKind === "link") {
+  if (resultKind === "link" || resultKind === "news") {
     const web = root.web;
-    const entries = typeof web === "object" && web !== null && Array.isArray((web as Record<string, unknown>).results) ? (web as Record<string, unknown>).results as unknown[] : null;
+    const entries = resultKind === "news" ? (Array.isArray(root.results) ? root.results as unknown[] : null)
+      : typeof web === "object" && web !== null && Array.isArray((web as Record<string, unknown>).results)
+        ? (web as Record<string, unknown>).results as unknown[] : null;
     if (!entries) throw new Error("invalid_response");
     return normalizeLinkEntries(entries, maxResults, identities);
   }

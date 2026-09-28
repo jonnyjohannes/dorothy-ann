@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import ReactPlayer from "react-player";
-import type { SourceRecord } from "../../domain/types";
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { canPlay as playerPatterns } from "react-player/patterns";
+import type { SourceId, SourceRecord } from "../../domain/types";
 import { sourceAccentSlotForIndex } from "../color-scheme";
 import styles from "../App.module.css";
 import type { BoxIntent } from "./box-types";
@@ -35,6 +35,8 @@ function LinkedMediaThumbnail({ href, label, thumbnailUrl }: LinkedMediaThumbnai
   return <a className={styles.mediaAttachment} href={href} target="_blank" rel="noreferrer" aria-label={label}><img className={styles.mediaThumbnail} src={thumbnailUrl} alt="" loading="lazy" /></a>;
 }
 
+const LazyReactPlayer = lazy(() => import("react-player"));
+
 interface VideoMediaProps extends LinkedMediaThumbnailProps {
   videoUrl: string;
 }
@@ -67,13 +69,15 @@ function useViewportEntry(enabled: boolean) {
 
 function VideoMedia({ href, label, thumbnailUrl, videoUrl }: VideoMediaProps) {
   const [playbackFailed, setPlaybackFailed] = useState(false);
-  const canPlay = ReactPlayer.canPlay?.(videoUrl) === true;
+  const canPlay = videoUrl.length > 0 && Object.values(playerPatterns).some((matches) => matches(videoUrl));
   const { boundaryRef, hasEnteredViewport } = useViewportEntry(canPlay && !playbackFailed);
   const showPlayer = canPlay && hasEnteredViewport && !playbackFailed;
 
+  const fallback = <a className={styles.mediaFallbackLink} href={href} target="_blank" rel="noreferrer" aria-label={label}><img className={styles.mediaThumbnail} src={thumbnailUrl} alt="" loading="lazy" /></a>;
+
   return <div ref={boundaryRef} className={styles.mediaAttachment}>
     {showPlayer
-      ? <ReactPlayer
+      ? <Suspense fallback={fallback}><LazyReactPlayer
           src={videoUrl}
           playing={false}
           controls
@@ -81,12 +85,14 @@ function VideoMedia({ href, label, thumbnailUrl, videoUrl }: VideoMediaProps) {
           width="100%"
           height="100%"
           onError={() => setPlaybackFailed(true)}
-        />
-      : <a className={styles.mediaFallbackLink} href={href} target="_blank" rel="noreferrer" aria-label={label}><img className={styles.mediaThumbnail} src={thumbnailUrl} alt="" loading="lazy" /></a>}
+        /></Suspense>
+      : fallback}
   </div>;
 }
 
-export function EvidenceBox({ sources, selectedSourceId, onIntent }: { sources: SourceRecord[]; selectedSourceId?: string; onIntent: (intent: BoxIntent) => void }) {
+function NewsGlyph() { return <svg role="img" aria-label="News source" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.2"><rect x="2" y="2" width="12" height="12" rx="1" /><path d="M5 5h3v3H5zM10 5h2M10 7h2M5 10h7M5 12h7" /></svg>; }
+
+export function EvidenceBox({ sources, discoveredViaNews, selectedSourceId, onIntent }: { sources: SourceRecord[]; discoveredViaNews?: ReadonlySet<SourceId>; selectedSourceId?: string; onIntent: (intent: BoxIntent) => void }) {
   return <aside className={styles.evidence} aria-label="Evidence"><h2 className={styles.srOnly}>Evidence</h2><ul className={styles.evidenceList}>{sources.map((source, index) => {
     const kind = "kind" in source ? source.kind : "link";
     const media = kind === "image" || kind === "video";
@@ -97,7 +103,10 @@ export function EvidenceBox({ sources, selectedSourceId, onIntent }: { sources: 
     const label = kind === "image" ? "Image result" : kind === "video" ? "Video result" : "Link result";
     return <li id={`source-${source.sourceId}`} key={source.sourceId} className={selectedSourceId === source.sourceId ? styles.evidenceItemActive : styles.evidenceItem} style={{ "--relational-accent": `var(--accent-${sourceAccentSlotForIndex(index, 8) + 1})` } as CSSProperties} aria-current={selectedSourceId === source.sourceId ? "true" : undefined} tabIndex={-1} onFocus={() => onIntent({ type: "source_open_requested", sourceId: String(source.sourceId) })}>
       <a className={styles.sourceAccent} style={{ "--relational-accent": `var(--accent-${sourceAccentSlotForIndex(index, 8) + 1})` } as CSSProperties} href={primary} target="_blank" rel="noreferrer" aria-label={`${label}: ${source.title}`} onFocus={() => onIntent({ type: "source_open_requested", sourceId: String(source.sourceId) })}><span aria-hidden="true">{index + 1}. </span><span>{source.title}</span></a>
-      <small>{source.displayUrl}</small>
+      <small className={kind === "link" && discoveredViaNews?.has(source.sourceId) ? styles.newsMetadata : undefined}>
+        {kind === "link" && discoveredViaNews?.has(source.sourceId) && <><NewsGlyph /><span aria-hidden="true">·</span></>}
+        <span>{source.displayUrl}</span>
+      </small>
       {mediaAttachment
         ? kind === "video" && "videoUrl" in source
           ? <VideoMedia href={primary} label={`${label} preview: ${source.title}`} thumbnailUrl={thumbnailUrl} videoUrl={source.videoUrl} />

@@ -1,0 +1,9 @@
+# Local secrets and generated state must never enter Vercel deployment uploads.
+.env
+.env.*
+.tmp/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo

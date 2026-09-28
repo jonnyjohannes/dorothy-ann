@@ -23,11 +23,19 @@ const resolution: SufficientResearchResolution = {
   knowledge: {
     problemId: id("problem"),
     findings: [],
-    evidence: [{ problemId: id("problem"), requestOrder: 0, query: "What happened?", sources: [{ sourceId: source.sourceId, page: { text: "Evidence.", extractedAt: id("2026-01-01T00:00:00.000Z"), characterCount: 8 } }], createdAt: id("2026-01-01T00:00:00.000Z") }],
+    evidence: [{ problemId: id("problem"), requestOrder: 0, query: "What happened?", sources: [
+      { sourceId: source.sourceId, page: { text: "Evidence.", extractedAt: id("2026-01-01T00:00:00.000Z"), characterCount: 9 } },
+      { sourceId: extraSource.sourceId, page: { text: "A different perspective.", extractedAt: id("2026-01-01T00:00:00.000Z"), characterCount: 24 } },
+    ], createdAt: id("2026-01-01T00:00:00.000Z") }],
     unresolvedGapIds: [],
   },
-  ledger: { gaps: [], assessmentsUsed: 1, searchesUsed: 1, sourcesConsumed: 1 },
+  ledger: { gaps: [], assessmentsUsed: 1, searchesUsed: 1, sourcesConsumed: 2 },
   tasks: [],
+};
+const oneSourceResolution: SufficientResearchResolution = {
+  ...resolution,
+  knowledge: { ...resolution.knowledge, evidence: [{ ...resolution.knowledge.evidence[0], sources: [resolution.knowledge.evidence[0].sources[0]] }] },
+  ledger: { ...resolution.ledger, sourcesConsumed: 1 },
 };
 
 const executionRefs = { assessmentModelRef: "high", synthesisModelRef: "balanced", searchRef: "brave" };
@@ -42,6 +50,63 @@ function provider(parts: AssistantContent["parts"]): LLMProvider {
 function fixedClock() { return "2026-01-01T00:00:01.000Z" as IsoTimestamp; }
 
 describe("v3 answer and turn executors", () => {
+  it("observes parsed text before provider completion but returns only a validated terminal", async () => {
+    let release!: () => void;
+    const waiting = new Promise<void>((resolve) => { release = resolve; });
+    let observed!: () => void;
+    const first = new Promise<void>((resolve) => { observed = resolve; });
+    const draft: string[] = [];
+    const llm: LLMProvider = { assessResearch: async () => { throw new Error("unused"); }, async *synthesizeResearch() {
+      yield { type: "text", markdown: "First " }; await waiting;
+      yield { type: "citation", sourceId: source.sourceId };
+      yield { type: "text", markdown: "last." };
+    } };
+    const result = new AnswerSynthesizer(llm, "system").synthesize({ question: "What happened?", answerPosition: "initial", context, resolution, onProvisionalText: (text) => { draft.push(text); observed(); } });
+    await first;
+    expect(draft).toEqual(["First "]);
+    release();
+    expect((await result).parts).toEqual([{ type: "text", markdown: "First " }, { type: "citation", sourceId: source.sourceId }, { type: "text", markdown: "last." }]);
+    expect(draft).toEqual(["First ", "last."]);
+  });
+
+  it("awaits a slow preview observer before advancing provider iteration", async () => {
+    let release!: () => void;
+    const wait = new Promise<void>((resolve) => { release = resolve; });
+    let first!: () => void;
+    const observed = new Promise<void>((resolve) => { first = resolve; });
+    let advanced = false;
+    const llm: LLMProvider = { assessResearch: async () => { throw new Error("unused"); }, async *synthesizeResearch() {
+      yield { type: "text", markdown: "First" };
+      advanced = true;
+      yield { type: "text", markdown: " last" };
+    } };
+    const result = new AnswerSynthesizer(llm, "system").synthesize({ question: "What happened?", answerPosition: "initial", context, resolution, onProvisionalText: async () => { first(); await wait; } });
+    await observed;
+    expect(advanced).toBe(false);
+    release();
+    expect((await result).parts).toEqual([{ type: "text", markdown: "First last" }]);
+    expect(advanced).toBe(true);
+  });
+
+  it("holds a split heading until it can demote it; partial failure and abort never return an answer", async () => {
+    const drafts: string[] = [];
+    const heading = provider([{ type: "text", markdown: "#" }, { type: "text", markdown: " Opening" }, { type: "text", markdown: "\nBody" }, { type: "citation", sourceId: id("src_unreachable") }]);
+    const answer = await new AnswerSynthesizer(heading, "system").synthesize({ question: "What happened?", answerPosition: "initial", context, resolution, onProvisionalText: (text) => { drafts.push(text); } });
+    expect(drafts).toEqual(["Opening\nBody"]);
+    expect(answer.parts).toEqual([{ type: "text", markdown: "Opening\nBody" }]);
+    for (const end of ["invalid", "refused", "aborted"] as const) {
+      const abort = new AbortController();
+      const seen: string[] = [];
+      const llm: LLMProvider = { assessResearch: async () => { throw new Error("unused"); }, async *synthesizeResearch() {
+        yield { type: "text", markdown: "Partial" };
+        if (end === "refused") throw Object.assign(new Error("refused"), { code: "refused" });
+        if (end === "aborted") abort.abort();
+        else yield { type: "text", markdown: "x".repeat(64_001) };
+      } };
+      await expect(new AnswerSynthesizer(llm, "system").synthesize({ question: "What happened?", answerPosition: "initial", context, resolution, signal: abort.signal, onProvisionalText: (text) => { seen.push(text); } })).rejects.toMatchObject({ code: end === "refused" ? "refused" : end === "aborted" ? "unavailable" : "invalid_output" });
+      expect(seen[0]).toBe("Partial");
+    }
+  });
   it("demotes only a violating opening heading and drops unreachable citations", async () => {
     const answer = await new AnswerSynthesizer(provider([
       { type: "text", markdown: "# Opening\n\nInternal ## heading" },
@@ -94,11 +159,79 @@ describe("v3 answer and turn executors", () => {
     expect(result.sources).toEqual([{ ...source, kind: "link" }]);
   });
 
+  it("keeps a raw news turn distinct while preserving link-shaped article sources", async () => {
+    const result = await executeSearchTurn({ turnId: id("turn-news"), userMessage, createdAt: userMessage.createdAt, resultKind: "news", searchRef: "brave", provider: { search: async (_query, options) => { expect(options.resultKind).toBe("news"); return [{ ...source, kind: "link", rank: 1 }]; } }, finishedAt: fixedClock });
+    expect(result.turn).toMatchObject({ kind: "search", status: "completed", result: { resultKind: "news" } });
+    expect(result.sources).toEqual([{ ...source, kind: "link" }]);
+  });
+
   it("preserves image result kind and media metadata without extraction", async () => {
     const media = { kind: "image" as const, sourceId: source.sourceId, rank: 1, title: "Cat", url: "https://cdn.example/cat.jpg", canonicalUrl: "https://cdn.example/cat.jpg", imageUrl: "https://cdn.example/cat.jpg", sourcePageUrl: "https://example.com/cats", thumbnailUrl: "https://cdn.example/thumb.jpg", displayUrl: "example.com", width: 640, height: 480 };
     const result = await executeSearchTurn({ turnId: id("turn-image"), userMessage, createdAt: userMessage.createdAt, resultKind: "image", searchRef: "brave", provider: { search: async (_query, options) => { expect(options.resultKind).toBe("image"); return [media]; } }, finishedAt: fixedClock });
     expect(result.turn).toMatchObject({ kind: "search", status: "completed", result: { resultKind: "image" } });
     expect(result.sources[0]).toMatchObject({ kind: "image", imageUrl: media.imageUrl, sourcePageUrl: media.sourcePageUrl });
+  });
+
+  it("never sends one-source or repeated-snapshot resolutions to a synthesis provider", async () => {
+    let calls = 0;
+    const llm: LLMProvider = {
+      assessResearch: async () => { throw new Error("not used"); },
+      synthesizeResearch: async function* () { calls += 1; yield { type: "text", markdown: "Should not answer." }; },
+    };
+    const snapshots: SufficientResearchResolution = {
+      ...oneSourceResolution,
+      knowledge: { ...oneSourceResolution.knowledge, evidence: [
+        oneSourceResolution.knowledge.evidence[0],
+        { ...oneSourceResolution.knowledge.evidence[0], requestOrder: 1, sources: [{ ...oneSourceResolution.knowledge.evidence[0].sources[0], page: { text: "New snapshot.", extractedAt: id("2026-01-01T00:00:01.000Z"), characterCount: 13 } }] },
+      ] },
+    };
+    for (const candidate of [oneSourceResolution, snapshots]) {
+      await expect(new AnswerSynthesizer(llm, "SYNTHESIZER EXACT").synthesize({ question: "What happened?", answerPosition: "initial", context, resolution: candidate })).rejects.toMatchObject({ message: "insufficient_sources" });
+    }
+    expect(calls).toBe(0);
+  });
+
+  it("turns a one-source sufficient resolution into a retryable insufficient terminal with retained evidence", async () => {
+    let calls = 0;
+    const result = await executeResearchTurn({
+      turnId: id("turn-one-source"), userMessage, createdAt: userMessage.createdAt, context, answerPosition: "initial",
+      resolver: { resolve: async () => oneSourceResolution },
+      synthesizer: { synthesize: async () => { calls += 1; throw new Error("must not synthesize"); } },
+      ...executionRefs, finishedAt: fixedClock,
+    });
+    expect(calls).toBe(0);
+    expect(result.turn).toMatchObject({ status: "failed", failure: { kind: "insufficient_evidence", retryable: true }, researchState: { kind: "resolution", resolution: { status: "insufficient", stopReason: "no_new_knowledge" } } });
+    expect(result.sources).toEqual([source]);
+  });
+
+  it("preserves a bounded best-effort stop reason without synthesizing one source", async () => {
+    const candidate = { ...oneSourceResolution, status: "best_effort" as const, stopReason: "provider_unavailable" as const };
+    const result = await executeResearchTurn({
+      turnId: id("turn-best-effort-one-source"), userMessage, createdAt: userMessage.createdAt, context, answerPosition: "follow_up",
+      resolver: { resolve: async () => candidate },
+      synthesizer: { synthesize: async () => { throw new Error("must not synthesize"); } },
+      ...executionRefs, finishedAt: fixedClock,
+    });
+    expect(result.turn).toMatchObject({ status: "failed", failure: { kind: "insufficient_evidence", retryable: true }, researchState: { kind: "resolution", resolution: { status: "insufficient", stopReason: "provider_unavailable" } } });
+    expect(result.sources).toEqual([source]);
+  });
+
+  it("counts extracted follow-up context plus fresh evidence, but not known-source metadata alone", async () => {
+    const candidate = {
+      ...oneSourceResolution,
+      knowledge: { ...oneSourceResolution.knowledge, evidence: [
+        ...oneSourceResolution.knowledge.evidence,
+        { ...resolution.knowledge.evidence[0], requestOrder: 1, sources: [resolution.knowledge.evidence[0].sources[1]] },
+      ] },
+    };
+    const result = await executeResearchTurn({
+      turnId: id("turn-follow-up-two-source"), userMessage, createdAt: userMessage.createdAt, context, answerPosition: "follow_up",
+      resolver: { resolve: async () => candidate },
+      synthesizer: { synthesize: async () => ({ parts: [{ type: "text", markdown: "Supported answer." }] }) },
+      ...executionRefs, finishedAt: fixedClock,
+    });
+    expect(result.turn).toMatchObject({ status: "completed", result: { completion: "sufficient" } });
+    expect(result.sources).toEqual([extraSource, source]);
   });
 
   it("synthesizes one root answer and preserves recorded provenance", async () => {
@@ -109,7 +242,7 @@ describe("v3 answer and turn executors", () => {
       turnId: id("turn-research"), userMessage, createdAt: userMessage.createdAt, context, answerPosition: "initial", resolver, synthesizer, ...executionRefs, finishedAt: fixedClock,
     });
     expect(synthesisCalls).toBe(1);
-    expect(result.sources).toEqual([source]);
+    expect(result.sources).toEqual([extraSource, source]);
     expect(result.turn.status).toBe("completed");
     if (result.turn.status === "completed") {
       expect(result.turn.result.completion).toBe("sufficient");
@@ -118,6 +251,7 @@ describe("v3 answer and turn executors", () => {
   });
 
   it("includes source metadata referenced only by ledger-gap support", async () => {
+    const ledgerOnly: CanonicalSource = { ...source, sourceId: id("src_ledger_only") };
     const gapSupported: SufficientResearchResolution = {
       ...resolution,
       ledger: {
@@ -126,7 +260,7 @@ describe("v3 answer and turn executors", () => {
           id: id("gap_supported"),
           problem: { id: resolution.knowledge.problemId, question: "What happened?", purpose: "answer", successCriterion: "supported", context: { ...context, knownSources: [] }, depth: 0 },
           status: "resolved",
-          support: [{ type: "source", sourceId: extraSource.sourceId }],
+          support: [{ type: "source", sourceId: ledgerOnly.sourceId }],
           fingerprint: "supported-gap",
           createdOrder: 0,
         }],
@@ -136,7 +270,7 @@ describe("v3 answer and turn executors", () => {
       turnId: id("turn-gap-support"),
       userMessage,
       createdAt: userMessage.createdAt,
-      context,
+      context: { ...context, knownSources: [...context.knownSources, ledgerOnly] },
       answerPosition: "initial",
       resolver: { resolve: async () => gapSupported },
       synthesizer: { synthesize: async () => ({ parts: [{ type: "text", markdown: "Answer." }] }) },
@@ -144,7 +278,7 @@ describe("v3 answer and turn executors", () => {
       finishedAt: fixedClock,
     });
     expect(result.turn.status).toBe("completed");
-    expect(result.sources).toEqual([extraSource, source]);
+    expect(result.sources).toEqual([extraSource, ledgerOnly, source]);
   });
 
   it("closes checkpoint evidence with checkpoint-admitted source metadata", async () => {
@@ -153,7 +287,7 @@ describe("v3 answer and turn executors", () => {
       knowledge: resolution.knowledge,
       ledger: resolution.ledger,
       tasks: resolution.tasks,
-      sources: [source],
+      sources: [source, extraSource],
     };
     const result = await executeResearchTurn({
       turnId: id("turn-checkpoint"),
@@ -167,7 +301,7 @@ describe("v3 answer and turn executors", () => {
       finishedAt: fixedClock,
     });
     expect(result.turn.status).toBe("failed");
-    expect(result.sources).toEqual([source]);
+    expect(result.sources).toEqual([extraSource, source]);
   });
 
   it("persists bounded synthesis failure without provider details", async () => {

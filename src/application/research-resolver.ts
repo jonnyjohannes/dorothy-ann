@@ -1,4 +1,5 @@
 import { joinKnowledge } from "../domain/knowledge.js";
+import { enforceResearchSynthesisFloor } from "./research-synthesis-policy.js";
 import type {
   CanonicalSource,
   GapLedger,
@@ -17,7 +18,7 @@ import type {
   ResearchAssessor,
   ResearchAssessment,
 } from "./research-assessor.js";
-import type { EvidenceAcquirer, EvidenceAcquisitionResult, EvidenceRequest, ResearchLimits } from "./evidence-acquirer.js";
+import type { EvidenceAcquirer, EvidenceAcquisitionResult, EvidenceRequest, EvidenceYieldRequest, ResearchLimits } from "./evidence-acquirer.js";
 import type { IdentityPolicy } from "./identity-policy.js";
 import { sourceIdSchema, turnIdSchema } from "../domain/schemas.js";
 
@@ -42,6 +43,11 @@ export interface ResearchResolverDependencies {
   assess(request: ResearchAssessmentRequest): Promise<ResearchAssessmentProposal>;
   acquirer: EvidenceAcquirer;
   acquisitionLimits?: ResearchLimits;
+  onEvidenceYield?: (requests: EvidenceYieldRequest[]) => void;
+  /** Optional wall span across concurrent acquisition work; no source data. */
+  onAcquisitionWall?: (elapsedMs: number, succeeded: boolean) => void;
+  /** Turn-local, count-only observer; failures must not affect resolution. */
+  onAssessmentDecision?: (result: { depth: number; directive: "resolved" | "search" | "decompose" | "invalid"; validationMs: number; searchesRemaining: number; assessmentsRemaining: number }) => void;
 }
 
 export interface ResearchResolverInput {
@@ -65,6 +71,14 @@ const cloneLedger = (ledger: GapLedger): GapLedger => ({
   sourcesConsumed: ledger.sourcesConsumed,
 });
 
+const MAX_KNOWLEDGE_EVIDENCE_PACKS = 3;
+const evidenceOrder = (left: ResearchResolution["knowledge"]["evidence"][number], right: ResearchResolution["knowledge"]["evidence"][number]): number => right.requestOrder - left.requestOrder || right.createdAt.localeCompare(left.createdAt) || left.query.localeCompare(right.query);
+function joinBoundedKnowledge(problemId: ResearchProblem["id"], units: readonly KnowledgeUnit[]): KnowledgeUnit {
+  const joined = joinKnowledge(problemId, units);
+  if (joined.evidence.length <= MAX_KNOWLEDGE_EVIDENCE_PACKS) return joined;
+  const evidence = [...joined.evidence].sort(evidenceOrder).slice(0, MAX_KNOWLEDGE_EVIDENCE_PACKS).sort((left, right) => left.requestOrder - right.requestOrder || left.createdAt.localeCompare(right.createdAt) || left.query.localeCompare(right.query));
+  return { ...joined, evidence };
+}
 const useful = (knowledge: KnowledgeUnit): boolean => knowledge.findings.length > 0 || knowledge.evidence.some((pack) => pack.sources.length > 0);
 const key = (knowledge: KnowledgeUnit): string => JSON.stringify(knowledge);
 const normalized = (value: string): string => value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLowerCase();
@@ -116,7 +130,10 @@ export class ResearchResolver {
     const state = {
       ledger: cloneLedger(input.ledger),
       budget: { ...input.budget },
-      knowledge: joinKnowledge(input.problem.id, [input.knowledge, {
+      // Keep the context evidence available to resolution, but bound the joined
+      // accumulator because a follow-up can add fresh packs before state crosses
+      // the stream boundary.
+      knowledge: joinBoundedKnowledge(input.problem.id, [input.knowledge, {
         problemId: input.problem.id,
         findings: [],
         evidence: input.problem.context.availableEvidence,
@@ -198,11 +215,10 @@ export class ResearchResolver {
         return { kind: "resolution", knowledge: startingKnowledge, stopReason: "assessment_budget_exhausted" };
       }
       const before = startingKnowledge;
-      // Brave already ranks the exact user question well enough for the first
-      // retrieval. Do not spend an assessment call inventing that query when
-      // the root has no admissible extracted evidence yet.
+      // Always begin at the root with the exact question on the web, even
+      // when prior context supplies evidence. News is assessor-selected later.
       let directive: ResearchAssessment["directive"];
-      if (problem.depth === 0 && state.tasks.length === 0 && !useful(before) && problem.context.availableEvidence.length === 0) {
+      if (problem.depth === 0 && state.tasks.length === 0) {
         directive = {
           kind: "search",
           query: problem.question,
@@ -222,8 +238,8 @@ export class ResearchResolver {
         }
       }
       if (directive.kind === "resolved") {
-        const merged = joinKnowledge(problem.id, [before, directive.knowledge]);
-        state.knowledge = joinKnowledge(problem.id, [state.knowledge, merged]);
+        const merged = joinBoundedKnowledge(problem.id, [before, directive.knowledge]);
+        state.knowledge = joinBoundedKnowledge(problem.id, [state.knowledge, merged]);
         if (key(before) === key(merged)) {
           gap.status = "blocked";
           return { kind: "resolution", knowledge: merged, stopReason: "no_new_knowledge" };
@@ -248,16 +264,17 @@ export class ResearchResolver {
         }
         const acquisition = await this.acquire(problem, directive, state);
         for (const source of acquisition.admittedSources) {
-          const canonical = { ...source } as CanonicalSource & { rank?: number };
+          const canonical = { ...source } as CanonicalSource & { rank?: number; kind?: string };
           delete canonical.rank;
+          delete canonical.kind;
           if (!state.admittedSources.some((existing) => existing.sourceId === source.sourceId)) state.admittedSources.push(canonical);
         }
-        const afterSearch = joinKnowledge(problem.id, [before, { problemId: problem.id, findings: [], evidence: acquisition.evidence, unresolvedGapIds: [] }]);
-        state.knowledge = joinKnowledge(problem.id, [state.knowledge, afterSearch]);
-        const acquiredEvidenceIds = new Set(acquisition.evidence.flatMap((pack) => pack.sources.map((source) => source.sourceId)));
+        const afterSearch = joinBoundedKnowledge(problem.id, [before, { problemId: problem.id, findings: [], evidence: acquisition.evidence, unresolvedGapIds: [] }]);
+        state.knowledge = joinBoundedKnowledge(problem.id, [state.knowledge, afterSearch]);
+        const acquiredEvidenceIds = new Set([...before.evidence, ...problem.context.availableEvidence, ...acquisition.evidence].flatMap((pack) => pack.sources.map((source) => source.sourceId)));
         const taskEvidence = acquisition.results.flatMap((result) => result.candidates.flatMap((source) =>
           acquiredEvidenceIds.has(source.sourceId) ? [{ sourceId: source.sourceId, rank: source.rank }] : [],
-        ));
+        )).slice(0, 3); // Keep reused hits within the existing durable per-task bound.
         const task: ResearchTaskRecord = {
           problemId: problem.id,
           query: directive.query,
@@ -312,8 +329,8 @@ export class ResearchResolver {
         };
         const childResult = await this.resolveProblem(turnId, child, combined, state, directive.operator);
         if (childResult.kind === "checkpoint") return childResult;
-        combined = joinKnowledge(problem.id, [combined, childResult.knowledge]);
-        state.knowledge = joinKnowledge(problem.id, [state.knowledge, combined]);
+        combined = joinBoundedKnowledge(problem.id, [combined, childResult.knowledge]);
+        state.knowledge = joinBoundedKnowledge(problem.id, [state.knowledge, combined]);
         const childResolved = childResult.stopReason === "sufficient";
         completedChild ||= childResolved;
         // `any` means one child satisfied its own obligation. The parent is
@@ -351,23 +368,34 @@ export class ResearchResolver {
     try {
       proposal = await this.dependencies.assess(request);
     } catch (error) {
-      if (isUnavailable(error)) throw new Error("provider_unavailable");
+      if (isUnavailable(error)) throw new Error("provider_unavailable", { cause: error });
       throw error;
     }
-    const assessment = await this.dependencies.assessor.assess({
-      ...request,
-      proposal,
-      turnId,
-      evidence: knowledge.evidence,
-    });
-    state.budget.assessmentsRemaining -= 1;
-    state.ledger.assessmentsUsed += 1;
+    const validationStarted = performance.now();
+    let directive: "resolved" | "search" | "decompose" | "invalid" = "invalid";
+    let validationMs: number;
+    let assessment: ResearchAssessment;
+    try {
+      assessment = await this.dependencies.assessor.assess({
+        ...request,
+        proposal,
+        turnId,
+        evidence: knowledge.evidence,
+      });
+      directive = assessment.directive.kind;
+      state.budget.assessmentsRemaining -= 1;
+      state.ledger.assessmentsUsed += 1;
+    } finally {
+      validationMs = Math.max(0, Math.min(300_000, Math.round(performance.now() - validationStarted)));
+      try { this.dependencies.onAssessmentDecision?.({ depth: problem.depth, directive, validationMs, searchesRemaining: state.budget.searchesRemaining, assessmentsRemaining: state.budget.assessmentsRemaining }); }
+      catch { /* Diagnostics cannot change resolution. */ }
+    }
     if (assessment.directive.kind !== "resolved") await emitPhase(state.onPhase, "recursing");
     await emitPhase(state.onPhase, "resolving");
     return assessment;
   }
 
-  private async acquire(problem: ResearchProblem, directive: Extract<ResearchAssessment["directive"], { kind: "search" }>, state: { budget: ResearchBudget; ledger: GapLedger; signal?: AbortSignal; onPhase?: ResearchProgressObserver }): Promise<EvidenceAcquisitionResult> {
+  private async acquire(problem: ResearchProblem, directive: Extract<ResearchAssessment["directive"], { kind: "search" }>, state: { budget: ResearchBudget; ledger: GapLedger; knowledge: KnowledgeUnit; admittedSources: CanonicalSource[]; signal?: AbortSignal; onPhase?: ResearchProgressObserver }): Promise<EvidenceAcquisitionResult> {
     const request: EvidenceRequest = {
       problemId: problem.id,
       query: directive.query,
@@ -377,14 +405,23 @@ export class ResearchResolver {
       problemDepth: problem.depth,
       createdOrder: state.ledger.gaps.length,
     };
-    const result = await this.dependencies.acquirer.acquire({
-      requests: [request],
-      knownSources: problem.context.knownSources,
-      availableEvidenceSourceIds: problem.context.availableEvidence.flatMap((pack) => pack.sources.map((source) => source.sourceId)),
-      budget: state.budget,
-      limits: this.dependencies.acquisitionLimits ?? {},
-      onStage: (stage) => emitPhase(state.onPhase, stage),
-    });
+    const started = performance.now();
+    let succeeded = false;
+    let result: EvidenceAcquisitionResult;
+    try {
+      result = await this.dependencies.acquirer.acquire({
+        requests: [request],
+        knownSources: [...problem.context.knownSources, ...state.admittedSources],
+        availableEvidenceSourceIds: state.knowledge.evidence.flatMap((pack) => pack.sources.filter((source) => source.page.text.trim()).map((source) => source.sourceId)),
+        budget: state.budget,
+        limits: this.dependencies.acquisitionLimits ?? {},
+        onStage: (stage) => emitPhase(state.onPhase, stage),
+        onYield: this.dependencies.onEvidenceYield,
+      });
+      succeeded = true;
+    } finally {
+      try { this.dependencies.onAcquisitionWall?.(performance.now() - started, succeeded); } catch { /* Diagnostics never affect acquisition. */ }
+    }
     await emitPhase(state.onPhase, "resolving");
     const searches = state.budget.searchesRemaining - result.budget.searchesRemaining;
     const sources = state.budget.sourcesRemaining - result.budget.sourcesRemaining;
@@ -398,10 +435,10 @@ export class ResearchResolver {
     const rootOpen = state.ledger.gaps.some((gap) => gap.status === "open");
     const sources = state.admittedSources.length ? state.admittedSources : undefined;
     const usefulKnowledge = useful(knowledge);
-    if (!rootOpen && stopReason === "sufficient") return { status: "sufficient", stopReason: "sufficient", knowledge, ledger: state.ledger, tasks: state.tasks, sources };
-    return usefulKnowledge
+    if (!rootOpen && stopReason === "sufficient") return enforceResearchSynthesisFloor({ status: "sufficient", stopReason: "sufficient", knowledge, ledger: state.ledger, tasks: state.tasks, sources });
+    return enforceResearchSynthesisFloor(usefulKnowledge
       ? { status: "best_effort", stopReason: stopReason === "sufficient" ? "no_new_knowledge" : stopReason, knowledge, ledger: state.ledger, tasks: state.tasks, sources }
-      : { status: "insufficient", stopReason: stopReason === "sufficient" ? "no_new_knowledge" : stopReason, knowledge, ledger: state.ledger, tasks: state.tasks, sources };
+      : { status: "insufficient", stopReason: stopReason === "sufficient" ? "no_new_knowledge" : stopReason, knowledge, ledger: state.ledger, tasks: state.tasks, sources });
   }
 }
 

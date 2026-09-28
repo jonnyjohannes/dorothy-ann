@@ -460,11 +460,20 @@
   min-width: 0;
   padding: 1.5rem 1.75rem 1.75rem;
 }
-.evidenceItem small {
+.evidenceItem small,
+.evidenceItemActive small {
   display: block;
   color: var(--muted);
   margin-top: 0.3rem;
 }
+.evidenceItem small.newsMetadata,
+.evidenceItemActive small.newsMetadata {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.newsMetadata svg { flex: none; }
+.newsMetadata > span:last-child { min-width: 0; overflow-wrap: anywhere; }
 .evidenceItem p {
   color: var(--muted);
   line-height: 1.45;
@@ -666,6 +675,9 @@
 .researchPlanLive code { color: inherit; font: inherit; }
 .researchPlanLive small { display: block; color: var(--muted); }
 .researchLoader { display: flex; align-items: center; gap: 0.75rem; margin: 3rem 0 1rem; color: var(--muted); }
+.provisionalAnswer { max-width: 90rem; margin: 0 0 2rem; border-left: 3px solid var(--accent); padding-left: 0.75rem; }
+.provisionalAnswer p { color: var(--muted); font-size: 0.85rem; }
+.provisionalText { white-space: pre-wrap; overflow-wrap: anywhere; }
 .loaderBars { display: inline-flex; align-items: end; gap: 0.18rem; height: 1.5rem; border-left: 3px solid var(--accent); padding-left: 0.6rem; }
 .loaderBars i { display: block; width: 0.22rem; height: 0.6rem; background: var(--accent); animation: loaderPulse 0.9s ease-in-out infinite alternate; }
 .loaderBars i:nth-child(2) { animation-delay: 0.18s; }
@@ -694,7 +706,18 @@
   padding: 0.75rem 0.8rem;
   font: inherit;
 }
-.threadPicker ul { max-height: 55vh; overflow: auto; margin: 1rem 0; padding: 0; list-style: none; }
+.threadPicker ul {
+  max-height: 55vh;
+  overflow: auto;
+  margin: 1rem 0;
+  padding: 0;
+  list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+}
+.threadPicker ul::-webkit-scrollbar { width: 0.5rem; }
+.threadPicker ul::-webkit-scrollbar-track { background: transparent; }
+.threadPicker ul::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 0; }
 .threadRow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

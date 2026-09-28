@@ -29,6 +29,11 @@ describe("v3 domain schemas", () => {
     expect(threadV3Schema.safeParse(baseThread).success).toBe(true);
   });
 
+  it("keeps news search destinations link-shaped in a durable thread", () => {
+    const news = { ...baseThread, sources: [{ ...source, kind: "link" }], turns: [{ ...searchTurn, result: { ...searchTurn.result, resultKind: "news" } }] };
+    expect(threadV3Schema.safeParse(news).success).toBe(true);
+  });
+
   it("accepts bounded media source records with canonical media identity", () => {
     const image = { kind: "image", sourceId: hash("src", "i"), ordinal: 1, title: "Cat", url: "https://cdn.example/cat.jpg", canonicalUrl: "https://cdn.example/cat.jpg", displayUrl: "cdn.example", imageUrl: "https://cdn.example/cat.jpg", sourcePageUrl: "https://example.com/cats", thumbnailUrl: "https://cdn.example/thumb.jpg", width: 640, height: 480 };
     const mediaThread = { ...baseThread, sources: [image], turns: [{ ...searchTurn, result: { completion: "results", resultKind: "image", destinations: [{ sourceId: image.sourceId, rank: 1 }] } }] };
@@ -40,6 +45,14 @@ describe("v3 domain schemas", () => {
     const resolution = { ...sufficientResolution, tasks: [{ problemId, query: "follow-up", purpose: "support", priority: 1, status: "completed", evidence: [{ sourceId, rank: 6 }] }] };
     const research = { ...researchBase, status: "completed", result: { completion: "sufficient", answer: { parts: [{ type: "text", markdown: "answer" }] }, resolution } };
     expect(turnV3Schema.safeParse(research).success).toBe(true);
+  });
+
+  it("accepts twelve charged extraction attempts but rejects a thirteenth", () => {
+    const resolution = { ...sufficientResolution, ledger: { ...emptyLedger, sourcesConsumed: 12 } };
+    const result = { completion: "sufficient", answer: { parts: [{ type: "text", markdown: "answer" }] }, resolution, usage: { extractedPages: 12 } };
+    expect(turnV3Schema.safeParse({ ...researchBase, status: "completed", result }).success).toBe(true);
+    expect(turnV3Schema.safeParse({ ...researchBase, status: "completed", result: { ...result, usage: { extractedPages: 13 } } }).success).toBe(false);
+    expect(turnV3Schema.safeParse({ ...researchBase, status: "completed", result: { ...result, resolution: { ...resolution, ledger: { ...resolution.ledger, sourcesConsumed: 13 } } } }).success).toBe(false);
   });
 
   it("represents pending work outside the durable Turn union", () => {

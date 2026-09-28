@@ -69,6 +69,11 @@ export type TurnExecutionEvent =
   | (TurnExecutionEventBase & { type: "answer_delta"; delta: string })
   | (TurnExecutionEventBase & { type: "terminal"; terminal: TurnExecutionTerminal });
 
+export type TurnStreamDiagnostic =
+  | { event: "turn_sse_summary"; stage: "transport"; frames: number; frame_bytes: number; largest_frame_bytes: number }
+  | { event: "turn_invalid_signal"; stage: "transport"; signal_type: TurnExecutionSignal["type"] }
+  | { event: "turn_stream_end"; stage: "transport"; request_aborted: boolean; executor_aborted: boolean; protocol_invalid: boolean; terminal_sent: boolean };
+
 export interface TurnStreamBoundaryOptions {
   executor: TurnExecutor;
   maxRequestBytes: number;
@@ -77,6 +82,7 @@ export interface TurnStreamBoundaryOptions {
   authenticate?: (context: Context) => boolean | Promise<boolean>;
   sameOrigin?: (context: Context) => boolean;
   heartbeatMs?: number;
+  onDiagnostic?: (record: TurnStreamDiagnostic) => void;
 }
 
 const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu);
@@ -86,7 +92,7 @@ const sourceId = z.string().regex(/^src_[A-Za-z0-9_-]{43}$/);
 const sourceSchema = sourceRecordV3Schema;
 const occurrenceSchema = z.strictObject({ sourceId, role: z.enum(["search_destination", "research_evidence"]), rank: z.number().int().positive().max(10).optional() });
 const requestSchema = z.discriminatedUnion("kind", [
-  z.strictObject({ executionId: uuid, turnId: uuid, kind: z.literal("search"), resultKind: z.enum(["link", "image", "video"]).optional(), query: boundedText(1, 2_000) }),
+  z.strictObject({ executionId: uuid, turnId: uuid, kind: z.literal("search"), resultKind: z.enum(["link", "news", "image", "video"]).optional(), query: boundedText(1, 2_000) }),
   z.strictObject({ executionId: uuid, turnId: uuid, kind: z.literal("research"), question: boundedText(1, 2_000), context: threadContextV3Schema, answerPosition: z.enum(["initial", "follow_up"]) }),
 ]);
 
@@ -177,22 +183,54 @@ export function createTurnStreamBoundary(options: TurnStreamBoundaryOptions): Ho
     context.req.raw.signal.addEventListener("abort", abortRequest, { once: true });
     return stream(context, async (writer) => {
       let sequence = 1;
+      let frames = 0;
+      let frameBytes = 0;
+      let largestFrameBytes = 0;
       let terminalSent = false;
       let protocolInvalid = false;
+      let previewChars = 0;
+      let previewFrames = 0;
+      writer.onAbort(abortRequest);
+      let writes = Promise.resolve();
+      const writeFrame = (frame: string) => {
+        const next = writes.then(async () => { await writer.write(frame); });
+        writes = next.catch(() => { abort.abort(); });
+        return next;
+      };
       const write = async (type: TurnExecutionEvent["type"], payload: Omit<TurnExecutionEvent, keyof TurnExecutionEventBase | "type">) => {
         const event = { executionId: request.executionId, turnId: request.turnId, sequence, type, ...payload } as TurnExecutionEvent;
         sequence += 1;
-        await writer.write(`id: ${event.sequence}\nevent: ${eventName(type)}\ndata: ${JSON.stringify(event)}\n\n`);
+        const frame = `id: ${event.sequence}\nevent: ${eventName(type)}\ndata: ${JSON.stringify(event)}\n\n`;
+        if (options.onDiagnostic) {
+          const bytes = new TextEncoder().encode(frame).byteLength;
+          frames = Math.min(10_000, frames + 1);
+          frameBytes = Math.min(10_000_000, frameBytes + bytes);
+          largestFrameBytes = Math.max(largestFrameBytes, Math.min(1_000_000, bytes));
+        }
+        await writeFrame(frame);
       };
+
       await write("accepted", { kind: request.kind });
-      const heartbeat = setInterval(() => { void writer.write(`: heartbeat\n\n`); }, options.heartbeatMs ?? 15_000);
+      const heartbeat = setInterval(() => { if (!abort.signal.aborted) void writeFrame(`: heartbeat\n\n`); }, options.heartbeatMs ?? 15_000);
       try {
         const terminal = await options.executor.execute(requestForExecutor, async (signal) => {
-          if (terminalSent) return;
+          if (terminalSent || abort.signal.aborted) return;
           if (!validateSignal(signal, requestForExecutor)) {
             protocolInvalid = true;
+            try { options.onDiagnostic?.({ event: "turn_invalid_signal", stage: "transport", signal_type: signal.type }); } catch { /* Diagnostics must never alter stream behavior. */ }
             abort.abort();
             return;
+          }
+          if (signal.type === "answer_delta") {
+            if (previewFrames >= 256 || previewChars >= 64_000) return;
+            // The executor normally enforces this cap; validate independent callers too.
+            if (previewChars + signal.delta.length > 64_000) {
+              protocolInvalid = true;
+              abort.abort();
+              return;
+            }
+            previewFrames += 1;
+            previewChars += signal.delta.length;
           }
           await write(signal.type, signal.type === "phase" ? { phase: signal.phase } : signal.type === "source_delta" ? { sources: signal.sources, occurrences: signal.occurrences } : signal.type === "research_state" ? { state: signal.state } : { delta: signal.delta });
         }, abort.signal);
@@ -208,6 +246,10 @@ export function createTurnStreamBoundary(options: TurnStreamBoundaryOptions): Ho
       } finally {
         clearInterval(heartbeat);
         context.req.raw.signal.removeEventListener("abort", abortRequest);
+        try {
+          options.onDiagnostic?.({ event: "turn_sse_summary", stage: "transport", frames, frame_bytes: frameBytes, largest_frame_bytes: largestFrameBytes });
+          options.onDiagnostic?.({ event: "turn_stream_end", stage: "transport", request_aborted: context.req.raw.signal.aborted, executor_aborted: abort.signal.aborted, protocol_invalid: protocolInvalid, terminal_sent: terminalSent });
+        } catch { /* Diagnostics must never alter stream behavior. */ }
       }
     });
   });
