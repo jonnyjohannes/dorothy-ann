@@ -38,7 +38,8 @@ export function GlobalShortcuts() {
       const isEditable = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable);
       if (event.isComposing) return;
       if (event.altKey && event.code === "KeyS") { event.preventDefault(); lastEscape.current = 0; navigate("/threads", { state: threadSelectorState(location) }); return; }
-      if (event.altKey && event.code === "KeyC") { event.preventDefault(); lastEscape.current = 0; navigate("/settings"); return; }
+      if (event.altKey && event.code === "Comma") { event.preventDefault(); lastEscape.current = 0; navigate("/settings"); return; }
+      if (event.altKey && event.code === "KeyA") { event.preventDefault(); lastEscape.current = 0; navigate("/new"); return; }
       if (event.key === "i" && !event.ctrlKey && !event.altKey && !event.metaKey && !isEditable) {
         const prompt = document.querySelector<HTMLInputElement>('input[aria-label="Search query"]:not(:disabled)');
         if (prompt) { event.preventDefault(); lastEscape.current = 0; prompt.focus(); return; }

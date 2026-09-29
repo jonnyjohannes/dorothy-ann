@@ -68,6 +68,56 @@ test("legacy accent stays inert; native caret cycles and scroll focus uses the r
   expect(await input.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
 });
 
+test("native caret stays default-shaped and focused text fields share the screen accent", async ({ page }) => {
+  const focusAccent = () => page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--focus-accent)";
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+  for (const theme of ["light", "dark"]) {
+    await page.goto("/new");
+    await page.evaluate((value) => { localStorage.setItem("dorothy-ann-theme", value); window.dispatchEvent(new Event("dorothy-ann-preference-change")); }, theme);
+    const prompt = page.getByLabel("Search query");
+    await prompt.focus();
+    expect(await prompt.evaluate((element) => getComputedStyle(element).getPropertyValue("caret-shape"))).not.toBe("block");
+    expect(await prompt.evaluate((element) => getComputedStyle(element).animationDuration)).toBe("32s");
+    expect(await prompt.locator("xpath=..").evaluate((element) => getComputedStyle(element).borderColor)).toBe(await focusAccent());
+    expect(await prompt.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("none");
+
+    await page.goto("/threads");
+    const search = page.getByLabel("Find threads");
+    await search.focus();
+    expect(await search.evaluate((element) => getComputedStyle(element).borderColor)).toBe(await focusAccent());
+    expect(await search.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("none");
+
+    await page.goto("/unlock");
+    const passphrase = page.getByLabel("Passphrase");
+    await passphrase.focus();
+    expect(await passphrase.locator("xpath=..").evaluate((element) => getComputedStyle(element).borderColor)).toBe(await focusAccent());
+    expect(await passphrase.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("none");
+    const title = page.getByRole("heading", { name: "/unlock" });
+    const card = page.locator("[aria-label='Unlock']");
+    expect((await title.boundingBox())!.x).toBeCloseTo((await card.boundingBox())!.x, 0);
+    await page.evaluate(() => {
+      const input = document.createElement("input");
+      input.type = "email";
+      input.setAttribute("aria-label", "Generic email");
+      const textarea = document.createElement("textarea");
+      textarea.setAttribute("aria-label", "Generic notes");
+      document.querySelector(".app-route-scroll")!.append(input, textarea);
+    });
+    for (const label of ["Generic email", "Generic notes"]) {
+      const field = page.getByLabel(label);
+      await field.focus();
+      expect(await field.evaluate((element) => getComputedStyle(element).outlineColor)).toBe(await focusAccent());
+      expect(await field.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
+    }
+  }
+});
+
 test("selection stays ink on paper while focus controls share a per-screen accent", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("dorothy-ann-color-scheme", "catppuccin");

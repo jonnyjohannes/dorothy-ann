@@ -117,7 +117,7 @@ describe("workspace controller", () => {
     fireEvent.keyDown(window, { key: "i" });
     expect(document.activeElement).toBe(prompt);
   });
-  it.each([["s", "KeyS", "/threads"], ["c", "KeyC", "/settings"] as const])("opens %s route with Alt+%s even while the prompt is focused", (key, code, path) => {
+  it.each([["s", "KeyS", "/threads"], [",", "Comma", "/settings"], ["a", "KeyA", "/new"]] as const)("opens %s route with Alt+%s even while the prompt is focused", (key, code, path) => {
     render(<MemoryRouter initialEntries={["/"]}><Routes><Route path="*" element={<><GlobalShortcuts /><input aria-label="Search query" /><LocationProbe /></>} /></Routes></MemoryRouter>);
     const prompt = screen.getByLabelText("Search query");
     prompt.focus();
@@ -171,13 +171,19 @@ describe("workspace controller", () => {
     fireEvent.keyDown(scroller, { key: "Escape" });
     expect(screen.getByTestId("location")).toHaveTextContent(/^\/$/u);
   });
-  it("does not assign Alt+A to any search result kind", () => {
+  it("does not reserve the old Alt+C settings shortcut", () => {
     render(<MemoryRouter initialEntries={["/"]}><Routes><Route path="*" element={<><GlobalShortcuts /><input aria-label="Search query" /><LocationProbe /></>} /></Routes></MemoryRouter>);
     const prompt = screen.getByLabelText("Search query");
     prompt.focus();
-    fireEvent.keyDown(prompt, { key: "a", code: "KeyA", altKey: true });
+    fireEvent.keyDown(prompt, { key: "c", code: "KeyC", altKey: true });
     expect(screen.getByTestId("location")).toHaveTextContent(/^\/$/u);
-    expect(prompt).toHaveValue("");
+  });
+  it("advertises the same routes as the global shortcuts", () => {
+    render(<MemoryRouter><HomeRoute /></MemoryRouter>);
+    expect(screen.getByText("<alt>+a")).toBeInTheDocument();
+    expect(screen.getByText("<alt>+s")).toBeInTheDocument();
+    expect(screen.getByText("<alt>+,")).toBeInTheDocument();
+    expect(screen.queryByText("<alt>+c")).not.toBeInTheDocument();
   });
   it.each(["/threads", "/settings"])("leaves %s on Escape", (path) => {
     render(<MemoryRouter initialEntries={[path]}><Routes><Route path="*" element={<><GlobalShortcuts /><LocationProbe /></>} /></Routes></MemoryRouter>);

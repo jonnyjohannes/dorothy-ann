@@ -278,7 +278,7 @@ test("native scroll surfaces gain accessible square accent indicators on desktop
     nativeHidden: getComputedStyle(document.querySelector("pre")!).scrollbarWidth,
   }));
   expect(geometry.radius).toBe("0px");
-  const activeAccent = await page.evaluate(() => { const probe = document.createElement("div"); probe.style.color = "var(--accent)"; document.body.append(probe); const color = getComputedStyle(probe).color; probe.remove(); return color; });
+  const activeAccent = await page.evaluate(() => { const probe = document.createElement("div"); probe.style.color = "var(--focus-accent)"; document.body.append(probe); const color = getComputedStyle(probe).color; probe.remove(); return color; });
   expect(geometry.accent).toBe(activeAccent);
   expect(geometry.nativeHidden).toBe("none");
   await scrollbar.focus();
@@ -366,6 +366,21 @@ test("command swatch text keeps WCAG AA contrast across theme and color-scheme v
     await expect(buttons.nth(1)).toBeFocused();
     await expect.poll(() => buttons.nth(1).evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
   }
+});
+
+test("Alt shortcuts navigate to new, threads, and settings from focused text input", async ({ page }) => {
+  await page.goto("/new");
+  await page.getByLabel("Search query").focus();
+  await page.keyboard.press("Alt+Comma");
+  await expect(page).toHaveURL(/\/settings$/u);
+  await page.keyboard.press("Alt+a");
+  await expect(page).toHaveURL(/\/new$/u);
+  await page.getByLabel("Search query").focus();
+  await page.keyboard.press("Alt+s");
+  await expect(page).toHaveURL(/\/threads$/u);
+  await page.getByLabel("Find threads").focus();
+  await page.keyboard.press("Alt+c");
+  await expect(page).toHaveURL(/\/threads$/u);
 });
 
 test("route shells keep document fixed and unlock uses the shared passphrase layout", async ({ page }) => {

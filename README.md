@@ -43,7 +43,8 @@ The root uses the exact user question for its first search when no admissible ex
 | --- | --- |
 | `i` | focus the prompt input (ignored while typing in a field) |
 | `Alt+S` | open saved threads, even while the prompt is focused |
-| `Alt+C` | open settings |
+| `Alt+A` | open `/new` |
+| `Alt+,` | open settings |
 | `Escape` | leave `/threads` or `/settings` and return where you came from |
 | `Escape` `Escape` | from anywhere else, return home (within 500ms) |
 

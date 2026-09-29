@@ -317,9 +317,6 @@
   100% { caret-color: var(--accent-1); }
 }
 :where(input, textarea) { animation: caret-accent-cycle 32s steps(1, end) infinite; }
-@supports (caret-shape: block) {
-  :where(input, textarea) { caret-shape: block; }
-}
 @media (prefers-reduced-motion: reduce) {
   :where(input, textarea) { animation: none; caret-color: var(--accent-6); }
 }
@@ -434,6 +431,15 @@ textarea {
 :focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 3px;
+}
+/* Text fields show the screen's focus accent, with an outer border for bordered forms. */
+:where(input:not([type]), input:is([type="text"], [type="password"], [type="search"], [type="email"], [type="url"], [type="tel"], [type="number"]), textarea):focus {
+  border-color: var(--focus-accent);
+  outline: 2px solid var(--focus-accent);
+  outline-offset: 2px;
+}
+form:has(> :where(input:not([type]), input:is([type="text"], [type="password"], [type="search"], [type="email"], [type="url"], [type="tel"], [type="number"]), textarea):focus) {
+  border-color: var(--focus-accent);
 }
 @media (prefers-reduced-motion: reduce) {
   *,

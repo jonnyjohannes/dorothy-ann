@@ -38,13 +38,13 @@ export function HomeRoute() {
     <section className={`${styles.routeLayout} app-route-scroll`} aria-label="Home content">
       <h1 className={styles.pageTitle}><code>/new</code></h1>
       <div className={styles.commandList} aria-label="Commands">
-        <p><Link to="/"><code>/new</code></Link><span><code>&lt;esc&gt;&lt;esc&gt;</code></span></p>
+        <p><Link to="/new"><code>/new</code></Link><span><code>&lt;alt&gt;+a</code></span></p>
         <p><Link to="/threads" state={threadSelectorState(location)}><code>/threads</code></Link><span><code>&lt;alt&gt;+s</code></span></p>
         <p><button className={styles.commandListAction} type="button" onClick={() => populateSearchCommand("/link")}><code>/link</code></button><span><code>{"{query}"}</code></span></p>
         <p><button className={styles.commandListAction} type="button" onClick={() => populateSearchCommand("/news")}><code>/news</code></button><span><code>{"{query}"}</code></span></p>
         <p><button className={styles.commandListAction} type="button" onClick={() => populateSearchCommand("/image")}><code>/image</code></button><span><code>{"{query}"}</code></span></p>
         <p><button className={styles.commandListAction} type="button" onClick={() => populateSearchCommand("/video")}><code>/video</code></button><span><code>{"{query}"}</code></span></p>
-        <p><Link to="/settings"><code>/settings</code></Link><span><code>&lt;alt&gt;+c</code></span></p>
+        <p><Link to="/settings"><code>/settings</code></Link><span><code>&lt;alt&gt;+,</code></span></p>
       </div>
       {message && <p className={styles.commandMessage} role="status">{message}</p>}
     </section>
