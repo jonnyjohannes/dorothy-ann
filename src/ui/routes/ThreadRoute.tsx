@@ -162,19 +162,20 @@ export function ThreadRoute() {
   };
   const sources = sourceRecords(thread, view.sources);
   const discoveredViaNews = newsSourceIds(thread);
+  const turnPending = view.active || activeRequest.length > 0;
   const selectCitation = (sourceId: string) => { setSelectedSourceId(sourceId); window.setTimeout(() => document.getElementById(`source-${sourceId}`)?.focus(), 0); };
   return <main className={`${styles.shell} ${styles.promptShell}`}>
     <StickyHeader onIntent={onIntent} actions={thread ? <div className={styles.headerActions} aria-label="Thread actions"><button className={`${styles.iconButton} ${successfulAction === "copy" ? styles.iconButtonSuccess : ""}`} type="button" onClick={() => void copyThread()} aria-label={successfulAction === "copy" ? "Copied thread" : "Copy thread"}>{successfulAction === "copy" ? <CheckGlyph /> : <CopyGlyph />}</button><button className={`${styles.iconButton} ${successfulAction === "export" ? styles.iconButtonSuccess : ""}`} type="button" onClick={exportThread} aria-label={successfulAction === "export" ? "Exported thread" : "Export thread"}>{successfulAction === "export" ? <CheckGlyph /> : <ExportGlyph />}</button></div> : undefined} />
     <section className={`${styles.threadContent} app-route-scroll`} aria-label="Thread content">
       {message && <p role="alert">{message}</p>}
       {thread && <TranscriptBox thread={thread} sources={sources} onIntent={onIntent} onCitationSelect={selectCitation} />}
-      {view.active && activeRequest && <article className={styles.scrollback}><blockquote className={styles.userTurn}>{activeRequest}</blockquote></article>}
-      {view.active && <ResearchStatus answerDraft={view.answerDraft} events={view.events} />}
+      {turnPending && activeRequest && <article className={styles.scrollback}><blockquote className={styles.userTurn}>{activeRequest}</blockquote></article>}
+      {turnPending && <ResearchStatus answerDraft={view.answerDraft} events={view.events} />}
       {view.active && view.answerDraft && <ProvisionalAnswer text={view.answerDraft} paused={view.previewPaused} />}
       {sources.length > 0 && <EvidenceBox sources={sources} discoveredViaNews={discoveredViaNews} selectedSourceId={selectedSourceId} onIntent={onIntent} />}
     </section>
     <footer className={`${styles.promptFooter} app-prompt-footer`}>
-      <PromptBox value={value} disabled={view.active} onChange={setValue} onIntent={onIntent} />
+      <PromptBox value={value} disabled={turnPending} onChange={setValue} onIntent={onIntent} />
     </footer>
   </main>;
 }
