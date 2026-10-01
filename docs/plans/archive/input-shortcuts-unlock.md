@@ -18,7 +18,7 @@ inspect existing contracts → change only scoped CSS/shortcuts/docs → test na
 - [x] U1 — remove the `caret-shape: block` declaration only. Keep the current 32s color animation with 4s phases, reduced-motion behavior, and browser-native blink. Avoid guessed thickness or a simulated caret.
 - [x] U2 — map `Alt+,` to `/settings`, `Alt+A` to `/new`, retain `Alt+S` for `/threads`, and update homepage hints, README, and `AGENTS.md` keyboard contract. Keep IME/editing and Escape behavior intact; remove the old `Alt+C` mapping.
 - [x] U3 — remove `/unlock`'s centered title constraint; preserve full-width passphrase input. Centralize text-input focus highlighting so prompt, fuzzy/thread search, unlock, and other text-entry inputs receive a consistent focus cue without a special unlock-only rule.
-- [x] U4 — focused UI (53 passed) and browser (4 passed), lint, typecheck, unit (383 passed), build, full fixture e2e (52 passed, 10 conditional skips), and `git diff --check` passed. Physical-device/IME and owner visual verification remain external. No local release integration, push, or deployment without owner direction.
+- [x] U4 — focused UI (53 passed) and browser (4 passed), lint, typecheck, unit (383 passed), build, full fixture e2e (52 passed, 10 conditional skips), and `git diff --check` passed. Physical-device/IME testing was not run; owner visual acceptance was recorded at plan closure. The original isolated-branch verification did not itself authorize integration, push, or deployment.
 - [x] U5 — confirmed `840ed05` is already an ancestor of `release/v1.2.2`; Jonny accepted the current visual behavior for now and explicitly deferred physical-device/IME verification. Close and archive the plan without claiming that external check passed.
 
 ## Desired Outcome
@@ -48,7 +48,7 @@ Only UI input focus/caret shape, navigation shortcut hints/contracts, unlock hea
 
 ## Verification
 
-`npm ci`, `npm run lint`, `npm run typecheck`, focused Vitest (53 passed), `npm test` (383 passed), `npm run build`, focused Chromium/mobile WebKit (4 passed), full `npm run test:e2e` (52 passed, 10 conditional telemetry skips), and `git diff --check` passed. Build retains its large-chunk warning. An initial full browser run exposed an **existing release-baseline** smoke assertion comparing scrollbar color to obsolete `--accent` after the archived V12 focus-color change; it failed identically on clean local release (Chromium/WebKit). Corrected only that assertion to `--focus-accent` and reran focused/full browser tests successfully. Physical keyboard/IME and owner visual comparison remain external.
+`npm ci`, `npm run lint`, `npm run typecheck`, focused Vitest (53 passed), `npm test` (383 passed), `npm run build`, focused Chromium/mobile WebKit (4 passed), full `npm run test:e2e` (52 passed, 10 conditional telemetry skips), and `git diff --check` passed. Build retains its large-chunk warning. An initial full browser run exposed an **existing release-baseline** smoke assertion comparing scrollbar color to obsolete `--accent` after the archived V12 focus-color change; it failed identically on clean local release (Chromium/WebKit). Corrected only that assertion to `--focus-accent` and reran focused/full browser tests successfully. Physical keyboard/IME and a measured visual comparison were not performed; the owner accepted the current appearance for now.
 
 ## Open Questions
 
