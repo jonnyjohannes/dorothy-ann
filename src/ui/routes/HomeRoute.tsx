@@ -22,7 +22,7 @@ export function HomeRoute() {
 
   const populateSearchCommand = (command: "/link" | "/news" | "/image" | "/video") => {
     setValue(`${command} `);
-    document.querySelector<HTMLInputElement>('input[aria-label="Search query"]:not(:disabled)')?.focus();
+    document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Search query"]:not(:disabled)')?.focus();
   };
 
   const onIntent = (intent: BoxIntent) => {

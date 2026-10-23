@@ -20,7 +20,7 @@ for (const theme of ["light", "dark"] as const) {
     const fonts = await page.evaluate(() => {
       const family = (selector: string) => getComputedStyle(document.querySelector(selector)!).fontFamily;
       return {
-        prose: family(":root"), prompt: family("input[aria-label='Search query']"),
+        prose: family(":root"), prompt: family("textarea[aria-label='Search query']"),
         title: family("h1 code"), command: family("[aria-label='Commands'] code"),
         shortcut: family("[aria-label='Commands'] p span code"), signature: family("header button"), tagline: family("header button span:last-child"),
       };
@@ -40,7 +40,7 @@ test("failed web fonts fall back without changing the UI stack or focus", async 
   await page.evaluate(() => document.fonts.ready);
   const fonts = await page.evaluate(() => ({
     code: getComputedStyle(document.querySelector("[aria-label='Commands'] code")!).fontFamily,
-    prompt: getComputedStyle(document.querySelector("input[aria-label='Search query']")!).fontFamily,
+    prompt: getComputedStyle(document.querySelector("textarea[aria-label='Search query']")!).fontFamily,
     fallbackRendered: (() => {
       const context = document.createElement("canvas").getContext("2d")!;
       context.font = '16px "Source Code Pro", ui-monospace, monospace';

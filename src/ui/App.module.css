@@ -683,7 +683,18 @@
   box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 12%);
   backdrop-filter: blur(10px);
 }
-.promptBox > input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); padding: 0.45rem 0.7rem; }
+.promptBox > textarea {
+  min-width: 0;
+  max-height: min(40vh, 16rem);
+  flex: 1;
+  resize: none;
+  overflow-y: auto;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  padding: 0.45rem 0.7rem;
+}
 .promptHint { align-self: center; color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
 .commandMessage { width: 100%; margin: 1rem 0; color: var(--muted); }
 .researchPlanLive {

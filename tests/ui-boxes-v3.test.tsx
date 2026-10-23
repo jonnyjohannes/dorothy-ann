@@ -19,7 +19,30 @@ const summaries: ThreadSummary[] = [{ id: "thread_1" as never, title: "Topic", c
 describe("v3 product boxes", () => {
   it("brands only emit new-thread intent", () => { const onIntent = vi.fn(); render(<BrandBox onIntent={onIntent} />); fireEvent.click(screen.getByRole("button", { name: "New topic" })); expect(onIntent).toHaveBeenCalledWith({ type: "new_thread_requested" }); });
   it("rotates the cleaned-up brand treatment without changing its accessible target", () => { vi.useFakeTimers(); const onIntent = vi.fn(); render(<BrandBox onIntent={onIntent} />); const brand = screen.getByRole("button", { name: "New topic" }); expect(brand).toHaveTextContent("take chances"); act(() => { vi.advanceTimersByTime(3000); }); expect(brand).toHaveTextContent("make mistakes"); expect(brand).toHaveAttribute("type", "button"); });
-  it("keeps the prompt hint playful and styles the native caret", () => { const onIntent = vi.fn(); const onChange = vi.fn(); render(<PromptBox value="" onChange={onChange} onIntent={onIntent} />); const prompt = screen.getByLabelText("Search query"); expect(prompt).toHaveAttribute("placeholder", "???"); expect(prompt.className).toContain("promptInput"); expect(prompt.style.caretColor).toBe(""); expect(prompt.nextElementSibling).toBeNull(); });
+  it("keeps the prompt hint playful and styles the native caret", () => { const onIntent = vi.fn(); const onChange = vi.fn(); render(<PromptBox value="" onChange={onChange} onIntent={onIntent} />); const prompt = screen.getByLabelText("Search query"); expect(prompt).toHaveAttribute("placeholder", "???"); expect(prompt).toHaveAttribute("rows", "1"); expect(prompt.tagName).toBe("TEXTAREA"); expect(prompt.className).toContain("promptInput"); expect(prompt.style.caretColor).toBe(""); expect(prompt.nextElementSibling).toBeNull(); });
+  it("grows with the prompt and shrinks when cleared", () => {
+    const onIntent = vi.fn();
+    const { rerender } = render(<PromptBox value="first" onChange={vi.fn()} onIntent={onIntent} />);
+    const prompt = screen.getByLabelText("Search query");
+    let height = 36;
+    Object.defineProperty(prompt, "scrollHeight", { configurable: true, get: () => height });
+    height = 84;
+    rerender(<PromptBox value={"first\nsecond"} onChange={vi.fn()} onIntent={onIntent} />);
+    expect(prompt).toHaveStyle({ height: "84px" });
+    height = 36;
+    rerender(<PromptBox value="" onChange={vi.fn()} onIntent={onIntent} />);
+    expect(prompt).toHaveStyle({ height: "36px" });
+  });
+  it("submits with Enter but leaves Shift+Enter and composing Enter to the textarea", () => {
+    const onIntent = vi.fn();
+    render(<PromptBox value={"line one\nline two"} onChange={vi.fn()} onIntent={onIntent} />);
+    const prompt = screen.getByLabelText("Search query");
+    fireEvent.keyDown(prompt, { key: "Enter", shiftKey: true });
+    fireEvent.keyDown(prompt, { key: "Enter", isComposing: true });
+    expect(onIntent).not.toHaveBeenCalled();
+    fireEvent.keyDown(prompt, { key: "Enter" });
+    expect(onIntent).toHaveBeenCalledExactlyOnceWith({ type: "prompt_submitted", value: "line one\nline two" });
+  });
   it("suggests link and navigation commands while keeping Escape local", () => { const onIntent = vi.fn(); const onChange = vi.fn(); render(<PromptBox value="/" onChange={onChange} onIntent={onIntent} />); const prompt = screen.getByLabelText("Search query"); expect(screen.getByRole("option", { name: /link/ })).toBeInTheDocument(); expect(screen.getByRole("listbox", { name: "Commands" })).toHaveClass("ui-listbox-menu--overlay"); expect(screen.queryByRole("option", { name: "/research" })).not.toBeInTheDocument(); expect(prompt).toHaveAttribute("placeholder", "???"); fireEvent.keyDown(prompt, { key: "Tab" }); expect(onChange).toHaveBeenCalledWith("/new "); expect(screen.queryByRole("listbox")).not.toBeInTheDocument(); });
   it("uses click to autocomplete without submitting and spaces link commands", () => { const onIntent = vi.fn(); const onChange = vi.fn(); render(<PromptBox value="/" onChange={onChange} onIntent={onIntent} />); fireEvent.click(screen.getByRole("option", { name: /link/ })); expect(onChange).toHaveBeenCalledWith("/link "); expect(onIntent).not.toHaveBeenCalled(); expect(screen.queryByRole("listbox")).not.toBeInTheDocument(); });
   it("keeps hovered thread rows in sync with keyboard selection", () => {

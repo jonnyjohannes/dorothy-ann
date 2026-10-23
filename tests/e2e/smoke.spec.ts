@@ -1,6 +1,22 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
+test("prompt grows for multiline text and Enter submits without losing Shift+Enter", async ({ page }) => {
+  await page.goto("/new");
+  const prompt = page.getByRole("textbox", { name: "Search query" });
+  const singleLineHeight = await prompt.evaluate((element) => element.getBoundingClientRect().height);
+  await prompt.fill("first line");
+  await prompt.press("Shift+Enter");
+  await prompt.type("second line");
+  await expect(prompt).toHaveValue("first line\nsecond line");
+  await expect.poll(() => prompt.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThan(singleLineHeight);
+  await prompt.fill("short");
+  await expect.poll(() => prompt.evaluate((element) => element.getBoundingClientRect().height)).toBeLessThan(singleLineHeight + 10);
+  await prompt.press("Enter");
+  await expect(page).toHaveURL(/\/threads\/[^/]+$/u);
+  await expect(page.getByLabel("Topic scrollback")).toContainText("short");
+});
+
 test("explicit fixture search is keyboard reachable on desktop and mobile", async ({ page }) => {
   await page.goto("/");
   const query = page.getByLabel("Search query");

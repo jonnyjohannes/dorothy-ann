@@ -112,13 +112,13 @@ describe("workspace controller", () => {
     expect(screen.getByTestId("location")).toHaveTextContent("/threads/new?q=%2Fimage%20apollo%2011%20landing");
   });
   it.each(["/threads", "/settings"])("uses unmodified i to focus the prompt from %s", (path) => {
-    render(<MemoryRouter initialEntries={[path]}><GlobalShortcuts /><input aria-label="Search query" /></MemoryRouter>);
+    render(<MemoryRouter initialEntries={[path]}><GlobalShortcuts /><textarea aria-label="Search query" /></MemoryRouter>);
     const prompt = screen.getByLabelText("Search query");
     fireEvent.keyDown(window, { key: "i" });
     expect(document.activeElement).toBe(prompt);
   });
   it.each([["s", "KeyS", "/threads"], [",", "Comma", "/settings"], ["a", "KeyA", "/new"]] as const)("opens %s route with Alt+%s even while the prompt is focused", (key, code, path) => {
-    render(<MemoryRouter initialEntries={["/"]}><Routes><Route path="*" element={<><GlobalShortcuts /><input aria-label="Search query" /><LocationProbe /></>} /></Routes></MemoryRouter>);
+    render(<MemoryRouter initialEntries={["/"]}><Routes><Route path="*" element={<><GlobalShortcuts /><textarea aria-label="Search query" /><LocationProbe /></>} /></Routes></MemoryRouter>);
     const prompt = screen.getByLabelText("Search query");
     prompt.focus();
     fireEvent.keyDown(prompt, { key, code, altKey: true });
@@ -154,7 +154,7 @@ describe("workspace controller", () => {
   });
   it("lets the Escape pair expire and ignores modified/composing Escape in the prompt", () => {
     vi.useFakeTimers(); vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
-    render(<MemoryRouter initialEntries={["/threads/thread-1"]}><GlobalShortcuts /><input aria-label="Search query" /><section className="app-route-scroll" tabIndex={0} aria-label="Thread content" /><LocationProbe /></MemoryRouter>);
+    render(<MemoryRouter initialEntries={["/threads/thread-1"]}><GlobalShortcuts /><textarea aria-label="Search query" /><section className="app-route-scroll" tabIndex={0} aria-label="Thread content" /><LocationProbe /></MemoryRouter>);
     const prompt = screen.getByLabelText("Search query");
     const scroller = screen.getByRole("region", { name: "Thread content" });
     prompt.focus();
@@ -172,7 +172,7 @@ describe("workspace controller", () => {
     expect(screen.getByTestId("location")).toHaveTextContent(/^\/$/u);
   });
   it("does not reserve the old Alt+C settings shortcut", () => {
-    render(<MemoryRouter initialEntries={["/"]}><Routes><Route path="*" element={<><GlobalShortcuts /><input aria-label="Search query" /><LocationProbe /></>} /></Routes></MemoryRouter>);
+    render(<MemoryRouter initialEntries={["/"]}><Routes><Route path="*" element={<><GlobalShortcuts /><textarea aria-label="Search query" /><LocationProbe /></>} /></Routes></MemoryRouter>);
     const prompt = screen.getByLabelText("Search query");
     prompt.focus();
     fireEvent.keyDown(prompt, { key: "c", code: "KeyC", altKey: true });

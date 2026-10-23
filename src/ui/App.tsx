@@ -41,7 +41,7 @@ export function GlobalShortcuts() {
       if (event.altKey && event.code === "Comma") { event.preventDefault(); lastEscape.current = 0; navigate("/settings"); return; }
       if (event.altKey && event.code === "KeyA") { event.preventDefault(); lastEscape.current = 0; navigate("/new"); return; }
       if (event.key === "i" && !event.ctrlKey && !event.altKey && !event.metaKey && !isEditable) {
-        const prompt = document.querySelector<HTMLInputElement>('input[aria-label="Search query"]:not(:disabled)');
+        const prompt = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Search query"]:not(:disabled)');
         if (prompt) { event.preventDefault(); lastEscape.current = 0; prompt.focus(); return; }
       }
       if (event.key !== "Escape" || event.defaultPrevented || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
@@ -51,7 +51,7 @@ export function GlobalShortcuts() {
         navigate(location.pathname === "/threads" ? threadSelectorReturnTo(location.state) : "/", { replace: true });
         return;
       }
-      const promptEscape = target instanceof HTMLInputElement && target.matches('input[aria-label="Search query"]');
+      const promptEscape = target instanceof HTMLTextAreaElement && target.matches('textarea[aria-label="Search query"]');
       if (isEditable && !promptEscape) return;
       event.preventDefault();
       const current = Date.now();
