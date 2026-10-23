@@ -363,6 +363,18 @@ describe("AnthropicProvider v3", () => {
     ]);
   });
 
+  it("resolves a citation when the model omits the allowed source ID namespace prefix", async () => {
+    const fake = client([{ [Symbol.asyncIterator]: async function* () {
+      yield { type: "content_block_delta", delta: { type: "text_delta", text: "Answer [[cite:test]]." } };
+    } } as MessageStream]);
+    const provider = new AnthropicProvider({ assessmentModel: "high", synthesisModel: "balanced", client: fake });
+    await expect(collect(provider.synthesizeResearch(baseSynthesis))).resolves.toEqual([
+      { type: "text", markdown: "Answer " },
+      { type: "citation", sourceId: source },
+      { type: "text", markdown: "." },
+    ]);
+  });
+
   it("streams citations only when they are reachable through allowed source IDs", async () => {
     const fake = client([{ [Symbol.asyncIterator]: async function* () {
       yield { type: "content_block_delta", delta: { type: "text_delta", text: "Answer [[cite:src_test]] and [[cite:other]]." } };
