@@ -17,11 +17,13 @@ test("prompt grows for multiline text and Enter submits without losing Shift+Ent
   await expect(page.getByLabel("Topic scrollback")).toContainText("short");
 });
 
-test("Send button submits a mobile multiline prompt even if Return only adds newlines", async ({ page, isMobile }) => {
-  test.skip(!isMobile, "Mobile composer path");
+test("return glyph is mobile-only and submits when the keyboard only inserts newlines", async ({ page, isMobile }) => {
   await page.goto("/new");
   const prompt = page.getByRole("textbox", { name: "Search query" });
-  const send = page.getByRole("button", { name: "Send" });
+  const send = page.locator('button[aria-label="Send"]');
+  await expect(send).toHaveText("↵");
+  if (!isMobile) { await expect(send).toBeHidden(); return; }
+  await expect(send).toBeVisible();
   await expect(send).toBeDisabled();
   await prompt.fill("what does this mean?\nwith context");
   await expect(send).toBeEnabled();
