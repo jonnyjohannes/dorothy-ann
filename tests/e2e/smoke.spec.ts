@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { submitPrompt } from "./submit-prompt";
 
-test("prompt grows for multiline text and Enter submits without losing Shift+Enter", async ({ page }) => {
+test("prompt grows for multiline text and submits without losing Shift+Enter", async ({ page }) => {
   await page.goto("/new");
   const prompt = page.getByRole("textbox", { name: "Search query" });
   const singleLineHeight = await prompt.evaluate((element) => element.getBoundingClientRect().height);
@@ -12,7 +13,7 @@ test("prompt grows for multiline text and Enter submits without losing Shift+Ent
   await expect.poll(() => prompt.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThan(singleLineHeight);
   await prompt.fill("short");
   await expect.poll(() => prompt.evaluate((element) => element.getBoundingClientRect().height)).toBeLessThan(singleLineHeight + 10);
-  await prompt.press("Enter");
+  await submitPrompt(page);
   await expect(page).toHaveURL(/\/threads\/[^/]+$/u);
   await expect(page.getByLabel("Topic scrollback")).toContainText("short");
 });
@@ -25,7 +26,11 @@ test("return glyph is mobile-only and submits when the keyboard only inserts new
   if (!isMobile) { await expect(send).toBeHidden(); return; }
   await expect(send).toBeVisible();
   await expect(send).toBeDisabled();
-  await prompt.fill("what does this mean?\nwith context");
+  await prompt.fill("what does this mean?");
+  await prompt.press("Enter");
+  await prompt.type("with context");
+  await expect(prompt).toHaveValue("what does this mean?\nwith context");
+  await expect(page).toHaveURL(/\/new$/u);
   await expect(send).toBeEnabled();
   await send.tap();
   await expect(page).toHaveURL(/\/threads\/[^/]+$/u);
@@ -38,7 +43,7 @@ test("explicit fixture search is keyboard reachable on desktop and mobile", asyn
   const query = page.getByLabel("Search query");
   await expect(query).toBeVisible();
   await query.fill("/link weather");
-  await query.press("Enter");
+  await submitPrompt(page);
   await expect(page.getByRole("heading", { name: "Evidence" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Fixture result for weather" }).first()).toBeVisible();
 });
@@ -47,7 +52,7 @@ test("news command keeps a single article card and accessible cue across reload"
   await page.goto("/");
   const query = page.getByLabel("Search query");
   await query.fill("/news update");
-  await query.press("Enter");
+  await submitPrompt(page);
   const evidence = page.getByRole("complementary", { name: "Evidence" });
   await expect(evidence.getByRole("img", { name: "News source" })).toBeVisible();
   await expect(evidence.locator("li")).toHaveCount(1);
@@ -68,12 +73,12 @@ test("ordinary fixture input and its contextual follow-up complete", async ({ pa
   await page.goto("/");
   const query = page.getByLabel("Search query");
   await query.fill("what happened?");
-  await query.press("Enter");
+  await submitPrompt(page);
   await expect(page.getByText("This is a bounded fixture answer grounded in the available evidence.")).toHaveCount(1);
   await expect(page.getByRole("alert")).toHaveCount(0);
 
   await query.fill("what should I ask next?");
-  await query.press("Enter");
+  await submitPrompt(page);
   await expect(page.getByText("This is a bounded fixture answer grounded in the available evidence.")).toHaveCount(2);
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
@@ -82,7 +87,7 @@ test("deferred fixture shows a plain provisional answer before terminal, then re
   await page.goto("/");
   const query = page.getByLabel("Search query");
   await query.fill("what happened?");
-  await query.press("Enter");
+  await submitPrompt(page);
   const preview = page.getByRole("region", { name: "Provisional answer preview" });
   await expect(preview).toBeVisible();
   await expect(preview.getByRole("status")).toContainText("provisional · checking answer and citations");
@@ -99,7 +104,7 @@ test("navigation during a deferred fixture preview never saves the provisional t
   await page.goto("/");
   const query = page.getByLabel("Search query");
   await query.fill("what happened?");
-  await query.press("Enter");
+  await submitPrompt(page);
   await expect(page.getByRole("region", { name: "Provisional answer preview" })).toBeVisible();
   await page.keyboard.press("Alt+s");
   await expect(page).toHaveURL(/\/threads$/);
@@ -143,7 +148,7 @@ test("a disconnected fixture stream clears its provisional text without a saved 
   await page.goto("/");
   const query = page.getByLabel("Search query");
   await query.fill("what happened?");
-  await query.press("Enter");
+  await submitPrompt(page);
   // A deferred fixture supplies the first frame; the test transport closes before terminal.
   await expect(page.getByRole("region", { name: "Provisional answer preview" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Provisional answer preview" })).toHaveCount(0);
@@ -154,7 +159,7 @@ test("thread transcript scrolls with arrow and page keys without stealing prompt
   await page.goto("/new");
   const prompt = page.getByLabel("Search query");
   await prompt.fill("keyboard transcript scrolling");
-  await prompt.press("Enter");
+  await submitPrompt(page);
   await expect(page).toHaveURL(/\/threads\/(?!new$)[^/]+$/);
   await expect(page.getByRole("heading", { name: "Evidence" })).toBeVisible();
   await expect(prompt).toBeEnabled();
@@ -252,7 +257,7 @@ test("shared keyboard scrolling works on routes, saved threads, and future layou
 test("native scroll surfaces gain accessible square accent indicators on desktop and mobile", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Search query").fill("scroll indicator route");
-  await page.getByLabel("Search query").press("Enter");
+  await submitPrompt(page);
   await expect(page).toHaveURL(/\/threads\/[^/]+$/);
   await expect(page.getByRole("heading", { name: "Evidence" })).toBeVisible();
   await expect(page.locator(".app-route-scroll")).toHaveCount(1);
@@ -422,7 +427,7 @@ test("route shells keep document fixed and unlock uses the shared passphrase lay
     if (path === "thread") {
       await page.goto("/new");
       await page.getByLabel("Search query").fill("thread width check");
-      await page.getByLabel("Search query").press("Enter");
+      await submitPrompt(page);
       await expect(page).toHaveURL(/\/threads\/(?!new$)[^/?]+$/);
     } else await page.goto(path);
     const shell = page.locator("main").first();

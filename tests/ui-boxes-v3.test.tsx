@@ -11,7 +11,7 @@ import { TranscriptBox } from "../src/ui/boxes/TranscriptBox";
 import { rankThreads, transcriptItems } from "../src/ui/boxes/box-policies";
 import type { Thread, ThreadSummary } from "../src/domain/types";
 
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const source = { sourceId: "src_1" as never, title: "Source", url: "https://example.com", canonicalUrl: "https://example.com", displayUrl: "example.com" };
 const thread: Thread = { schemaVersion: 3, id: "thread_1" as never, title: "Topic", createdAt: "2026-01-01T00:00:00.000Z" as never, updatedAt: "2026-01-01T00:00:00.000Z" as never, sources: [ { ...source, ordinal: 1 } ], turns: [], legacyArchive: [{ id: "legacy_1" as never, originalIndex: 0, legacyKind: "chat", legacyStatus: "completed", createdAt: "2026-01-01T00:00:00.000Z" as never, finishedAt: "2026-01-01T00:00:00.000Z" as never, request: "Old question", answerMarkdown: "old answer [[cite:missing]]", destinations: [] }], };
 const summaries: ThreadSummary[] = [{ id: "thread_1" as never, title: "Topic", createdAt: "2026-01-01T00:00:00.000Z" as never, updatedAt: "2026-01-02T00:00:00.000Z" as never, turnCount: 1, legacyArchiveCount: 0 }];
@@ -19,7 +19,7 @@ const summaries: ThreadSummary[] = [{ id: "thread_1" as never, title: "Topic", c
 describe("v3 product boxes", () => {
   it("brands only emit new-thread intent", () => { const onIntent = vi.fn(); render(<BrandBox onIntent={onIntent} />); fireEvent.click(screen.getByRole("button", { name: "New topic" })); expect(onIntent).toHaveBeenCalledWith({ type: "new_thread_requested" }); });
   it("rotates the cleaned-up brand treatment without changing its accessible target", () => { vi.useFakeTimers(); const onIntent = vi.fn(); render(<BrandBox onIntent={onIntent} />); const brand = screen.getByRole("button", { name: "New topic" }); expect(brand).toHaveTextContent("take chances"); act(() => { vi.advanceTimersByTime(3000); }); expect(brand).toHaveTextContent("make mistakes"); expect(brand).toHaveAttribute("type", "button"); });
-  it("keeps the prompt hint playful and styles the native caret", () => { const onIntent = vi.fn(); const onChange = vi.fn(); render(<PromptBox value="" onChange={onChange} onIntent={onIntent} />); const prompt = screen.getByLabelText("Search query"); expect(prompt).toHaveAttribute("placeholder", "???"); expect(prompt).toHaveAttribute("rows", "1"); expect(prompt.tagName).toBe("TEXTAREA"); expect(prompt.className).toContain("promptInput"); expect(prompt.style.caretColor).toBe(""); expect(prompt).toHaveAttribute("enterkeyhint", "send"); expect(screen.getByRole("button", { name: "Send" })).toBeDisabled(); expect(screen.getByRole("button", { name: "Send" })).toHaveTextContent("↵"); });
+  it("keeps the prompt hint playful and styles the native caret", () => { const onIntent = vi.fn(); const onChange = vi.fn(); render(<PromptBox value="" onChange={onChange} onIntent={onIntent} />); const prompt = screen.getByLabelText("Search query"); expect(prompt).toHaveAttribute("placeholder", "???"); expect(prompt).toHaveAttribute("rows", "1"); expect(prompt.tagName).toBe("TEXTAREA"); expect(prompt.className).toContain("promptInput"); expect(prompt.style.caretColor).toBe(""); expect(prompt).toHaveAttribute("enterkeyhint", "enter"); expect(screen.getByRole("button", { name: "Send" })).toBeDisabled(); expect(screen.getByRole("button", { name: "Send" })).toHaveTextContent("↵"); });
   it("submits from the Send button and blocks blank or disabled input", () => {
     const onIntent = vi.fn();
     const onChange = vi.fn();
@@ -57,6 +57,16 @@ describe("v3 product boxes", () => {
     expect(onIntent).not.toHaveBeenCalled();
     fireEvent.keyDown(prompt, { key: "Enter" });
     expect(onIntent).toHaveBeenCalledExactlyOnceWith({ type: "prompt_submitted", value: "line one\nline two" });
+  });
+  it("leaves touch Return to insert a newline and keeps the Send glyph as the submit action", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    const onIntent = vi.fn();
+    render(<PromptBox value="question" onChange={vi.fn()} onIntent={onIntent} />);
+    const prompt = screen.getByLabelText("Search query");
+    expect(fireEvent.keyDown(prompt, { key: "Enter" })).toBe(true);
+    expect(onIntent).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(onIntent).toHaveBeenCalledExactlyOnceWith({ type: "prompt_submitted", value: "question" });
   });
   it("suggests link and navigation commands while keeping Escape local", () => { const onIntent = vi.fn(); const onChange = vi.fn(); render(<PromptBox value="/" onChange={onChange} onIntent={onIntent} />); const prompt = screen.getByLabelText("Search query"); expect(screen.getByRole("option", { name: /link/ })).toBeInTheDocument(); expect(screen.getByRole("listbox", { name: "Commands" })).toHaveClass("ui-listbox-menu--overlay"); expect(screen.queryByRole("option", { name: "/research" })).not.toBeInTheDocument(); expect(prompt).toHaveAttribute("placeholder", "???"); fireEvent.keyDown(prompt, { key: "Tab" }); expect(onChange).toHaveBeenCalledWith("/new "); expect(screen.queryByRole("listbox")).not.toBeInTheDocument(); });
   it("uses click to autocomplete without submitting and spaces link commands", () => { const onIntent = vi.fn(); const onChange = vi.fn(); render(<PromptBox value="/" onChange={onChange} onIntent={onIntent} />); fireEvent.click(screen.getByRole("option", { name: /link/ })); expect(onChange).toHaveBeenCalledWith("/link "); expect(onIntent).not.toHaveBeenCalled(); expect(screen.queryByRole("listbox")).not.toBeInTheDocument(); });

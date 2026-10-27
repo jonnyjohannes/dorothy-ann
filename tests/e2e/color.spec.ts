@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { submitPrompt } from "./submit-prompt";
 
 test("legacy accent stays inert; native caret cycles and scroll focus uses the random shared accent", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("dorothy-ann-primary-accent", "e068a5"));
@@ -290,7 +291,7 @@ test("a mounted surface keeps the shared accent across temporary overflow change
 test("scroll focus uses the random accent while user turns use the image hue", async ({ page }) => {
   await page.goto("/new");
   await page.getByLabel("Search query").fill("color fixture topic");
-  await page.getByLabel("Search query").press("Enter");
+  await submitPrompt(page);
   await expect(page).toHaveURL(/\/threads\/(?!new$)[^/?]+$/);
   const scroller = page.locator(".app-route-scroll");
   await scroller.evaluate((element) => element.insertAdjacentHTML("beforeend", "<p>Long content</p>".repeat(100)));
@@ -350,7 +351,7 @@ test("thread search and row selection keep distinct focus and hue cues", async (
     await page.goto("/new");
     const prompt = page.getByLabel("Search query");
     await prompt.fill(title);
-    await prompt.press("Enter");
+    await submitPrompt(page);
     await expect(page).toHaveURL(/\/threads\/(?!new$)[^/?]+$/);
     await expect(page.getByText("This is a bounded fixture answer grounded in the available evidence.")).toBeVisible();
   }
