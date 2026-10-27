@@ -695,6 +695,18 @@
   color: var(--ink);
   padding: 0.45rem 0.7rem;
 }
+.promptSubmit {
+  align-self: flex-end;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+.promptSubmit:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 9%, var(--paper)); }
+.promptSubmit:disabled { opacity: 0.5; cursor: default; }
 .promptHint { align-self: center; color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
 .commandMessage { width: 100%; margin: 1rem 0; color: var(--muted); }
 .researchPlanLive {

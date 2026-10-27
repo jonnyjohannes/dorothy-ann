@@ -17,6 +17,20 @@ test("prompt grows for multiline text and Enter submits without losing Shift+Ent
   await expect(page.getByLabel("Topic scrollback")).toContainText("short");
 });
 
+test("Send button submits a mobile multiline prompt even if Return only adds newlines", async ({ page, isMobile }) => {
+  test.skip(!isMobile, "Mobile composer path");
+  await page.goto("/new");
+  const prompt = page.getByRole("textbox", { name: "Search query" });
+  const send = page.getByRole("button", { name: "Send" });
+  await expect(send).toBeDisabled();
+  await prompt.fill("what does this mean?\nwith context");
+  await expect(send).toBeEnabled();
+  await send.tap();
+  await expect(page).toHaveURL(/\/threads\/[^/]+$/u);
+  await expect(page.getByLabel("Topic scrollback")).toContainText("with context");
+  await expect(send).toBeDisabled();
+});
+
 test("explicit fixture search is keyboard reachable on desktop and mobile", async ({ page }) => {
   await page.goto("/");
   const query = page.getByLabel("Search query");

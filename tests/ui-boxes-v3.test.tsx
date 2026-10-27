@@ -19,7 +19,22 @@ const summaries: ThreadSummary[] = [{ id: "thread_1" as never, title: "Topic", c
 describe("v3 product boxes", () => {
   it("brands only emit new-thread intent", () => { const onIntent = vi.fn(); render(<BrandBox onIntent={onIntent} />); fireEvent.click(screen.getByRole("button", { name: "New topic" })); expect(onIntent).toHaveBeenCalledWith({ type: "new_thread_requested" }); });
   it("rotates the cleaned-up brand treatment without changing its accessible target", () => { vi.useFakeTimers(); const onIntent = vi.fn(); render(<BrandBox onIntent={onIntent} />); const brand = screen.getByRole("button", { name: "New topic" }); expect(brand).toHaveTextContent("take chances"); act(() => { vi.advanceTimersByTime(3000); }); expect(brand).toHaveTextContent("make mistakes"); expect(brand).toHaveAttribute("type", "button"); });
-  it("keeps the prompt hint playful and styles the native caret", () => { const onIntent = vi.fn(); const onChange = vi.fn(); render(<PromptBox value="" onChange={onChange} onIntent={onIntent} />); const prompt = screen.getByLabelText("Search query"); expect(prompt).toHaveAttribute("placeholder", "???"); expect(prompt).toHaveAttribute("rows", "1"); expect(prompt.tagName).toBe("TEXTAREA"); expect(prompt.className).toContain("promptInput"); expect(prompt.style.caretColor).toBe(""); expect(prompt.nextElementSibling).toBeNull(); });
+  it("keeps the prompt hint playful and styles the native caret", () => { const onIntent = vi.fn(); const onChange = vi.fn(); render(<PromptBox value="" onChange={onChange} onIntent={onIntent} />); const prompt = screen.getByLabelText("Search query"); expect(prompt).toHaveAttribute("placeholder", "???"); expect(prompt).toHaveAttribute("rows", "1"); expect(prompt.tagName).toBe("TEXTAREA"); expect(prompt.className).toContain("promptInput"); expect(prompt.style.caretColor).toBe(""); expect(prompt).toHaveAttribute("enterkeyhint", "send"); expect(screen.getByRole("button", { name: "Send" })).toBeDisabled(); });
+  it("submits from the Send button and blocks blank or disabled input", () => {
+    const onIntent = vi.fn();
+    const onChange = vi.fn();
+    const { rerender } = render(<PromptBox value="  " onChange={onChange} onIntent={onIntent} />);
+    const send = screen.getByRole("button", { name: "Send" });
+    expect(send).toBeDisabled();
+    rerender(<PromptBox value="what happened?" onChange={onChange} onIntent={onIntent} />);
+    expect(send).toBeEnabled();
+    fireEvent.click(send);
+    expect(onIntent).toHaveBeenCalledExactlyOnceWith({ type: "prompt_submitted", value: "what happened?" });
+    rerender(<PromptBox value="what happened?" disabled onChange={onChange} onIntent={onIntent} />);
+    expect(send).toBeDisabled();
+    fireEvent.submit(send.closest("form")!);
+    expect(onIntent).toHaveBeenCalledTimes(1);
+  });
   it("grows with the prompt and shrinks when cleared", () => {
     const onIntent = vi.fn();
     const { rerender } = render(<PromptBox value="first" onChange={vi.fn()} onIntent={onIntent} />);
