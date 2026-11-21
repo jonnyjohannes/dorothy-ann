@@ -56,6 +56,7 @@ export function MarkdownContent({ markdown, className, threadSeed = "", resolveC
         h4: heading("h4"), h5: heading("h5"), h6: heading("h6"),
         strong: inline("strong"), em: inline("em"), code: inline("code"),
         blockquote: ({ children, ...props }) => <blockquote {...props} className="ui-markdown__blockquote">{children}</blockquote>,
+        table: ({ children, ...props }) => <div className="ui-markdown__table-scroll"><table {...props}>{children}</table></div>,
         a: ({ href, children, ...props }) => {
           const sourceId = href?.startsWith("#source-") ? href.slice("#source-".length) : undefined;
           return <a {...props} href={href} className={sourceId ? "ui-markdown__citation" : undefined} style={sourceId ? customAccent(citationAccentSlot?.(sourceId) ?? 0) : undefined} onClick={sourceId ? (event) => { event.preventDefault(); onCitationSelect?.(sourceId); } : props.onClick}>{children}</a>;

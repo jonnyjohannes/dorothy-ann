@@ -566,8 +566,16 @@ function bounded(value: unknown, maximum: number): value is string {
 
 class CitationParser {
   private buffer = "";
-  private readonly allowed: Set<string>;
-  constructor(allowed: readonly SourceId[]) { this.allowed = new Set(allowed); }
+  private readonly allowed: Map<string, SourceId>;
+  constructor(allowed: readonly SourceId[]) {
+    this.allowed = new Map();
+    for (const sourceId of allowed) {
+      this.allowed.set(sourceId, sourceId);
+      // Models occasionally omit the stable `src_` namespace prefix. Accept
+      // that shorthand only when its full digest maps to an allowed source.
+      this.allowed.set(sourceId.slice("src_".length), sourceId);
+    }
+  }
   feed(text: string): AssistantContentPart[] { this.buffer += text; return this.drain(false); }
   finish(): AssistantContentPart[] { return this.drain(true); }
   private drain(final: boolean): AssistantContentPart[] {
@@ -592,7 +600,8 @@ class CitationParser {
       if (end < 0) { if (!final) { this.buffer = this.buffer.slice(start); return parts; } parts.push({ type: "text", markdown: this.buffer }); this.buffer = ""; return parts; }
       const raw = this.buffer.slice(start + 7, end);
       const marker = this.buffer.slice(start, end + 2);
-      if (/^[A-Za-z0-9_-]+$/.test(raw) && this.allowed.has(raw)) parts.push({ type: "citation", sourceId: raw as SourceId });
+      const sourceId = this.allowed.get(raw);
+      if (/^[A-Za-z0-9_-]+$/.test(raw) && sourceId) parts.push({ type: "citation", sourceId });
       else parts.push({ type: "text", markdown: marker });
       this.buffer = this.buffer.slice(end + 2);
     }

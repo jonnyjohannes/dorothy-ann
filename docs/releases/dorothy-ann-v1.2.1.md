@@ -1,11 +1,11 @@
-# Dorothy Ann v1.2.1 release inventory (candidate)
+# Dorothy Ann v1.2.1 release inventory
 
-- Status: candidate prepared; not merged, tagged, or deployment-verified
-- Candidate branch: `release/v1.2.1-candidate`
-- Candidate commit: `4d1fa26` (reverts app-wide accent scroll indicators)
+- Status: candidate closed; PR merged and tag pushed. A later read-only plan audit found a successful GitHub Production deployment status for a subsequent commit containing these changes and a responsive Production health endpoint; direct active alias-to-commit mapping was not inspected.
+- Candidate branch: `release/v1.2.1` (merged; remote branch retired)
+- Candidate PR head: `d91c8ff` (squash-merged as `936c047`)
 - Base: `main` at `bb106fb` (`v1.2.0`)
 - Package version: `1.2.1`
-- Release tag/date: pending
+- Release tag/date: annotated `v1.2.1` on `2026-09-28`, targeting merge commit `936c047`
 - Scope: completed v1.2.1 work through `bc965d7`, with that app-wide scrollbar feature removed by revert. Excludes the subsequent route-layout series (`2d9d8f0`, `2a57d0b`, `ac2921c`, `f3118e5`), reserved with `wip/v1.2.2-route-layout` for v1.2.2.
 
 ## Release summary
@@ -41,7 +41,7 @@ The app-wide accent scrollbar feature (`bc965d7`) and route-scroll/layout/swatch
 - [Two-source synthesis and evidence yield](../plans/archive/dorothy-ann-two-source-synthesis.md) — shipped usable-source floor, bounded backfill, and diagnostics; extraction-yield recovery remains an open concern.
 - [Provisional synthesis streaming](../plans/archive/provisional-research-synthesis-streaming.md) — bounded non-durable preview; fixture browser flushing verified, live timing remains external.
 - [Research failure diagnostics](../plans/archive/research-failure-diagnostics.md) — selected-source failure classification and assessment/Vercel triage; operator validation remains external.
-- [Optional client observability](../plans/archive/client-observability.md) — optional Analytics and research timing shipped; dashboard/Request ID navigation follow-up remains active in [`observability-log-navigation-verification.md`](../plans/observability-log-navigation-verification.md).
+- [Optional client observability](../plans/archive/client-observability.md) — optional Analytics and research timing shipped; the [later log-navigation verification](../plans/archive/observability-log-navigation-verification.md) confirmed one Production invocation's Request ID/log correlation, and the owner accepted the global `no-referrer` tradeoff.
 - [News discovery](../plans/archive/dorothy-ann-news-search.md) and [news cue alignment](../plans/archive/dorothy-ann-news-cue-alignment.md) — raw news search/provenance shipped; live Brave acceptance remains unverified.
 - [Compact web-only assessor](../plans/archive/assessor-compact-web-only.md) and [surface-free assessor proposals](../plans/archive/assessor-surface-free.md) — research remains web-only; `/news` remains raw retrieval.
 - [Release hygiene](../plans/archive/dorothy-ann-release-hygiene.md) — bookkeeping and plan-state cleanup.
@@ -58,10 +58,13 @@ Plan-level fixture and live-provider limits are recorded in each linked plan. Ca
 - `npm run build` — passed; Zod/Rollup false annotation warnings are gone. ReactPlayer's provider-specific Mux (533.35 kB), HLS (591.58 kB), and DASH (858.98 kB) chunks remain dynamically loaded and trigger the >500 kB warning. The initial HTML preloads no such chunk; Jonny chose to retain playback and accept these provider-specific lazy-chunk warnings without raising the build threshold.
 - `CI=1 DOROTHY_E2E_VITE_PORT=5273 npm run test:e2e -- --workers=2` — 16 passed, 10 opt-in Analytics cases skipped.
 - `npm audit` — zero vulnerabilities.
-- `git diff --check` — passed after this verification record was updated.
+- `git diff --check` — passed after release-gate documentation updates.
 
-Vercel Preview on `45838de` completed deployment but reported function TypeScript errors. The root TypeScript config was made standalone (Vercel does not support project references), with local project references moved to `tsconfig.build.json`; the follow-up Preview on `62e0546` completed without TypeScript errors, npm install-script warnings, or a Node-version mismatch warning. The only remaining build warning is for the three accepted lazy video-provider chunks. The active [`vercel-build-node-runtime.md`](../plans/vercel-build-node-runtime.md) records the verification and Production command gate. Live Brave behavior and live provider timing are not claimed. No Production deployment authorization is granted by this file.
+Vercel Preview on `62e0546` completed with no function TypeScript errors, install-script warnings, or Node-version mismatch warning; the only build warning is the accepted lazy Mux/HLS/DASH chunk sizes. The Vercel and Preview Comments checks passed on the merged PR head. The archived [Vercel build and Node runtime plan](../plans/archive/vercel-build-node-runtime.md) records these gates and the later read-only Production check: GitHub reports a successful deployment of subsequent commit `1b68496`, and the Production alias health endpoint returned HTTP 200. That does not directly prove the alias's exact commit or Node runtime. Live Brave behavior and live provider timing are not claimed.
 
 ## Release identity
 
-After release blockers are resolved and final checks run, record the merge commit, annotated tag, release date, PR URL, and deployment outcome here. <|°_°|>
+- PR: [#15](https://github.com/jonnyjohannes/dorothy-ann/pull/15) — merged to `main` on 2026-09-28.
+- Merge commit: `936c0475debb57defc4f656a10ad6534da6f0cbf`.
+- Annotated tag: [`v1.2.1`](https://github.com/jonnyjohannes/dorothy-ann/releases/tag/v1.2.1), targeting the merge commit.
+- Production outcome: later GitHub deployment success and alias health verified read-only as described above; no Production deploy command was run by this agent, and no direct alias-to-commit mapping is claimed. <|°_°|>

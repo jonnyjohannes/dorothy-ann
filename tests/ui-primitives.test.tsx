@@ -45,7 +45,7 @@ describe("browser semantic primitives", () => {
   it("sanitizes markdown while preserving liberal formatting", () => {
     render(<MarkdownContent markdown={"Hello **world**\n\n| A | B |\n| - | - |\n| 1 | 2 |\n\n<a href=\"javascript:alert(1)\">bad</a>"} />);
     expect(screen.getByText("world")).toBeInTheDocument();
-    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.getByRole("table").parentElement).toHaveClass("ui-markdown__table-scroll");
     expect(document.body.innerHTML).not.toContain("javascript:alert(1)");
   });
   it("renders citation markers as numbered links to evidence cards", () => {

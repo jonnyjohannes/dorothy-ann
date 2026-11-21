@@ -1,8 +1,9 @@
 // @vitest-environment node
 import "fake-indexeddb/auto";
 import { webcrypto } from "node:crypto";
+import { Redis, errors } from "@upstash/redis";
 import { Hono } from "hono";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { IdentityPolicy } from "../src/application/identity-policy";
 import type { CanonicalSource, SearchTurn, ThreadId } from "../src/domain/types";
 import { IndexedDbThreadStore, openDorothyAnnV3Db } from "../src/infrastructure/browser/indexeddb-thread-store";
@@ -10,6 +11,8 @@ import { BrowserRemoteThreadStore } from "../src/infrastructure/browser/remote-t
 import { WebCryptoIdentityHasher } from "../src/infrastructure/identity/web-crypto-hasher";
 import { REDIS_MIGRATE_RECORD, REDIS_WRITE_RECORD, REDIS_WRITE_TOMBSTONE, RedisThreadStore, type V3Redis } from "../src/infrastructure/storage/redis-thread-store";
 import { createThreadStorageRoutes } from "../src/server/thread-storage-routes";
+import { createThreadListTimingSink } from "../server/runtime/thread-list-timing";
+import { createLogger, type LogRecord } from "../server/runtime/logger";
 import type { ThreadRevision, ThreadStore } from "../src/ports/storage-v3";
 
 const identity = () => new IdentityPolicy(new WebCryptoIdentityHasher(webcrypto.subtle as unknown as SubtleCrypto));
@@ -21,7 +24,12 @@ const revisions = () => `revision-test-${++serial}` as ThreadRevision;
 class FakeRedis implements V3Redis {
   values = new Map<string, unknown>();
   scores = new Map<string, Map<string, number>>();
+  mgetCalls: string[][] = [];
   async get<T>(key: string) { return (this.values.get(key) as T | undefined) ?? null; }
+  async mget<T extends unknown[]>(...keys: string[]): Promise<T> {
+    this.mgetCalls.push(keys);
+    return keys.map((key) => this.values.get(key) ?? null) as T;
+  }
   async zrange<T extends unknown[]>(key: string) { return [...(this.scores.get(key)?.keys() ?? [])] as T; }
   async zrem(key: string, ...members: string[]) { let count = 0; for (const member of members) if (this.scores.get(key)?.delete(member)) count += 1; return count; }
   async del(...keys: string[]) { let count = 0; for (const key of keys) if (this.values.delete(key)) count += 1; return count; }
@@ -150,6 +158,199 @@ for (const [name, factory] of factories) describe(`${name} v3 storage adapter`, 
     const collision = { ...source, url: "https://example.com/other", canonicalUrl: "https://example.com/other" };
     const revision = earlier.ok ? earlier.value.record.revision : later.value.record.revision;
     expect(await store.commitTerminalTurn({ threadId, expectedRevision: revision, sourceRecords: [collision], turn: turn(4, collision, 7) })).toEqual({ ok: false, failure: { code: "integrity_failure", retryable: false } });
+  });
+});
+
+describe("Redis thread list timings", () => {
+  it("reports one count-only summary and fixed per-phase metrics without changing list results", async () => {
+    const logs: LogRecord[] = [];
+    const emit = vi.fn((name: string) => { if (name === "threads.list.ids.wall_elapsed_ms") throw new Error("metric unavailable"); });
+    const redis = new FakeRedis();
+    const identities = identity();
+    const store = new RedisThreadStore(redis, identities, "test", () => new Date(at(3)), revisions, "legacy", createThreadListTimingSink(createLogger({ level: "info", sink: (record) => { logs.push(record); } }), emit));
+    for (const n of [1, 2]) {
+      const id = uuid(n + 700) as ThreadId;
+      const committed = await store.commitTerminalTurn({ threadId: id, expectedRevision: null, create: { id, title: "SENTINEL_PRIVATE_TITLE", createdAt: at(1) as never }, sourceRecords: [], turn: turn(n) });
+      expect(committed.ok).toBe(true);
+    }
+    const listed = await store.list();
+    expect(listed.ok && listed.value).toHaveLength(2);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ event: "thread_list_timing", outcome: "ok", ids_count: 2, scanned_count: 2, returned_count: 2 });
+    expect(emit.mock.calls.map(([name]) => name)).toEqual([
+      "threads.list.total.wall_elapsed_ms", "threads.list.ids.wall_elapsed_ms", "threads.list.records.wall_elapsed_ms", "threads.list.sort.wall_elapsed_ms",
+    ]);
+    expect(emit.mock.calls.every((call) => call.length === 2 && Number.isInteger(call[1]) && call[1] >= 0)).toBe(true);
+    expect(JSON.stringify([logs, emit.mock.calls])).not.toMatch(/SENTINEL_PRIVATE_TITLE|10000000-0000-4000-8000-|SENTINEL_PROVIDER_PAYLOAD/u);
+  });
+
+  it("reports an index failure without inventing unentered record or sort timings", async () => {
+    const redis = new FakeRedis();
+    redis.zrange = async () => { throw new Error("SENTINEL_PROVIDER_PAYLOAD"); };
+    const logs: LogRecord[] = [];
+    const emit = vi.fn();
+    const store = new RedisThreadStore(redis, identity(), "test", () => new Date(at(3)), revisions, "legacy", createThreadListTimingSink(createLogger({ level: "info", sink: (record) => { logs.push(record); } }), emit));
+    expect(await store.list()).toEqual({ ok: false, failure: { code: "storage_unavailable", retryable: true } });
+    expect(logs[0]).toMatchObject({ event: "thread_list_timing", outcome: "failed", ids_count: 0, scanned_count: 0, returned_count: 0 });
+    expect(logs[0]).not.toHaveProperty("records_ms");
+    expect(logs[0]).not.toHaveProperty("sort_ms");
+    expect(emit.mock.calls.map(([name]) => name)).toEqual(["threads.list.total.wall_elapsed_ms", "threads.list.ids.wall_elapsed_ms"]);
+    expect(JSON.stringify(logs)).not.toContain("SENTINEL_PROVIDER_PAYLOAD");
+  });
+
+  it("measures a failed record read without pretending sorting happened", async () => {
+    const redis = new FakeRedis();
+    redis.scores.set("test:threads:index", new Map([[uuid(800), 1]]));
+    redis.mget = async () => { throw new Error("SENTINEL_PROVIDER_PAYLOAD"); };
+    const logs: LogRecord[] = [];
+    const emit = vi.fn();
+    const store = new RedisThreadStore(redis, identity(), "test", () => new Date(at(3)), revisions, "legacy", createThreadListTimingSink(createLogger({ level: "info", sink: (record) => { logs.push(record); } }), emit));
+    expect(await store.list()).toMatchObject({ ok: false, failure: { code: "storage_unavailable" } });
+    expect(logs[0]).toMatchObject({ outcome: "failed", ids_count: 1, scanned_count: 0, returned_count: 0 });
+    expect(logs[0]).not.toHaveProperty("max_record_ms");
+    expect(logs[0]).not.toHaveProperty("sort_ms");
+    expect(emit.mock.calls.map(([name]) => name)).toEqual([
+      "threads.list.total.wall_elapsed_ms", "threads.list.ids.wall_elapsed_ms", "threads.list.records.wall_elapsed_ms",
+    ]);
+    expect(JSON.stringify(logs)).not.toContain("SENTINEL_PROVIDER_PAYLOAD");
+  });
+
+  it("batches 180 indexed IDs, including missing legacy checks, without individual missing-record GETs", async () => {
+    const redis = new FakeRedis();
+    const store = new RedisThreadStore(redis, identity(), "test", () => new Date(at(3)), revisions, "legacy");
+    const firstId = uuid(1000) as ThreadId;
+    const committed = await store.commitTerminalTurn({ threadId: firstId, expectedRevision: null, create: { id: firstId, title: "Batch", createdAt: at(1) as never }, sourceRecords: [], turn: turn(1) });
+    expect(committed.ok).toBe(true);
+    if (!committed.ok) return;
+    const index = new Map<string, number>();
+    for (let i = 0; i < 180; i += 1) {
+      const id = uuid(1000 + i) as ThreadId;
+      index.set(id, i);
+      if (i < 51) redis.values.set(`test:thread:${id}`, { ...committed.value.record, thread: { ...committed.value.record.thread, id } });
+    }
+    const deletedId = uuid(1178) as ThreadId;
+    redis.values.set(`test:deleted:${deletedId}`, { deletedAt: at(1), expiresAt: at(8) });
+    const expiredId = uuid(1179) as ThreadId;
+    redis.values.set(`test:thread:${expiredId}`, { ...committed.value.record, expiresAt: at(2), thread: { ...committed.value.record.thread, id: expiredId } });
+    redis.scores.set("test:threads:index", index);
+    const get = vi.spyOn(redis, "get");
+    const result = await store.list();
+    expect(result.ok && result.value).toHaveLength(51);
+    expect(result.ok && result.value.map((item) => item.summary.id)).toEqual([...index.keys()].slice(0, 51));
+    expect(redis.mgetCalls.length).toBeLessThan(50);
+    expect(redis.mgetCalls.every((keys) => keys.length <= 16)).toBe(true);
+    expect(get).toHaveBeenCalledTimes(2); // only the expired snapshot needs a fresh read
+    expect(redis.values.has(`test:thread:${expiredId}`)).toBe(false);
+    expect(redis.scores.get("test:threads:index")?.has(deletedId)).toBe(true);
+  });
+
+  it("migrates a legacy value found behind a stale current-index entry", async () => {
+    const redis = new FakeRedis();
+    const id = uuid(1200) as ThreadId;
+    redis.scores.set("test:threads:index", new Map([[id, 1]]));
+    redis.values.set(`legacy:thread:${id}`, legacyRecord(id));
+    const store = new RedisThreadStore(redis, identity(), "test", () => new Date(at(3)), revisions, "legacy");
+    const result = await store.list();
+    expect(result.ok && result.value).toMatchObject([{ summary: { id, legacyArchiveCount: 1 } }]);
+    expect(redis.values.has(`legacy:thread:${id}`)).toBe(false);
+    expect(redis.mgetCalls.map((keys) => keys.length)).toEqual([2, 1, 2]);
+  });
+
+  it("splits only a recognized Upstash size error, then falls back to per-record GETs", async () => {
+    const redis = new FakeRedis();
+    const id = uuid(1300) as ThreadId;
+    const store = new RedisThreadStore(redis, identity(), "test", () => new Date(at(3)), revisions, "legacy");
+    expect((await store.commitTerminalTurn({ threadId: id, expectedRevision: null, create: { id, title: "Large", createdAt: at(1) as never }, sourceRecords: [], turn: turn(1) })).ok).toBe(true);
+    const mget = redis.mget.bind(redis);
+    redis.mget = async <T extends unknown[]>(...keys: string[]): Promise<T> => {
+      if (keys.length > 1) throw new errors.UpstashError("ERR max request size exceeded, command was: PRIVATE_KEY");
+      return mget<T>(...keys);
+    };
+    const get = vi.spyOn(redis, "get");
+    const result = await store.list();
+    expect(result.ok && result.value).toHaveLength(1);
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(redis.mgetCalls).toHaveLength(0); // the pair fell back before a successful MGET
+  });
+
+  it("returns storage_unavailable without logging provider details if size fallback cannot read a record", async () => {
+    const redis = new FakeRedis();
+    redis.scores.set("test:threads:index", new Map([[uuid(1320), 1]]));
+    redis.mget = async () => { throw new errors.UpstashError("ERR max request size exceeded, command was: PRIVATE_KEY"); };
+    redis.get = async () => { throw new Error("SENTINEL_PROVIDER_PAYLOAD"); };
+    const logs: LogRecord[] = [];
+    const store = new RedisThreadStore(redis, identity(), "test", () => new Date(at(3)), revisions, "legacy", createThreadListTimingSink(createLogger({ level: "info", sink: (record) => { logs.push(record); } }), vi.fn()));
+    expect(await store.list()).toEqual({ ok: false, failure: { code: "storage_unavailable", retryable: true } });
+    expect(logs[0]).toMatchObject({ outcome: "failed", ids_count: 1, scanned_count: 0 });
+    expect(JSON.stringify(logs)).not.toMatch(/PRIVATE_KEY|SENTINEL_PROVIDER_PAYLOAD/u);
+  });
+
+  it("splits an oversized multi-ID batch without individual GETs when smaller MGETs fit", async () => {
+    const redis = new FakeRedis();
+    const store = new RedisThreadStore(redis, identity(), "test", () => new Date(at(3)), revisions, "legacy");
+    for (let i = 0; i < 8; i += 1) {
+      const id = uuid(1350 + i) as ThreadId;
+      expect((await store.commitTerminalTurn({ threadId: id, expectedRevision: null, create: { id, title: "Chunk", createdAt: at(1) as never }, sourceRecords: [], turn: turn(1) })).ok).toBe(true);
+    }
+    const mget = redis.mget.bind(redis);
+    redis.mget = async <T extends unknown[]>(...keys: string[]): Promise<T> => {
+      if (keys.length > 4) throw new errors.UpstashError("ERR max request size exceeded");
+      return mget<T>(...keys);
+    };
+    const get = vi.spyOn(redis, "get");
+    const result = await store.list();
+    expect(result.ok && result.value).toHaveLength(8);
+    expect(redis.mgetCalls.map((keys) => keys.length)).toEqual([4, 4, 4, 4]);
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed batch results rather than dropping indexed records", async () => {
+    const redis = new FakeRedis();
+    redis.scores.set("test:threads:index", new Map([[uuid(1400), 1]]));
+    redis.mget = async <T extends unknown[]>(): Promise<T> => [] as unknown as T;
+    const get = vi.spyOn(redis, "get");
+    const result = await new RedisThreadStore(redis, identity(), "test", () => new Date(at(3)), revisions, "legacy").list();
+    expect(result).toMatchObject({ ok: false, failure: { code: "storage_unavailable" } });
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("rechecks an expired batched snapshot before cleanup if a thread was refreshed", async () => {
+    const redis = new FakeRedis();
+    const id = uuid(1500) as ThreadId;
+    const store = new RedisThreadStore(redis, identity(), "test", () => new Date(at(3)), revisions, "legacy");
+    const created = await store.commitTerminalTurn({ threadId: id, expectedRevision: null, create: { id, title: "Refreshed", createdAt: at(1) as never }, sourceRecords: [], turn: turn(1) });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const key = `test:thread:${id}`;
+    const current = redis.values.get(key);
+    redis.values.set(key, { ...created.value.record, expiresAt: at(2) });
+    const mget = redis.mget.bind(redis);
+    redis.mget = async <T extends unknown[]>(...keys: string[]): Promise<T> => {
+      const snapshot = await mget<T>(...keys);
+      redis.values.set(key, current);
+      return snapshot;
+    };
+    const result = await store.list();
+    expect(result.ok && result.value).toHaveLength(1);
+    expect(redis.values.get(key)).toEqual(current);
+  });
+
+  it("matches the SDK's documented size-error shape and deserializes ordered MGET values", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(Response.json({ error: "ERR max request size exceeded" }, { status: 413 }))
+      .mockResolvedValueOnce(Response.json([{ result: [JSON.stringify({ revision: "one" }), null] }]));
+    vi.stubGlobal("fetch", fetcher);
+    try {
+      const client = new Redis({ url: "https://example.invalid", token: "fixture" });
+      await expect(client.mget("fixture-key")).rejects.toMatchObject({ name: "UpstashError", message: expect.stringMatching(/^ERR max request size exceeded/u) });
+      expect(await client.mget<Array<{ revision: string } | null>>("fixture-key", "missing-key")).toEqual([{ revision: "one" }, null]);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it("does not let an observer failure alter storage results", async () => {
+    const store = new RedisThreadStore(new FakeRedis(), identity(), "test", () => new Date(at(3)), revisions, "legacy", () => { throw new Error("observer failure"); });
+    expect(await store.list()).toEqual({ ok: true, value: [] });
   });
 });
 

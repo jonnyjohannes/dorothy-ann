@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultAccentSlot, headingAccentSlot, inlineAccentSlot, primaryAccentSlot, readColorScheme, readPrimaryAccent, sourceAccentSlot } from "../src/ui/color-scheme";
+import { headingAccentSlot, inlineAccentSlot, readColorScheme, sourceAccentSlot } from "../src/ui/color-scheme";
 
 describe("color scheme policy", () => {
   it("falls back to mono for missing or invalid values", () => {
@@ -15,16 +15,6 @@ describe("color scheme policy", () => {
     expect(slot).toBeLessThan(8);
     expect(sourceAccentSlot("source-a", 0, "thread-a")).toBe(0);
     expect(sourceAccentSlot("source-a", 8, "thread-a")).not.toBe(sourceAccentSlot("source-a", 8, "thread-b"));
-  });
-
-  it("selects scheme defaults and validates primary accents", () => {
-    expect(defaultAccentSlot("catppuccin")).toBe(5);
-    expect(primaryAccentSlot("rose-pine", "3")).toBe(3);
-    expect(readPrimaryAccent("9")).toBe("default");
-    expect(readPrimaryAccent("e068a5")).toBe("e068a5");
-    expect(readPrimaryAccent("fbf719")).toBe("fbf719");
-    expect(primaryAccentSlot("mono", "7")).toBe(0);
-    expect(primaryAccentSlot("rose-pine", "e068a5")).toBe(0);
   });
 
   it("keeps headings stable within a thread and spreads inline accents", () => {

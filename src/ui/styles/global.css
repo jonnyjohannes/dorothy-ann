@@ -1,5 +1,74 @@
+/* Source Sans 3 Latin, SIL OFL 1.1; see ../fonts/SOURCE-SANS-3-LICENSE.txt. */
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/source-sans-3-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../fonts/source-sans-3-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../fonts/source-sans-3-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../fonts/source-sans-3-latin-700-normal.woff2") format("woff2");
+}
+/* Source Code Pro Latin, SIL OFL 1.1; see ../fonts/OFL.txt. */
+@font-face {
+  font-family: "Source Code Pro";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/source-code-pro-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Source Code Pro";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../fonts/source-code-pro-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Source Code Pro";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../fonts/source-code-pro-latin-700-normal.woff2") format("woff2");
+}
 :root {
+  --sans: "Source Sans 3", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: "Source Code Pro", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --paper: #e0e0e0;
+  --command-accent-1: var(--accent-1);
+  --command-accent-2: var(--accent-2);
+  --command-accent-3: var(--accent-3);
+  --command-accent-4: var(--accent-4);
+  --command-accent-5: var(--accent-5);
+  --command-accent-6: var(--accent-6);
+  --command-accent-7: var(--accent-7);
+  --command-accent-8: var(--accent-8);
+  --command-foreground-1: #6c5205;
+  --command-foreground-2: #6c5205;
+  --command-foreground-3: #6c5205;
+  --command-foreground-4: #6c5205;
+  --command-foreground-5: #6c5205;
+  --command-foreground-6: #6c5205;
+  --command-foreground-7: #6c5205;
+  --command-foreground-8: #6c5205;
   --ink: #1e1e1e;
   --muted: #626262;
   --accent: #f6c945;
@@ -12,9 +81,9 @@
   --accent-7: #f6c945;
   --accent-8: #f6c945;
   --line: #d0d0d0;
-  --display: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --display: var(--sans);
   --shadow: 0 1rem 3rem rgb(0 0 0 / 8%);
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: var(--sans);
   color: var(--ink);
   background: var(--paper);
   font-synthesis: none;
@@ -104,12 +173,239 @@
     --accent-8: #e0def4;
   }
 }
+/* Keep the command rail in a cool-to-warm hue progression; monochrome stays one hue. */
+:root[data-color-scheme="catppuccin"] {
+  --command-accent-1: var(--accent-1); --command-foreground-1: #f3ecfd;
+  --command-accent-2: var(--accent-3); --command-foreground-2: #f8faff;
+  --command-accent-3: var(--accent-4); --command-foreground-3: #041c1e;
+  --command-accent-4: var(--accent-5); --command-foreground-4: #10280b;
+  --command-accent-5: var(--accent-6); --command-foreground-5: #4a2f0a;
+  --command-accent-6: var(--accent-7); --command-foreground-6: #4e1d00;
+  --command-accent-7: var(--accent-8); --command-foreground-7: #fdeaee;
+  --command-accent-8: var(--accent-2); --command-foreground-8: #f2e2f6;
+}
+:root[data-theme="dark"][data-color-scheme="catppuccin"] {
+  --command-accent-1: var(--accent-2); --command-foreground-1: #5c10b5;
+  --command-accent-2: var(--accent-3); --command-foreground-2: #063d96;
+  --command-accent-3: var(--accent-4); --command-foreground-3: #1b6458;
+  --command-accent-4: var(--accent-5); --command-foreground-4: #24661e;
+  --command-accent-5: var(--accent-6); --command-foreground-5: #825d0a;
+  --command-accent-6: var(--accent-7); --command-foreground-6: #853606;
+  --command-accent-7: var(--accent-8); --command-foreground-7: #7b0d2b;
+  --command-accent-8: var(--accent-1); --command-foreground-8: #0323ef;
+}
+/* Rose Pine has fewer spectral hues, so its purple/cyan shades lead into rose, coral, and gold. */
+:root[data-color-scheme="rose-pine"] {
+  --command-accent-1: var(--accent-1); --command-foreground-1: #d0cede;
+  --command-accent-2: var(--accent-4); --command-foreground-2: #1b1521;
+  --command-accent-3: var(--accent-2); --command-foreground-3: #cde6f0;
+  --command-accent-4: var(--accent-3); --command-foreground-4: #152326;
+  --command-accent-5: var(--accent-5); --command-foreground-5: #11080b;
+  --command-accent-6: var(--accent-6); --command-foreground-6: #551d1a;
+  --command-accent-7: var(--accent-7); --command-foreground-7: #5a3809;
+  --command-accent-8: var(--accent-8); --command-foreground-8: #bcb8ca;
+}
+:root[data-theme="dark"][data-color-scheme="rose-pine"] {
+  --command-accent-1: var(--accent-1); --command-foreground-1: #5c2998;
+  --command-accent-2: var(--accent-8); --command-foreground-2: #5b50c5;
+  --command-accent-3: var(--accent-2); --command-foreground-3: #265760;
+  --command-accent-4: var(--accent-3); --command-foreground-4: #ebf5f8;
+  --command-accent-5: var(--accent-6); --command-foreground-5: #5c0d23;
+  --command-accent-6: var(--accent-5); --command-foreground-6: #922e2a;
+  --command-accent-7: var(--accent-7); --command-foreground-7: #774908;
+  --command-accent-8: var(--accent-4); --command-foreground-8: #582892;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"][data-color-scheme="catppuccin"] {
+    --command-accent-1: var(--accent-2); --command-foreground-1: #5c10b5;
+    --command-accent-2: var(--accent-3); --command-foreground-2: #063d96;
+    --command-accent-3: var(--accent-4); --command-foreground-3: #1b6458;
+    --command-accent-4: var(--accent-5); --command-foreground-4: #24661e;
+    --command-accent-5: var(--accent-6); --command-foreground-5: #825d0a;
+    --command-accent-6: var(--accent-7); --command-foreground-6: #853606;
+    --command-accent-7: var(--accent-8); --command-foreground-7: #7b0d2b;
+    --command-accent-8: var(--accent-1); --command-foreground-8: #0323ef;
+  }
+  :root[data-theme="auto"][data-color-scheme="rose-pine"] {
+    --command-accent-1: var(--accent-1); --command-foreground-1: #5c2998;
+    --command-accent-2: var(--accent-8); --command-foreground-2: #5b50c5;
+    --command-accent-3: var(--accent-2); --command-foreground-3: #265760;
+    --command-accent-4: var(--accent-3); --command-foreground-4: #ebf5f8;
+    --command-accent-5: var(--accent-6); --command-foreground-5: #5c0d23;
+    --command-accent-6: var(--accent-5); --command-foreground-6: #922e2a;
+    --command-accent-7: var(--accent-7); --command-foreground-7: #774908;
+    --command-accent-8: var(--accent-4); --command-foreground-8: #582892;
+  }
+}
+/* Thread hues follow accent-slot order; reuse each home command's same-hue readable foreground. */
+:root[data-color-scheme="catppuccin"] {
+  --thread-foreground-1: var(--command-foreground-1);
+  --thread-foreground-2: var(--command-foreground-8);
+  --thread-foreground-3: var(--command-foreground-2);
+  --thread-foreground-4: var(--command-foreground-3);
+  --thread-foreground-5: var(--command-foreground-4);
+  --thread-foreground-6: var(--command-foreground-5);
+  --thread-foreground-7: var(--command-foreground-6);
+  --thread-foreground-8: var(--command-foreground-7);
+}
+:root[data-theme="dark"][data-color-scheme="catppuccin"] {
+  --thread-foreground-1: var(--command-foreground-8);
+  --thread-foreground-2: var(--command-foreground-1);
+  --thread-foreground-8: var(--command-foreground-7);
+  --thread-foreground-7: var(--command-foreground-6);
+  --thread-foreground-6: var(--command-foreground-5);
+  --thread-foreground-5: var(--command-foreground-4);
+  --thread-foreground-4: var(--command-foreground-3);
+  --thread-foreground-3: var(--command-foreground-2);
+}
+:root[data-color-scheme="rose-pine"] {
+  --thread-foreground-1: var(--command-foreground-1);
+  --thread-foreground-2: var(--command-foreground-3);
+  --thread-foreground-3: var(--command-foreground-4);
+  --thread-foreground-4: var(--command-foreground-2);
+  --thread-foreground-5: var(--command-foreground-5);
+  --thread-foreground-6: var(--command-foreground-6);
+  --thread-foreground-7: var(--command-foreground-7);
+  --thread-foreground-8: var(--command-foreground-8);
+}
+:root[data-theme="dark"][data-color-scheme="rose-pine"] {
+  --thread-foreground-1: var(--command-foreground-1);
+  --thread-foreground-2: var(--command-foreground-3);
+  --thread-foreground-3: var(--command-foreground-4);
+  --thread-foreground-4: var(--command-foreground-8);
+  --thread-foreground-5: var(--command-foreground-6);
+  --thread-foreground-6: var(--command-foreground-5);
+  --thread-foreground-7: var(--command-foreground-7);
+  --thread-foreground-8: var(--command-foreground-2);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"][data-color-scheme="catppuccin"] {
+    --thread-foreground-1: var(--command-foreground-8);
+    --thread-foreground-2: var(--command-foreground-1);
+    --thread-foreground-3: var(--command-foreground-2);
+    --thread-foreground-4: var(--command-foreground-3);
+    --thread-foreground-5: var(--command-foreground-4);
+    --thread-foreground-6: var(--command-foreground-5);
+    --thread-foreground-7: var(--command-foreground-6);
+    --thread-foreground-8: var(--command-foreground-7);
+  }
+  :root[data-theme="auto"][data-color-scheme="rose-pine"] {
+    --thread-foreground-1: var(--command-foreground-1);
+    --thread-foreground-2: var(--command-foreground-3);
+    --thread-foreground-3: var(--command-foreground-4);
+    --thread-foreground-4: var(--command-foreground-8);
+    --thread-foreground-5: var(--command-foreground-6);
+    --thread-foreground-6: var(--command-foreground-5);
+    --thread-foreground-7: var(--command-foreground-7);
+    --thread-foreground-8: var(--command-foreground-2);
+  }
+}
+:root {
+  --focus-accent: color-mix(in srgb, var(--accent-1) 55%, var(--ink));
+  --scroll-focus-color: var(--focus-accent);
+  --scroll-thumb-color: var(--focus-accent);
+}
+@keyframes caret-accent-cycle {
+  0%, 12.49% { caret-color: var(--accent-1); }
+  12.5%, 24.99% { caret-color: var(--accent-2); }
+  25%, 37.49% { caret-color: var(--accent-3); }
+  37.5%, 49.99% { caret-color: var(--accent-4); }
+  50%, 62.49% { caret-color: var(--accent-5); }
+  62.5%, 74.99% { caret-color: var(--accent-6); }
+  75%, 87.49% { caret-color: var(--accent-7); }
+  87.5%, 99.99% { caret-color: var(--accent-8); }
+  100% { caret-color: var(--accent-1); }
+}
+:where(input, textarea) { animation: caret-accent-cycle 32s steps(1, end) infinite; }
+@media (prefers-reduced-motion: reduce) {
+  :where(input, textarea) { animation: none; caret-color: var(--accent-6); }
+}
 * {
   box-sizing: border-box;
+}
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 body {
   margin: 0;
   min-width: 320px;
+  font-size: 1.0625rem;
+}
+:where(code, kbd, samp, pre) { font-size: 1rem; }
+#root {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.route-scroll-locked { overflow: hidden !important; }
+:is(.app-route-scroll, .app-thread-list-scroll, .app-scroll-surface, .ui-listbox-menu, .ui-fuzzy-listbox, .ui-markdown pre) {
+  scrollbar-color: var(--scroll-thumb-color) transparent;
+}
+:is(.app-route-scroll, .app-thread-list-scroll, .app-scroll-surface, .ui-listbox-menu, .ui-fuzzy-listbox, .ui-markdown pre)::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb-color);
+}
+:is(.app-route-scroll, .app-thread-list-scroll, .app-scroll-surface, .ui-markdown pre):focus:not(.has-custom-scroll-indicator) {
+  outline: 2px solid var(--scroll-focus-color);
+  outline-offset: -2px;
+}
+:is(.app-route-scroll, .app-thread-list-scroll, .app-scroll-surface, .ui-markdown pre):focus.has-custom-scroll-indicator {
+  outline: none;
+}
+.has-custom-scroll-indicator {
+  scrollbar-width: none !important;
+}
+.has-custom-scroll-indicator::-webkit-scrollbar {
+  display: none;
+}
+.app-scroll-indicator {
+  --scroll-track-width: 0.4rem;
+  position: fixed;
+  z-index: 20;
+  display: block;
+  background: transparent;
+  touch-action: none;
+  outline-offset: 0;
+}
+.app-scroll-indicator:is(:focus, .app-scroll-indicator--surface-focused) {
+  outline: 2px solid var(--scroll-focus-color);
+  outline-offset: 0;
+}
+.app-scroll-indicator > div {
+  position: absolute;
+  display: block;
+  background: var(--scroll-thumb-color);
+}
+@media (forced-colors: active) {
+  .app-scroll-indicator > div { background: CanvasText; }
+  .app-scroll-indicator:is(:focus, .app-scroll-indicator--surface-focused) { outline-color: CanvasText; }
+  :is(.app-route-scroll, .app-thread-list-scroll, .app-scroll-surface, .ui-markdown pre):focus:not(.has-custom-scroll-indicator) { outline-color: CanvasText; }
+}
+.app-scroll-indicator--vertical {
+  top: var(--scroll-track-start);
+  right: max(var(--scroll-track-edge), env(safe-area-inset-right, 0px));
+  width: var(--scroll-track-width);
+  height: var(--scroll-track-size);
+}
+.app-scroll-indicator--vertical > div {
+  top: var(--scroll-thumb-start);
+  width: 100%;
+  height: var(--scroll-thumb-size);
+}
+.app-scroll-indicator--horizontal {
+  left: var(--scroll-track-start);
+  bottom: var(--scroll-track-edge);
+  width: var(--scroll-track-size);
+  height: var(--scroll-track-width);
+}
+.app-scroll-indicator--horizontal > div {
+  left: var(--scroll-thumb-start);
+  width: var(--scroll-thumb-size);
+  height: 100%;
 }
 button,
 input,
@@ -135,6 +431,15 @@ textarea {
 :focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 3px;
+}
+/* Text fields show the screen's focus accent, with an outer border for bordered forms. */
+:where(input:not([type]), input:is([type="text"], [type="password"], [type="search"], [type="email"], [type="url"], [type="tel"], [type="number"]), textarea):focus {
+  border-color: var(--focus-accent);
+  outline: 2px solid var(--focus-accent);
+  outline-offset: 2px;
+}
+form:has(> :where(input:not([type]), input:is([type="text"], [type="password"], [type="search"], [type="email"], [type="url"], [type="tel"], [type="number"]), textarea):focus) {
+  border-color: var(--focus-accent);
 }
 @media (prefers-reduced-motion: reduce) {
   *,

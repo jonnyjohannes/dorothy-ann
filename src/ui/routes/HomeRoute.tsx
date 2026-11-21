@@ -22,7 +22,7 @@ export function HomeRoute() {
 
   const populateSearchCommand = (command: "/link" | "/news" | "/image" | "/video") => {
     setValue(`${command} `);
-    document.querySelector<HTMLInputElement>('input[aria-label="Search query"]:not(:disabled)')?.focus();
+    document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Search query"]:not(:disabled)')?.focus();
   };
 
   const onIntent = (intent: BoxIntent) => {
@@ -33,21 +33,23 @@ export function HomeRoute() {
     else if (command.type === "invalid") setMessage(command.message);
   };
 
-  return <main className={styles.shell}>
+  return <main className={`${styles.shell} ${styles.promptShell}`}>
     <StickyHeader onIntent={onIntent} />
-    <section className={styles.routeLayout}>
+    <section className={`${styles.routeLayout} app-route-scroll`} aria-label="Home content">
       <h1 className={styles.pageTitle}><code>/new</code></h1>
       <div className={styles.commandList} aria-label="Commands">
-        <p><Link to="/"><code>/new</code></Link><span><code>&lt;esc&gt;&lt;esc&gt;</code></span></p>
+        <p><Link to="/new"><code>/new</code></Link><span><code>&lt;alt&gt;+a</code></span></p>
         <p><Link to="/threads" state={threadSelectorState(location)}><code>/threads</code></Link><span><code>&lt;alt&gt;+s</code></span></p>
         <p><button className={styles.commandListAction} type="button" onClick={() => populateSearchCommand("/link")}><code>/link</code></button><span><code>{"{query}"}</code></span></p>
         <p><button className={styles.commandListAction} type="button" onClick={() => populateSearchCommand("/news")}><code>/news</code></button><span><code>{"{query}"}</code></span></p>
         <p><button className={styles.commandListAction} type="button" onClick={() => populateSearchCommand("/image")}><code>/image</code></button><span><code>{"{query}"}</code></span></p>
         <p><button className={styles.commandListAction} type="button" onClick={() => populateSearchCommand("/video")}><code>/video</code></button><span><code>{"{query}"}</code></span></p>
-        <p><Link to="/settings"><code>/settings</code></Link><span><code>&lt;alt&gt;+c</code></span></p>
+        <p><Link to="/settings"><code>/settings</code></Link><span><code>&lt;alt&gt;+,</code></span></p>
       </div>
-      <PromptBox value={value} onChange={setValue} onIntent={onIntent} />
       {message && <p className={styles.commandMessage} role="status">{message}</p>}
     </section>
+    <footer className={`${styles.promptFooter} app-prompt-footer`}>
+      <PromptBox value={value} onChange={setValue} onIntent={onIntent} />
+    </footer>
   </main>;
 }

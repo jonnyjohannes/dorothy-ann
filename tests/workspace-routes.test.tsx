@@ -1,14 +1,15 @@
 import { fireEvent, render, screen, cleanup } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { GlobalShortcuts } from "../src/ui/App";
+import { PromptBox } from "../src/ui/boxes/PromptBox";
 import { WorkspaceController } from "../src/ui/controllers/workspace-controller";
 import { ProvisionalAnswer, ResearchStatus } from "../src/ui/routes/ThreadRoute";
 import { researchAnswerPosition } from "../src/ui/policies/answer-position";
 import { HomeRoute } from "../src/ui/routes/HomeRoute";
 import { threadSelectorReturnTo, threadSelectorState } from "../src/ui/navigation-state";
 
-afterEach(() => cleanup());
+afterEach(() => { cleanup(); vi.useRealTimers(); });
 function LocationProbe() { const location = useLocation(); return <output data-testid="location">{location.pathname}{location.search}</output>; }
 
 describe("workspace controller", () => {
@@ -111,13 +112,13 @@ describe("workspace controller", () => {
     expect(screen.getByTestId("location")).toHaveTextContent("/threads/new?q=%2Fimage%20apollo%2011%20landing");
   });
   it.each(["/threads", "/settings"])("uses unmodified i to focus the prompt from %s", (path) => {
-    render(<MemoryRouter initialEntries={[path]}><GlobalShortcuts /><input aria-label="Search query" /></MemoryRouter>);
+    render(<MemoryRouter initialEntries={[path]}><GlobalShortcuts /><textarea aria-label="Search query" /></MemoryRouter>);
     const prompt = screen.getByLabelText("Search query");
     fireEvent.keyDown(window, { key: "i" });
     expect(document.activeElement).toBe(prompt);
   });
-  it.each([["s", "KeyS", "/threads"], ["c", "KeyC", "/settings"] as const])("opens %s route with Alt+%s even while the prompt is focused", (key, code, path) => {
-    render(<MemoryRouter initialEntries={["/"]}><Routes><Route path="*" element={<><GlobalShortcuts /><input aria-label="Search query" /><LocationProbe /></>} /></Routes></MemoryRouter>);
+  it.each([["s", "KeyS", "/threads"], [",", "Comma", "/settings"], ["a", "KeyA", "/new"]] as const)("opens %s route with Alt+%s even while the prompt is focused", (key, code, path) => {
+    render(<MemoryRouter initialEntries={["/"]}><Routes><Route path="*" element={<><GlobalShortcuts /><textarea aria-label="Search query" /><LocationProbe /></>} /></Routes></MemoryRouter>);
     const prompt = screen.getByLabelText("Search query");
     prompt.focus();
     fireEvent.keyDown(prompt, { key, code, altKey: true });
@@ -136,13 +137,53 @@ describe("workspace controller", () => {
     expect(threadSelectorReturnTo({ returnTo: "https://example.com" })).toBe("/");
     expect(threadSelectorReturnTo({ returnTo: "//example.com" })).toBe("/");
   });
-  it("does not assign Alt+A to any search result kind", () => {
-    render(<MemoryRouter initialEntries={["/"]}><Routes><Route path="*" element={<><GlobalShortcuts /><input aria-label="Search query" /><LocationProbe /></>} /></Routes></MemoryRouter>);
+  it("gives prompt suggestions first Escape, then hands focus to scroll before a second Escape returns home", () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    render(<MemoryRouter initialEntries={["/threads/thread-1"]}><GlobalShortcuts /><PromptBox value="/" onChange={vi.fn()} onIntent={vi.fn()} /><section className="app-route-scroll" tabIndex={0} aria-label="Thread content" /><LocationProbe /></MemoryRouter>);
+    const prompt = screen.getByLabelText("Search query");
+    const scroller = screen.getByRole("region", { name: "Thread content" });
+    fireEvent.keyDown(prompt, { key: "Escape" });
+    expect(prompt).toHaveFocus();
+    expect(screen.queryByRole("listbox", { name: "Commands" })).not.toBeInTheDocument();
+    vi.advanceTimersByTime(600);
+    fireEvent.keyDown(prompt, { key: "Escape" });
+    expect(scroller).toHaveFocus();
+    expect(screen.getByTestId("location")).toHaveTextContent("/threads/thread-1");
+    fireEvent.keyDown(scroller, { key: "Escape" });
+    expect(screen.getByTestId("location")).toHaveTextContent(/^\/$/u);
+  });
+  it("lets the Escape pair expire and ignores modified/composing Escape in the prompt", () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    render(<MemoryRouter initialEntries={["/threads/thread-1"]}><GlobalShortcuts /><textarea aria-label="Search query" /><section className="app-route-scroll" tabIndex={0} aria-label="Thread content" /><LocationProbe /></MemoryRouter>);
+    const prompt = screen.getByLabelText("Search query");
+    const scroller = screen.getByRole("region", { name: "Thread content" });
+    prompt.focus();
+    fireEvent.keyDown(prompt, { key: "Escape", altKey: true });
+    fireEvent.keyDown(prompt, { key: "Escape", isComposing: true });
+    expect(prompt).toHaveFocus();
+    fireEvent.keyDown(prompt, { key: "Escape" });
+    expect(scroller).toHaveFocus();
+    vi.advanceTimersByTime(600);
+    fireEvent.keyDown(scroller, { key: "Escape" });
+    expect(screen.getByTestId("location")).toHaveTextContent("/threads/thread-1");
+    fireEvent.keyDown(scroller, { key: "Escape", repeat: true });
+    expect(screen.getByTestId("location")).toHaveTextContent("/threads/thread-1");
+    fireEvent.keyDown(scroller, { key: "Escape" });
+    expect(screen.getByTestId("location")).toHaveTextContent(/^\/$/u);
+  });
+  it("does not reserve the old Alt+C settings shortcut", () => {
+    render(<MemoryRouter initialEntries={["/"]}><Routes><Route path="*" element={<><GlobalShortcuts /><textarea aria-label="Search query" /><LocationProbe /></>} /></Routes></MemoryRouter>);
     const prompt = screen.getByLabelText("Search query");
     prompt.focus();
-    fireEvent.keyDown(prompt, { key: "a", code: "KeyA", altKey: true });
+    fireEvent.keyDown(prompt, { key: "c", code: "KeyC", altKey: true });
     expect(screen.getByTestId("location")).toHaveTextContent(/^\/$/u);
-    expect(prompt).toHaveValue("");
+  });
+  it("advertises the same routes as the global shortcuts", () => {
+    render(<MemoryRouter><HomeRoute /></MemoryRouter>);
+    expect(screen.getByText("<alt>+a")).toBeInTheDocument();
+    expect(screen.getByText("<alt>+s")).toBeInTheDocument();
+    expect(screen.getByText("<alt>+,")).toBeInTheDocument();
+    expect(screen.queryByText("<alt>+c")).not.toBeInTheDocument();
   });
   it.each(["/threads", "/settings"])("leaves %s on Escape", (path) => {
     render(<MemoryRouter initialEntries={[path]}><Routes><Route path="*" element={<><GlobalShortcuts /><LocationProbe /></>} /></Routes></MemoryRouter>);
