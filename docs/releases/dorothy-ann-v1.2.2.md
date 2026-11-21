@@ -2,7 +2,7 @@
 
 - Status: release candidate; draft PR #16 is open.
 - Candidate branch: `release/v1.2.2`
-- Candidate head: `5f55fcb` (PR #16 head).
+- Candidate head: `82b753b` (PR #16 head, with `main` merged to resolve conflicts).
 - Base: `main` at `936c047` (v1.2.1)
 - Package version: `1.2.2`
 - Release tag/date: pending merge and release.
@@ -51,7 +51,7 @@ Verified locally after the release metadata and dependency-remediation edits:
 - `CI=1 DOROTHY_E2E_VITE_PORT=5273 npm run test:e2e -- --workers=2` — 56 passed, 10 opt-in Analytics cases skipped.
 - `npm audit` and `npm audit --omit=dev` — both report zero vulnerabilities after updating vulnerable dependencies. `@hono/node-server` is on 2.1.11; the existing Node adapter `serve` call remains in use and no removed Vercel adapter import exists.
 - `git diff --check` — passed for the candidate comparison and working tree.
-- GitHub checks on PR head `5f55fcb` — Vercel deployment and Vercel Preview Comments succeeded.
+- GitHub checks on PR head `5f55fcb` — Vercel deployment and Vercel Preview Comments succeeded before the merge-conflict resolution; checks for `82b753b` will run after it is pushed.
 
 Security and external validation gaps:
 

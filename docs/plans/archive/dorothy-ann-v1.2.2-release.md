@@ -2,11 +2,11 @@
 
 ## Current State
 
-- Status: complete; draft PR #16 is open. Merge, tag, and production deployment remain pending.
+- Status: complete; draft PR #16 is open with `main` merged to resolve conflicts. Tag and production deployment remain pending.
 - Owner: Jonny
 - Candidate branch: `release/v1.2.2`
 - Base: `main` (`936c047`)
-- Candidate head: `457da11`
+- Initial feature candidate: `457da11`; conflict-resolution merge: `82b753b`.
 - Current focus: none; release preparation and PR creation are complete.
 
 ## Summary
@@ -20,6 +20,7 @@ Prepare the existing release candidate for review. Align the package version and
 - [x] R3 — remediate the audit findings by updating vulnerable dependencies, including the `@hono/node-server` major-version boundary; preserve the existing Node adapter behavior and drop the version-specific, comment-only Zod patch.
 - [x] R4 — rerun lint, typecheck, unit tests, build, e2e, both audit scopes, and `git diff --check`; record the non-fatal Zod/player chunk warnings and external gaps.
 - [x] R5 — present the PR title/body for approval and open draft PR [#16](https://github.com/jonnyjohannes/dorothy-ann/pull/16) from `release/v1.2.2` to `main`.
+- [x] R6 — merge `main` into the release branch to resolve PR conflicts, retain newer release-branch changes, and rerun the full verification suite.
 
 ## Open Questions
 
