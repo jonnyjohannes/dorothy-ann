@@ -2,7 +2,7 @@
 
 - Status: release candidate; draft PR #16 is open.
 - Candidate branch: `release/v1.2.2`
-- Candidate head: `82b753b` (PR #16 head, with `main` merged to resolve conflicts).
+- Conflict-resolution merge: `82b753b` (merges `main` into the PR branch; subsequent PR commits record release bookkeeping).
 - Base: `main` at `936c047` (v1.2.1)
 - Package version: `1.2.2`
 - Release tag/date: pending merge and release.
